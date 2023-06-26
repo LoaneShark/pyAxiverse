@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 #import multiprocess as mp
 import time
 from datetime import timedelta
-import pathos
-import dill
+#import pathos
+#import dill
 
 params = {}
 signstr = {1: "+", -1: "-", 0: "±"}
@@ -183,7 +183,7 @@ def get_text_params():
             r'$\dot{A}_\pm (t = 0)=%.2f$' % (Adot_0, ),
             r'$\pm=%s$' % (signstr[A_pm], ),
             '\n',
-            r'$\varepsilon=%d$' % (eps, ),
+            r'$\varepsilon=%.0e$' % (eps, ),
             '\n',
             r'$\lambda_1=%d$' % (l1, ),
             r'$\lambda_2=%d$' % (l2, ),
