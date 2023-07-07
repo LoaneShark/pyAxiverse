@@ -8,7 +8,7 @@ from datetime import timedelta
 #import dill
 
 params = {}
-signstr = {1: "+", -1: "-", 0: "±"}
+signstr = {1: '+', -1: '-', 0: '±'}
 
 ## Set parameters of model for use in numerical integration
 def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, t_min=0, t_N=500, 
@@ -46,68 +46,72 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
     t_span = [t_min, t_max]  # Time range
     t_num  = t_N             # Number of timesteps
     t, t_step = np.linspace(t_span[0], t_span[1], t_num, retstep=True)
+    t_sens = params_in['t_sens']
     # k domain
     k_span = [k_min, k_max] # Momentum range
     k_num  = k_N            # Number of k-modes
     k_values, k_step = np.linspace(k_span[0], k_span[1], k_num, retstep=True)
+    # resonance condition threshold
+    res_con = params_in['res_con']
 
     # Set constants of model (otherwise default)
-    e = params_in["e"] if "e" in params_in else 0.3        #
-    F = params_in["F"] if "F" in params_in else 1e20       # eV
-    p_t = params_in["p_t"] if "p_t" in params_in else 0.4  # eV / cm^3
+    e = params_in['e'] if 'e' in params_in else 0.3        #
+    F = params_in['F'] if 'F' in params_in else 1e20       # eV
+    p_t = params_in['p_t'] if 'p_t' in params_in else 0.4  # eV / cm^3
     
     ## Tuneable constants
     # millicharge, vary to enable/disable charged species (10e-15 = OFF, 10e-25 = ON)
     #eps  = 1e-25   # (unitless)
-    eps  = params_in["eps"] #
+    eps  = params_in['eps'] #
     
     # Coupling constants
-    L3 = params_in["L3"] # eV
-    L4 = params_in["L4"] # eV
-    l1 = params_in["l1"] #
-    l2 = params_in["l2"] #
-    l3 = params_in["l3"] #
-    l4 = params_in["l4"] #
+    L3 = params_in['L3'] # eV
+    L4 = params_in['L4'] # eV
+    l1 = params_in['l1'] #
+    l2 = params_in['l2'] #
+    l3 = params_in['l3'] #
+    l4 = params_in['l4'] #
     
     # Initial Conditions
-    A_0    = params_in["A_0"]
-    Adot_0 = params_in["Adot_0"]
-    A_pm   = params_in["A_pm"]      # specify A± case (+1 or -1)
+    A_0    = params_in['A_0']
+    Adot_0 = params_in['Adot_0']
+    A_pm   = params_in['A_pm']      # specify A± case (+1 or -1)
+    A_sens = params_in['A_sens']
 
     # masses for real, complex, and charged species in range (10e-8, 10e-4)
-    m = params_in["m"] # eV
+    m = params_in['m'] # eV
 
     # local DM densities/amplitudes for each species (assuming equal distribution unless otherwise specified)
-    p    = params_in["p"] if "p" in params_in else np.array([1/3, 1/3, 1/3]) * p_t
-    amps = params_in["amps"] if "amps" in params_in else [np.sqrt(2 * p[i]) / m[i] for i in range(len(m))]
+    p    = params_in['p'] if 'p' in params_in else np.array([1/3, 1/3, 1/3]) * p_t
+    amps = params_in['amps'] if 'amps' in params_in else [np.sqrt(2 * p[i]) / m[i] for i in range(len(m))]
 
     # local phases for each species
-    d    = [0, 0, 0] if sample_delta else params["d"]   # (0, 2pi)
+    d    = [0, 0, 0] if sample_delta else params['d']   # (0, 2pi)
 
     # global phase for neutral complex species
-    Th   = [0, 0, 0] if sample_theta else params["Th"]  # (0, 2pi)
+    Th   = [0, 0, 0] if sample_theta else params['Th']  # (0, 2pi)
     
     # Sample phases from normal distribution, sampled within range (0, 2pi)
     if sample_delta:
-            mu_d  = params_in["mu_d"] if "mu_d" in params_in else np.pi        # mean
-            sig_d = params_in["sig_d"] if "sig_d" in params_in else np.pi / 3  # standard deviation
+            mu_d  = params_in['mu_d'] if 'mu_d' in params_in else np.pi        # mean
+            sig_d = params_in['sig_d'] if 'sig_d' in params_in else np.pi / 3  # standard deviation
             d = [np.mod(np.random.normal(mu_d, sig_d), 2*np.pi) for d_i in d]
     if sample_theta:
-            mu_Th  = params_in["mu_Th"] if "mu_Th" in params_in else np.pi        # mean
-            sig_Th = params_in["sig_Th"] if "sig_Th" in params_in else np.pi / 3  # standard deviation
+            mu_Th  = params_in['mu_Th'] if 'mu_Th' in params_in else np.pi        # mean
+            sig_Th = params_in['sig_Th'] if 'sig_Th' in params_in else np.pi / 3  # standard deviation
             Th = [np.mod(np.random.normal(mu_Th, sig_Th), 2*np.pi) for Th_i in Th]
             
     # Store for local use, and then return
-    params = {"e": e, "F": F, "p_t": p_t, "eps": eps, "L3": L3, "L4": L4, "l1": l1, "l2": l2, "l3": l3, "l4": l4,
-              "A_0": A_0, "Adot_0": Adot_0, "A_pm": A_pm, "m": m, "p": p, "amps": amps, "d": d, "Th": Th,
-              "mu_d": mu_d, "sig_d": sig_d, "mu_Th": mu_Th, "sig_Th": sig_Th, "k_span": k_span, "k_num": k_num,
-              "t_span": t_span, "t_num": t_num}
+    params = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4,
+              'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 'm': m, 'p': p, 'amps': amps, 'd': d, 'Th': Th,
+              'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num,
+              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con}
     
     return params
 
 '''
 def system(t, y, k):
-    #l3 = params["l3"]
+    #l3 = params['l3']
     P = lambda t: 4*l3/(L3**2) * eps**2 * (np.abs(amps[2])**2 * np.cos(m[2]*t + d[2])**2) + \
                   4*l4/(L4**2) * eps**2 * (np.abs(amps[1])**2 * np.cos(m[1]*t + d[1])**2 + \
                                            np.abs(amps[0])**2 * np.cos(m[0]*t + d[0])**2 + \
@@ -157,18 +161,24 @@ def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
     end_time = time.monotonic()
     
     time_elapsed = timedelta(seconds=end_time - start_time) 
-    timestr = str(time_elapsed) + (" on %d cores" % num_cores if parallelize else "")
+    timestr = str(time_elapsed) + (' on %d cores' % num_cores if parallelize else '')
     
-    return solutions, timestr
+    # update parameters with performance statistics
+    params['time_elapsed'] = time_elapsed
+    params['num_cores'] = num_cores if parallelize else 1
+    params['parallel'] = parallelize
+    params['jupyter'] = jupyter
+    
+    return solutions, params, time_elapsed, timestr
     
 
 # Solve the differential equation for a given k
 def solve_subsystem(system_in, params, k):
     # Initial conditions
-    y0 = [params["A_0"], params["Adot_0"]]
+    y0 = [params['A_0'], params['Adot_0']]
     # Time domain
-    t_span = params["t_span"]
-    t = np.linspace(t_span[0], t_span[1], params["t_num"])
+    t_span = params['t_span']
+    t = np.linspace(t_span[0], t_span[1], params['t_num'])
 
     sol = solve_ivp(system_in, t_span, y0, args=(k, params), dense_output=True)
     
