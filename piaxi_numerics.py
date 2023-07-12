@@ -172,7 +172,7 @@ def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
     return solutions, params, time_elapsed, timestr
     
 
-# Solve the differential equation for a given k
+# Solve the differential equation for a singular given k
 def solve_subsystem(system_in, params, k):
     # Initial conditions
     y0 = [params['A_0'], params['Adot_0']]

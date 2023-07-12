@@ -1,4 +1,0 @@
-matplotlib==3.4.3
-multiprocess==0.70.14
-numpy==1.23.5
-scipy==1.11.1
