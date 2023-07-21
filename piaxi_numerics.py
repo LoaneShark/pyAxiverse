@@ -87,11 +87,11 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
 
     # masses for real, complex, and charged species in range (10e-8, 10e-4) [eV]
     m   = params_in['m']
-    N_r = m_r.count() if 'm_r' in params_in else 1                           # number of real species
+    N_r = len(params_in['m_r']) if 'm_r' in params_in else 1              # number of real species
     m_r = params_in['m_r'] if 'm_r' in params_in else np.full((N_r, ), m[0]) # (neutral) real species
-    N_n = m_n.count() if 'm_n' in params_in else 1                           # number of neutral species
+    N_n = len(params_in['m_n']) if 'm_n' in params_in else 1              # number of neutral species
     m_n = params_in['m_n'] if 'm_n' in params_in else np.full((N_n, ), m[1]) # neutral (complex) species
-    N_c = m_c.count() if 'm_c' in params_in else 1                           # number of charged species
+    N_c = len(params_in['m_c']) if 'm_c' in params_in else 1              # number of charged species
     m_c = params_in['m_c'] if 'm_c' in params_in else np.full((N_c, ), m[2]) # charged (complex) species
 
     # local DM densities for each species [eV/cm^3]
@@ -127,34 +127,6 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con}
     
     return params
-
-'''
-def system(t, y, k):
-    #l3 = params['l3']
-    P = lambda t: 4*l3/(L3**2) * eps**2 * (np.abs(amps[2])**2 * np.cos(m[2]*t + d[2])**2) + \
-                  4*l4/(L4**2) * eps**2 * (np.abs(amps[1])**2 * np.cos(m[1]*t + d[1])**2 + \
-                                           np.abs(amps[0])**2 * np.cos(m[0]*t + d[0])**2 + \
-                                           2*np.abs(amps[0])*np.abs(amps[1]) * np.cos(m[0]*t + d[0])*np.cos(m[1]*t + d[1]) * np.cos(Th[1]))
-
-    B = lambda t: (-1)*8*l3/(L3**2) * eps**2 * (np.abs(amps[2])**2 * m[2] * np.sin(m[2]*t + d[2])**2 * np.cos(m[2]*t + d[2])**2) + \
-                  (-1)*8*l4/(L4**2) * eps**2 * (np.abs(amps[0])**2 * m[0] * np.sin(m[0]*t + d[0])**2 * np.cos(m[0]*t + d[0])**2 + \
-                                                np.abs(amps[1])**2 * m[1] * np.sin(m[1]*t + d[1])**2 * np.cos(m[1]*t + d[1])**2 + \
-                                                np.abs(amps[1])*np.abs(amps[0]) * np.cos(Th[1]) * \
-                                                    (m[0] * np.sin(m[0]*t + d[0])**2 * np.cos(m[1]*t + d[1])**2 + \
-                                                     m[1] * np.sin(m[1]*t + d[1])**2 * np.cos(m[0]*t + d[0])**2))
-
-    C = lambda t, pm: (-1) * pm * (2*l1 / F * eps**2) * np.abs(amps[0]) * m[0] * np.sin(m[0]*t + d[0])
-
-    D = lambda t: 2*l2 * eps**2 * e**2 * np.abs(amps[2])**2 * np.cos(m[2]*t + d[2])**2
-
-    Alpha = lambda t, k: (k**2 + C(t, A_pm)*k + D(t)) / (1 + P(t))
-
-    Beta = lambda t: B(t) / (1 + P(t))
-    
-    dy0dt = y[1]
-    dy1dt = -1/(1 + P(t)) * (B(t)*y[1] + (C(t, A_pm)*k + D(t))*y[0]) - k**2*y[0]
-    return [dy0dt, dy1dt]
-'''
 
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
 def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
