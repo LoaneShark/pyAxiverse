@@ -133,7 +133,7 @@ def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
     if jupyter: import multiprocess as mp
     else: import multiprocessing as mp
     # Start timing
-    start_time = time.monotonic()
+    start_time = time.time()
     
     # Solve the differential equation for each k, in parallel
     if parallelize:
@@ -149,7 +149,7 @@ def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
     # e.g. `solutions[i]` is the solution for `k_values[i]`.
     
     # Finish timing
-    end_time = time.monotonic()
+    end_time = time.time()
     
     time_elapsed = timedelta(seconds=end_time - start_time) 
     timestr = str(time_elapsed) + (' on %d cores' % num_cores if parallelize else '')
@@ -239,9 +239,9 @@ def get_text_params(case='full'):
                 r'$t \in \left[%d, %d\right]$' % (t_span[0], t_span[1]),
 
         ))
-        m0_mask = np.ma.getmask(m[0])
-        m1_mask = np.ma.getmask(m[1])
-        m2_mask = np.ma.getmask(m[2])
+        m0_mask = np.ma.getmask(m[0]) if np.ma.getmask(m[0]) else np.full_like(m[0], False)
+        m1_mask = np.ma.getmask(m[1]) if np.ma.getmask(m[1]) else np.full_like(m[1], False)
+        m2_mask = np.ma.getmask(m[2]) if np.ma.getmask(m[2]) else np.full_like(m[2], False)
         textstr2 = '\n'.join((
                 ' '.join([r'$m_{(0),%d}=%.0e$'   % (i+1, m[0][i], ) for i in range(len(m[0])) if not m0_mask[i]]),
                 ' '.join([r'$m_{(\pi),%d}=%.0e$' % (i+1, m[1][i], ) for i in range(len(m[1])) if not m1_mask[i]]),
