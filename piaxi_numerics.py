@@ -37,6 +37,7 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
     global Adot_0
     global A_pm
     global m
+    global m_0
     global p
     global amps
     global d
@@ -87,6 +88,7 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
 
     # masses for real, complex, and charged species in range (10e-8, 10e-4) [eV]
     m   = params_in['m']
+    m_0 = params_in['m_0'] if 'm_0' in params_in else min(m[0])           # unit mass value
     N_r = len(params_in['m_r']) if 'm_r' in params_in else 1              # number of real species
     m_r = params_in['m_r'] if 'm_r' in params_in else np.full((N_r, ), m[0]) # (neutral) real species
     N_n = len(params_in['m_n']) if 'm_n' in params_in else 1              # number of neutral species
@@ -109,8 +111,8 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
     Th   = params_in['Th'] if 'Th' in params_in else np.array([np.zeros(float(N_r)), np.zeros(float(N_n)), np.zeros(float(N_c))], dtype=object)
     
     # Sample phases from normal distribution, sampled within range (0, 2pi)
-    mu_d  = params_in['mu_d'] if 'mu_d' in params_in else np.pi           # local phase mean
-    sig_d = params_in['sig_d'] if 'sig_d' in params_in else np.pi / 3     # local phase standard deviation
+    mu_d   = params_in['mu_d'] if 'mu_d' in params_in else np.pi           # local phase mean
+    sig_d  = params_in['sig_d'] if 'sig_d' in params_in else np.pi / 3     # local phase standard deviation
     mu_Th  = params_in['mu_Th'] if 'mu_Th' in params_in else np.pi        # global phase mean
     sig_Th = params_in['sig_Th'] if 'sig_Th' in params_in else np.pi / 3  # global phase standard deviation
     if sample_delta and 'd' not in params_in:
@@ -122,7 +124,7 @@ def set_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, 
     params = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4,
               'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 'amps': amps, 'd': d, 'Th': Th,
               'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'N_r': N_r, 'N_n': N_n, 'N_c': N_c,
-              'm': m, 'm_r': m_r, 'm_n': m_n, 'm_c': m_c, 'p': p, 'p_r': p_r, 'p_n': p_n, 'p_c': p_c,
+              'm': m, 'm_r': m_r, 'm_n': m_n, 'm_c': m_c, 'p': p, 'p_r': p_r, 'p_n': p_n, 'p_c': p_c, 'm_0': m_0,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num,
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con}
     
@@ -194,7 +196,7 @@ def get_text_params(case='full'):
                 r'$\Lambda_3=%.0e$' % (L3, ),
                 r'$\Lambda_4=%.0e$' % (L4, ),
                 '\n',
-                r'$\Delta k=%d$' % (k_step, ),
+                r'$\Delta k=%.2f$' % (k_step, ),
                 r'$k \in \left[%d, %d\right]$' % (k_span[0], k_span[1]),
 
         ))
@@ -232,7 +234,7 @@ def get_text_params(case='full'):
                 r'$\Lambda_3=%.0e$' % (L3, ),
                 r'$\Lambda_4=%.0e$' % (L4, ),
                 '\n',
-                r'$\Delta k=%d$' % (k_step, ),
+                r'$\Delta k=%.2f$' % (k_step, ),
                 r'$k \in \left[%d, %d\right]$' % (k_span[0], k_span[1]),
                 '\n',
                 r'$\Delta t=%f$' % (t_step, ),
@@ -243,13 +245,14 @@ def get_text_params(case='full'):
         m1_mask = np.ma.getmask(m[1]) if np.ma.getmask(m[1]) else np.full_like(m[1], False)
         m2_mask = np.ma.getmask(m[2]) if np.ma.getmask(m[2]) else np.full_like(m[2], False)
         textstr2 = '\n'.join((
-                ' '.join([r'$m_{(0),%d}=%.0e$'   % (i+1, m[0][i], ) for i in range(len(m[0])) if not m0_mask[i]]),
-                ' '.join([r'$m_{(\pi),%d}=%.0e$' % (i+1, m[1][i], ) for i in range(len(m[1])) if not m1_mask[i]]),
-                ' '.join([r'$m_{(\pm),%d}=%.0e$' % (i+1, m[2][i], ) for i in range(len(m[2])) if not m2_mask[i]]),
+                r'$m_{I} = %.2e$' % (m_0, ),
+                ' '.join([r'$m_{(0),%d}=%.2e$'   % (i+1, m[0][i], ) for i in range(len(m[0])) if not m0_mask[i]]),
+                ' '.join([r'$m_{(\pi),%d}=%.2e$' % (i+1, m[1][i], ) for i in range(len(m[1])) if not m1_mask[i]]),
+                ' '.join([r'$m_{(\pm),%d}=%.2e$' % (i+1, m[2][i], ) for i in range(len(m[2])) if not m2_mask[i]]),
                 '\n',
-                ' '.join([r'$\pi_{(0),%d}=%.2f$'   % (i+1, amps[0][i], ) for i in range(len(amps[0])) if not m0_mask[i]]),
-                ' '.join([r'$\pi_{(\pi),%d}=%.2f$' % (i+1, amps[1][i], ) for i in range(len(amps[1])) if not m1_mask[i]]),
-                ' '.join([r'$\pi_{(\pm),%d}=%.2f$' % (i+1, amps[2][i], ) for i in range(len(amps[2])) if not m2_mask[i]]),
+                ' '.join([r'$\pi_{(0),%d}=%.2e$'   % (i+1, amps[0][i], ) for i in range(len(amps[0])) if not m0_mask[i]]),
+                ' '.join([r'$\pi_{(\pi),%d}=%.2e$' % (i+1, amps[1][i], ) for i in range(len(amps[1])) if not m1_mask[i]]),
+                ' '.join([r'$\pi_{(\pm),%d}=%.2e$' % (i+1, amps[2][i], ) for i in range(len(amps[2])) if not m2_mask[i]]),
                 '\n',
                 ' '.join([r'$\delta_{(0),%d}=%.2f \pi$'   % (i+1, d[0][i]/np.pi, ) for i in range(len(d[0])) if not m0_mask[i]]),
                 ' '.join([r'$\delta_{(\pi),%d}=%.2f \pi$' % (i+1, d[1][i]/np.pi, ) for i in range(len(d[1])) if not m1_mask[i]]),
