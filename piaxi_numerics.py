@@ -247,8 +247,8 @@ def get_text_params(case='full', units_in={}):
                 r'$\lambda_2=%d%s$' % (l2, units['lambda']),
                 r'$\lambda_3=%d%s$' % (l3, units['lambda']),
                 r'$\lambda_4=%d%s$' % (l4, units['lambda']),
-                r'$\Lambda_3=%.0e%s$' % (L3, units['Lambda']),
-                r'$\Lambda_4=%.0e%s$' % (L4, units['Lambda']),
+                r'$\Lambda_3=%.0e%s$' % (L3, units['Lambda']) if L3 > 0 else r'$[\Lambda_3=%d]$' % (L3),
+                r'$\Lambda_4=%.0e%s$' % (L4, units['Lambda']) if L4 > 0 else r'$[\Lambda_4=%d]$' % (L4),
                 '\n',
                 r'$\Delta k=%.2f%s$' % (k_step, units['k']),
                 r'$k \in [%d, %d]$' % (k_span[0], k_span[1]),
@@ -261,7 +261,7 @@ def get_text_params(case='full', units_in={}):
         m1_mask = np.ma.getmask(m[1]) if np.ma.getmask(m[1]) else np.full_like(m[1], False)
         m2_mask = np.ma.getmask(m[2]) if np.ma.getmask(m[2]) else np.full_like(m[2], False)
         textstr2 = '\n'.join((
-                r'$m_{\{I\}} = [%s]\quad%.0e eV$' % (', '.join('%d' % q for q in qm), m_q),
+                r'$m_{dQCD} = [%s]\quad%.0e eV$' % (', '.join('%d' % q for q in qm), m_q),
                 '' if units_in['m'] == 'eV' else r'$m_{u} = %.2e\quad[eV]$' % (m_0, ),
                 r'$m%s$' % units['m'],
                 ' '.join([r'$m_{(0),%d}=%.2e$'   % (i+1, m[0][i], ) for i in range(len(m[0])) if not m0_mask[i]]),
