@@ -4,24 +4,48 @@ import matplotlib.pyplot as plt
 import matplotlib.image as image
 import matplotlib.cm as cm
 from matplotlib.backends.backend_pdf import PdfPages
-from IPython.display import display, HTML, Image
+from IPython.display import display, clear_output, HTML, Image
 from scipy.signal import spectrogram
 from scipy.optimize import curve_fit
 #from collections import OrderedDict
-import time
-from datetime import timedelta
 import json
 import hashlib
-from pathlib import Path
+import sys
 import os
 
 signstr = {1: '+', -1: '-', 0: '±'}
 color_purple = '#b042f5'
 GeV = 1e9
+# Fundamental constants
+c = np.float64(2.998e10)    # Speed of light       [cm/s]
+h = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
+G = np.float64(1.0693e-19)  # Newtonian constant   [cm^5 /(eV s^4)]
+e = 0.3                     # Dimensionless electron charge
+# Pointers to global variables
+'''
+params = None
+t = t_span = t_num = t_step = t_sens = None
+k_values = k_span = k_num = k_step = None
+eps = None
+F = None
+L3 = L4 = None
+l1 = l2 = l3 = l4 = None
+A_0 = Adot_0 = A_pm = A_sens = None
+m = m_u = m_0 = m_q = k_0 = t_0 = None
+p = p_t = p_0 = amps = None
+d = Th = None
+qm = qc = dqm = eps_c = xi = None
+seed = res_con = None
+use_natural_units = use_mass_units = None
+unitful_m = unitful_k = unitful_amps = dimensionful_p = None
+rescale_m = rescale_k = rescale_amps = rescale_consts = None
+unitful_c = unitful_h = unitful_G = None
+L3_sc = L4_sc = F_sc = c_u = h_u = G_u = None
+'''
 
 ## Set parameters of model for use in numerical integration
-def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, t_min=0, t_N=500, 
-               k_max=200, k_min=1, k_N=200):
+def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, t_min=0, t_N=500,
+                k_max=200, k_min=1, k_N=200):
     # Define global variables
     global params
     global t, t_span, t_num, t_step, t_sens
@@ -33,11 +57,15 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     global L3, L4
     global l1, l2, l3, l4
     global A_0, Adot_0, A_pm, A_sens
-    global m, m_u, m_0, m_q, k_0
+    global m, m_u, m_0, m_q, k_0, t_0
     global p, p_t, p_0, amps
     global d, Th
     global qm, qc, dqm, eps_c, xi
     global seed, res_con
+    global use_natural_units, use_mass_units
+    global unitful_m, unitful_k, unitful_amps, dimensionful_p
+    global rescale_m, rescale_k, rescale_amps, rescale_consts
+    global unitful_c, unitful_h, unitful_G
     
     # t domain
     t_span = [t_min, t_max]  # Time range
@@ -142,6 +170,8 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
             Th = [np.mod(np.random.normal(mu_Th, sig_Th, len(Th_i)), 2*np.pi) for Th_i in Th]
             
     # rescaling and unit configuration
+    use_natural_units = params_in['use_natural_units']
+    use_mass_units    = params_in['use_mass_units']
     unitful_m      = params_in['unitful_m']
     rescale_m      = params_in['rescale_m']
     unitful_k      = params_in['unitful_k']
@@ -149,6 +179,20 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     unitful_amps   = params_in['unitful_amps']
     rescale_amps   = params_in['rescale_amps']
     rescale_consts = params_in['rescale_consts']
+    dimensionful_p = params_in['dimensionful_p']
+    unitful_c = False if use_natural_units else c != 1
+    unitful_h = False if use_natural_units else h != 1
+    unitful_G = False if use_natural_units else G != 1
+
+    t_0 = 1./m_u if unitful_m else 1.
+
+    # Turn off irrelevant constants
+    if N_r <= 0 and N_n <= 0:
+        L4 = -1                   # Turn off Lambda_4 if there are no surviving neutral (real and complex) species
+    if N_c <= 0:
+        L3 = -1                   # Turn off Lambda_3 if there are no surviving charged species
+
+    rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=unitful_c, unitful_h=unitful_h, unitful_G=unitful_G)
             
     # Store for local use, and then return
     params = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4,
@@ -156,7 +200,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'N_r': N_r, 'N_n': N_n, 'N_c': N_c, 'p_0': p_0,
               'm': m, 'm_r': m_r, 'm_n': m_n, 'm_c': m_c, 'p': p, 'p_r': p_r, 'p_n': p_n, 'p_c': p_c, 'm_0': m_0, 'm_q': m_q,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
-              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u,
+              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u, 't_u': t_0,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
               'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed}
     
@@ -164,6 +208,24 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
 
 def get_params():
     return params
+
+def rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=False, unitful_h=False, unitful_G=False, verbosity=0):
+    global params
+    global m, amps, k_values
+    global m_0, k_0
+    global L3, L4, F, c, h, G
+    global L3_sc, L4_sc, F_sc, c_u, h_u, G_u
+    is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)])
+    
+    # Values to use in order to ensure natural / dimensionful units
+    c_u = c if unitful_c else 1.
+    h_u = h if unitful_h else 1.
+    G_u = G if unitful_G else 1.
+
+    # Rescale all eV unit constants to unit mass
+    L3_sc = abs(L3) if not rescale_consts else L3 / m_u
+    L4_sc = abs(L4) if not rescale_consts else L4 / m_u
+    F_sc  = abs(F)  if not rescale_consts else  F / m_u
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -174,6 +236,16 @@ class NumpyEncoder(json.JSONEncoder):
 # Generate a unique but reproduceable hash for the given parameter set
 def get_parameter_space_hash(params_in):
     return hashlib.sha1(json.dumps(params_in, sort_keys=True, ensure_ascii=True, cls=NumpyEncoder).encode()).hexdigest()
+
+def get_rng(seed=None):
+    entropy_size = 4 # TODO: Probably should reduce to 8 or 4
+    if seed != None:
+        rng_ss = np.random.SeedSequence(entropy=seed, pool_size=entropy_size)
+    else:
+        rng_ss = np.random.SeedSequence(pool_size=entropy_size)
+    rng_seed = rng_ss.entropy
+    rng = np.random.default_rng(rng_ss)
+    return rng, rng_seed
 
 def save_results(output_dir_in, filename, params_in, results=None, plots=None, save_format='pdf', verbosity=0,
                  save_params=True, save_results=True, save_plots=True, plot_types=['amps', 'nums', 'resonance', 'alp'],
@@ -485,12 +557,12 @@ def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None,  k_sa
     
 def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], plot_all=True):
     global k_0
-    P = P_in if P_in is not None else P_off
-    B = B_in if B_in is not None else B_off
-    D = D_in if D_in is not None else D_off
-    C = C_in if C_in is not None else C_off
-    Cpm = Cpm_in if Cpm_in is not None else params['A_pm']
-    k0 = k_unit if k_unit is not None else k_0
+    P = P_in if P_in != None else P_off
+    B = B_in if B_in != None else B_off
+    D = D_in if D_in != None else D_off
+    C = C_in if C_in != None else C_off
+    Cpm = Cpm_in if Cpm_in != None else params['A_pm']
+    k0 = k_unit if k_unit != None else k_0
     
     if len(k_samples_in) <= 0:
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
@@ -616,12 +688,12 @@ def print_coefficient_ranges(P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
-    P    = P_in   if P_in   is not None else P_off
-    B    = B_in   if B_in   is not None else B_off
-    D    = D_in   if D_in   is not None else D_off
-    C    = C_in   if C_in   is not None else C_off
-    Cpm  = Cpm_in if Cpm_in is not None else params['A_pm']
-    k0   = k_unit if k_unit is not None else k_0
+    P    = P_in   if P_in   != None else P_off
+    B    = B_in   if B_in   != None else B_off
+    D    = D_in   if D_in   != None else D_off
+    C    = C_in   if C_in   != None else C_off
+    Cpm  = Cpm_in if Cpm_in != None else params['A_pm']
+    k0   = k_unit if k_unit != None else k_0
     times = t
     
     for c_range_str in get_coefficient_ranges(P, B, C, D, k_samples):
@@ -881,6 +953,66 @@ def print_param_space(params, units_in, case='full'):
         ))
         
     return textstr1, textstr2
+
+def get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p=False,
+              unitful_c=False, unitful_h=False, unitful_G=False, use_mass_units=True, use_natural_units=None, verbosity=0):
+    global units, params
+    is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)]) if use_natural_units is None else use_natural_units
+    units = {'c': 1 if not unitful_c else 'cm/s', 'h': 1 if not unitful_h else 'eV/Hz', 'G': 1 if not unitful_G else 'cm^5/(eV s^4)', 
+             'm': 'm_u' if not((unitful_m and not rescale_m) or (not unitful_m and rescale_m)) else 'eV/c^2' if unitful_c else 'eV',
+             'k': 'm_u' if not rescale_k else 'eV/c' if unitful_c else 'eV',
+             'p': 'eV/cm^3' if dimensionful_p else 'eV^4' if not(unitful_c or unitful_h) else 'eV^4/(hc)^3',
+             'amp': 'm_u' if (rescale_amps and unitful_amps) else 'eV^2/m_u^2' if (rescale_amps and not unitful_amps) else 'eV' if unitful_amps and is_natural_units else 'eV/c', # 'eV (h^3 c)^(-1/2)'
+             'Lambda': 'm_u' if rescale_consts else 'eV/c^2' if unitful_c else 'eV',
+             'lambda': 1,
+             'F': 'm_u' if rescale_consts else 'eV/c^2' if unitful_c else 'eV',
+             't': '1/m_u',
+             'Theta': 'π',
+             'delta': 'π'}
+    
+    unit_args = (unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p, unitful_c, unitful_h, unitful_G, use_mass_units, is_natural_units)
+
+    if verbosity >=0:
+        print_units(units, unit_args, verbosity=verbosity)
+
+    return units
+
+# Helper function to pretty print parameter values to console (with units)
+pp_param = lambda x, x_u=1., n=2, pfx='  ', notn='e': str(pfx)+('\n'+str(pfx)).join(['m_(%s): %s' % \
+            (s_label, ' | '.join([('%.'+('%d' % n)+str(notn)) % (x_s_i*x_u) for x_s_i in x_s]) if len(x_s) > 0 else 'N/A') for x_s, s_label in zip(x, ['0','π','±'])])
+
+def print_units(units, unit_args, verbosity=0):
+    unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p, unitful_c, unitful_h, unitful_G, use_mass_units, use_natural_units = unit_args
+    if verbosity > 2:
+        print('use_mass_units: %5s' % str(use_mass_units), '||', 'use_natural_units:', use_natural_units)
+        if verbosity > 3 and not use_natural_units:
+            for c_sw, c_name, c_val in zip([unitful_c, unitful_h, unitful_G], ['c', 'h', 'G'], [c, h, G]):
+                print('unitful_'+c_name+':', c_sw, '      | ', c_name+' =', str(1 if units[c_name] == 1 else '%.3e [%s]' % (c_val, units[c_name])))
+        print('----------------------------------------------------')
+    if verbosity > 3:
+        print('unitful_masses:', '%5s' % str(unitful_m),      '| [m_u]' if not unitful_m else '| [%s]' % 'eV')
+        print('rescale_m:     ', '%5s' % str(rescale_m),      ''        if not rescale_m else '| [%s] -> [%s]' % (('eV','m_u') if unitful_m    else ('m_u','eV')))
+        print('unitful_k:     ', '%5s' % str(unitful_k),      '| [m_u]' if not unitful_k else '| [%s]' % 'eV')
+        print('rescale_k:     ', '%5s' % str(rescale_k),      ''        if not rescale_k else '| [%s] -> [%s]' % (('eV','m_u') if unitful_k    else ('m_u','eV')))
+        print('unitful_amps:  ', '%5s' % str(unitful_amps),   '| [eV]'  if unitful_amps  else '| [eV^2/m_u]')
+        print('rescale_amps:  ', '%5s' % str(rescale_amps),   '' if not rescale_amps     else '| [%s] -> [%s]' % (('eV','m_u') if unitful_amps else ('eV^2/m_u','eV^2/m_u^2')))
+        print('rescale_consts:', '%5s' % str(rescale_consts), '' if not rescale_consts   else '| [%s] -> [%s]' % (('eV','m_u') if unitful_m    else ('eV', 'eV/m_u')))
+        print('----------------------------------------------------')
+
+def print_params(units, m=None, p=None, amps=None, Th=None, d=None, m_q=None, m_0=None, m_u=None, natural_units=True, verbosity=0, precision=3):
+    if verbosity >= 0:
+        if m != None:
+            print('m_dQCD = %.0e [eV%s]' % (m_q, '' if natural_units else '/c^2'))
+            if units['m'] == 'm_u': print('m_u = %.3e [eV%s]' % (m_u, '' if natural_units else '/c^2'))
+            print('m [' + units['m'] + ']\n'      + pp_param(m, m_0, n=precision))
+        if p != None:
+            print('rho [' + units['p'] + ']\n'    + pp_param(p, n=precision))
+        if amps != None:
+            print('amp [' + units['amp'] + ']\n'  + pp_param(amps, n=precision))
+        if Th != None:
+            print('Theta [π]\n'                   + pp_param(Th, 1. / np.pi, n=2, notn='f'))
+        if d != None:
+            print('delta [π]\n'                   + pp_param(d,  1. / np.pi, n=2, notn='f'))
 
 def sizeof_fmt(num, suffix='B'):
     for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:

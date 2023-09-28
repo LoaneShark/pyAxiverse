@@ -1,25 +1,26 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import matplotlib.pyplot as plt
-import time
-from datetime import timedelta
+import pprint
+import datetime
+import sys
 from piaxi_utils import signstr, Alpha, Beta
 
 def set_param_space(params_in):
     global params
-    global t, t_span, t_num, t_step
+    global t, t_span, t_num, t_step, t_0
     global k_values, k_span, k_num, k_step
     global e
     global eps
     global F
-    global c, h, G
     global L3, L4
     global l1, l2, l3, l4
     global A_0, Adot_0, A_pm
     global m, m_u, m_0, m_q, k_0
+    global N_r, N_n, N_c
     global p, p_t, p_0, amps
     global d, Th
     global qm, qc, dqm, eps_c, xi
+    global use_mass_units, use_natural_units, unitful_m
     
     params  = params_in
     
@@ -46,6 +47,9 @@ def set_param_space(params_in):
     m_u     = params['m_u']
     m_0     = params['m_0']
     m_q     = params['m_q']
+    N_r     = params['N_r']
+    N_n     = params['N_n']
+    N_c     = params['N_c']
     k_0     = params['k_0']
     qm      = params['qm']
     dqm     = params['dqm']
@@ -57,6 +61,7 @@ def set_param_space(params_in):
     p       = params['p']
     amps    = params['amps']
     p_t     = params['p_t']
+    t_0     = params['t_0']
     
     t, t_step        = np.linspace(t_span[0], t_span[1], t_num, retstep=True)
     k_values, k_step = np.linspace(k_span[0], k_span[1], k_num, retstep=True)
@@ -66,31 +71,80 @@ def set_param_space(params_in):
 def get_param_space():
     return params
 
+k_count_max = 0  # TODO: Make sure this max counter works
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
-def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
-    if jupyter: import multiprocess as mp
-    else: import multiprocessing as mp
-    # Start timing
-    start_time = time.time()
+def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False):
+    global k_count_max
+    # Determine the environment
+    is_jupyter = jupyter if jupyter != None else 'ipykernel' in sys.modules
+    if verbosity > 3:
+        print('Jupyter?       ', is_jupyter)
+        print('Parallel?      ', parallelize, ' (N = %d)' % num_cores if parallelize and verbosity >= 8 else '')
+
+    if is_jupyter:
+        import multiprocess as mp
+        from IPython.display import clear_output
+    else:
+        import multiprocessing as mp
     
+    # Progress bar display subroutine (WIP)
+    if show_progress_bar:
+        if is_jupyter:
+            from tqdm import notebook as tqdm
+        else:
+            import tqdm
+
+        def update_progress(count, maxval, maxcount=0):
+            global k_count_max
+            k_count_max = max(maxcount, k_count_max)
+            progress = max(k_count_max, count) / maxval
+            bar_length = 50
+            block = int(round(bar_length * progress))
+            clear_output(wait=True) if is_jupyter else None
+            text = "Progress: [{0}] {1:.2f}%".format("#" * block + "-" * (bar_length - block), progress * 100)
+            print(text, end="\r")
+            sys.stdout.flush()
+        
+        # Worker function for pretty printing a progress bar
+        progress_val = lambda i, n=len(k_values), i_max=k_count_max: update_progress(i + 1, n, maxcount=i_max)
+
+    # Start timing
+    start_time = datetime.datetime.now()
+    if verbosity > 5: 
+        print('start time: ', start_time)
+
+    if verbosity > 8:
+        print('system in:  ', system_in)
+        print('params in:  ')
+        pprint.pp(params)
+        print('-----------------------------------------------------')
+
     # Solve the differential equation for each k, in parallel
     if parallelize:
-        with mp.Pool(num_cores) as p:
+        with mp.Pool(num_cores) as pool:
             #solutions = np.array(p.map(solve_subsystem, k_values))
-            solutions = p.starmap(solve_subsystem, [(system_in, params, k_i) for k_i in k_values])
+            pool_params = [(system_in, params, k_i, verbosity) for k_i in k_values]
+            pool_inputs = tqdm.tqdm(pool_params, total=len(k_values)) if show_progress_bar else pool_params
+            solutions = pool.starmap(solve_subsystem, pool_inputs)
     else:
+        t_span = params['t_span']
+        t = np.linspace(t_span[0], t_span[1], params['t_num'])
         solutions = np.zeros((len(k_values), 2, len(t)))
-        for i, k in enumerate(k_values): 
-            solutions[i] = solve_subsystem(system_in, params, k) # Store the solution
+        k_count_max = 0
+        for i, k in enumerate(k_values):
+            if verbosity > 7 and show_progress_bar:
+                #print('i = %d,   k[i] = %d' % (i, k))
+                progress_val(i)
+            solutions[i] = solve_subsystem(system_in, params, k, verbosity=0) # Store the solution
     
     # `solutions` contains the solutions for A(t) for each k.
     # e.g. `solutions[i]` is the solution for `k_values[i]`.
     
     # Finish timing
-    end_time = time.time()
+    end_time = datetime.datetime.now()
     
-    time_elapsed = timedelta(seconds=end_time - start_time) 
-    timestr = str(time_elapsed) + (' on %d cores' % num_cores if parallelize else '')
+    time_elapsed = end_time - start_time
+    timestr = str(time_elapsed) + (' elapsed on %d cores' % num_cores if parallelize else '')
     
     # update parameters with performance statistics
     params['time_elapsed'] = time_elapsed
@@ -99,12 +153,18 @@ def solve_system(system_in, parallelize=False, jupyter=False, num_cores=4):
     params['jupyter'] = jupyter
     
     return solutions, params, time_elapsed, timestr
-    
 
 # Solve the differential equation for a singular given k
-def solve_subsystem(system_in, params, k):
+def solve_subsystem(system_in, params, k, verbosity=0):
     # Initial conditions
     y0 = [params['A_0'], params['Adot_0']]
+
+    # Debug print statements
+    if verbosity > 7:
+        print('  k=%d  ' % k)
+    if verbosity > 9:
+        print('y0:   ', y0)
+    
     # Time domain
     t_span = params['t_span']
     t = np.linspace(t_span[0], t_span[1], params['t_num'])
@@ -115,97 +175,13 @@ def solve_subsystem(system_in, params, k):
     y = sol.sol(t)
     return y
 
-## Pi-axion Species Mass Definitions
-def define_masses(qc, qm, F, e, eps, eps_c, xi):
-    m_r = np.array([0., 0., 0., 0., 0.], dtype=float)                   # real neutral
-    m_n = np.array([0., 0., 0., 0., 0., 0.], dtype=float)               # complex neutral
-    m_c = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype=float)   # charged
-    # Pi-axion Species Labels
-    s_l = np.array([np.full_like(m_r, '', dtype=str), np.full_like(m_n, '', dtype=str), np.full_like(m_c, '', dtype=str)], dtype=object)
+def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G):
+    # System of differential equations to be solved (bg = photon background)
+    dy0dt = y[1]
+    dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*k0) + D(t))*y[0]) - (k*k0)**2*y[0]
+    return [dy0dt, dy1dt]
 
-    ## Real Neutral Masses
-    # pi_3
-    m_r[0]    = np.sqrt(((qc[0] + qc[1])*qm[0])*F) if 0. not in [qc[0], qc[1]] else 0.
-    s_l[0][0] = '$\pi_{3}$'
-    # pi_8
-    m_r[1]    = np.sqrt(((qc[0] + qc[1])*qm[0] + qc[2]*qm[1])*F) if 0. not in [qc[0], qc[1], qc[2]] else 0.
-    s_l[0][1] = '$\pi_{8}$'
-    # pi_29
-    m_r[2]    = np.sqrt(((qc[3]*qm[1]) + (qc[4]*qm[2]))*F) if 0. not in [qc[3], qc[4]] else 0.
-    s_l[0][2] = '$\pi_{29}$'
-    # pi_34
-    m_r[3]    = np.sqrt(((qc[3]*qm[1]) + ((qc[4] + qc[5])*qm[2]))*F) if 0. not in [qc[3], qc[4], qc[5]] else 0.
-    s_l[0][3] = '$\pi_{34}$'
-    # pi_35
-    m_r[4]    = np.sqrt(((qc[0]+qc[1])*qm[0] + (qc[2]+qc[3])*qm[1] + (qc[4]+qc[5])*qm[2])*F) if 0. not in [qc[0], qc[1], qc[2], qc[3], qc[4], qc[5]] else 0.
-    s_l[0][4] = '$\pi_{35}$'
-
-    ## Complex Neutral Masses
-    # pi_6  +/- i*pi_7
-    m_n[0]    = np.sqrt((qc[1]*qm[0] + qc[2]*qm[1]) * F) if 0. not in [qc[1], qc[2]] else 0.
-    s_l[1][0] = '$\pi_6 \pm i\pi_7$'
-    # pi_9  +/- i*pi_10
-    m_n[1]    = np.sqrt((qc[0]*qm[0] + qc[3]*qm[1]) * F) if 0. not in [qc[0], qc[3]] else 0.
-    s_l[1][1] = '$\pi_9 \pm i\pi_{10}$'
-    # pi_17 +/- i*pi_18
-    m_n[2]    = np.sqrt((qc[1]*qm[0] + qc[4]*qm[2]) * F) if 0. not in [qc[1], qc[4]] else 0.
-    s_l[1][2] = '$\pi_{17} \pm i\pi_{18}$'
-    # pi_19 +/- i*pi_20
-    m_n[3]    = np.sqrt((qc[2]*qm[1] + qc[4]*qm[2]) * F) if 0. not in [qc[2], qc[4]] else 0.
-    s_l[1][3] = '$\pi_{19} \pm i\pi_{20}$'
-    # pi_21 +/- i*pi_22
-    m_n[4]    = np.sqrt((qc[0]*qm[0] + qc[5]*qm[2]) * F) if 0. not in [qc[0], qc[5]] else 0.
-    s_l[1][4] = '$\pi_{21} \pm i\pi_{22}$'
-    # pi_30 +/- i*pi_31
-    m_n[5]    = np.sqrt((qc[3]*qm[1] + qc[5]*qm[2]) * F) if 0. not in [qc[3], qc[5]] else 0.
-    s_l[1][5] = '$\pi_{30} \pm i\pi_{31}$'
-
-    ## Charged Masses
-    # pi_1  +/- i*pi_2
-    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) < 0.1 else 0.
-    s_l[2][0] = '$\pi_1 \pm i\pi_2$'
-    # pi_4  +/- i*pi_5
-    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) < 0.1 else 0.
-    s_l[2][1] = '$\pi_4 \pm i\pi_5$'
-    # pi_15 +/- i*pi_16
-    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) < 0.1 else 0.
-    s_l[2][2] = '$\pi_{15} \pm i\pi_{16}$'
-    # pi_11 +/- i*pi_12
-    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*F)**2) if 0. not in [qc[1], qc[3]] and abs(eps) < 0.1 else 0.
-    s_l[2][3] = '$\pi_{11} \pm i\pi_{12}$'
-    # pi_23 +/- i*pi_24
-    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*F)**2) if 0. not in [qc[1], qc[5]] and abs(eps) < 0.1 else 0.
-    s_l[2][4] = '$\pi_{23} \pm i\pi_{24}$'
-    # pi_13 +/- i*pi_14
-    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*F)**2) if 0. not in [qc[2], qc[3]] and abs(eps) < 0.1 else 0.
-    s_l[2][5] = '$\pi_{13} \pm i\pi_{14}$'
-    # pi_25 +/- i*pi_26
-    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*F)**2) if 0. not in [qc[2], qc[5]] and abs(eps) < 0.1 else 0.
-    s_l[2][6] = '$\pi_{25} \pm i\pi_{26}$'
-    # pi_27 +/- i*pi_28
-    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*F)**2) if 0. not in [qc[3], qc[4]] and abs(eps) < 0.1 else 0.
-    s_l[2][7] = '$\pi_{27} \pm i\pi_{28}$'
-    # pi_32 +/- i*pi_33
-    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*F)**2) if 0. not in [qc[4], qc[5]] and abs(eps) < 0.1 else 0.
-    s_l[2][8] = '$\pi_{32} \pm i\pi_{33}$'
-
-    # Mask zero-valued / disabled species in arrays
-    m_r = np.ma.masked_where(m_r == 0.0, m_r, copy=True)
-    m_n = np.ma.masked_where(m_n == 0.0, m_n, copy=True)
-    m_c = np.ma.masked_where(m_c == 0.0, m_c, copy=True)
-    r_mask = np.ma.getmask(m_r)
-    n_mask = np.ma.getmask(m_n)
-    c_mask = np.ma.getmask(m_c)
-    masks = np.array([r_mask, n_mask, c_mask], dtype=object)
-    N_r = m_r.count()
-    N_n = m_n.count()
-    N_c = m_c.count()
-    counts = (N_r, N_n, N_c)
-    
-    return m_r, m_n, m_c, counts, masks
-
-
-def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in = None, k_modes=[]):
+def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_modes=[]):
     """
     Calculate the Floquet exponents for a system with multiple k-modes.
     
@@ -222,8 +198,8 @@ def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in = None, k_mo
     global params, k_values
     k_modes = k_modes if len(k_modes) > 0 else k_values
     num_modes = len(k_modes)
-    y0 = y0_in if y0_in is not None else params['A_0'] if 'A_0' in params else 0
-    yp0 = yp0_in if yp0_in is not None else params['Adot_0'] if 'Adot_0' in params else 0.1
+    y0  = y0_in  if y0_in  != None else params['A_0']    if 'A_0'    in params else 0
+    yp0 = yp0_in if yp0_in != None else params['Adot_0'] if 'Adot_0' in params else 0.1
     
     # Convert the second-order differential equations to a system of first-order equations
     def floq_sys(t, Y):
