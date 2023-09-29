@@ -85,7 +85,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
         import multiprocess as mp
         from IPython.display import clear_output
     else:
-        import multiprocessing as mp
+        import pathos.multiprocessing as mp
     
     # Progress bar display subroutine (WIP)
     if show_progress_bar:
@@ -151,8 +151,11 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     params['num_cores'] = num_cores if parallelize else 1
     params['parallel'] = parallelize
     params['jupyter'] = jupyter
+
+    if verbosity >= 0:
+        print(timestr)
     
-    return solutions, params, time_elapsed, timestr
+    return solutions, params, time_elapsed
 
 # Solve the differential equation for a singular given k
 def solve_subsystem(system_in, params, k, verbosity=0):

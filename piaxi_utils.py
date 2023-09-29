@@ -1,5 +1,6 @@
 import numpy as np
 #import pandas as pd
+import datetime
 import matplotlib.pyplot as plt
 import matplotlib.image as image
 import matplotlib.cm as cm
@@ -234,10 +235,17 @@ class NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
     
 # Generate a unique but reproduceable hash for the given parameter set
-def get_parameter_space_hash(params_in):
-    return hashlib.sha1(json.dumps(params_in, sort_keys=True, ensure_ascii=True, cls=NumpyEncoder).encode()).hexdigest()
+def get_parameter_space_hash(params_in, verbosity=0):
+    
+    phash = hashlib.sha1(json.dumps(params_in, sort_keys=True, ensure_ascii=True, cls=NumpyEncoder).encode()).hexdigest()
 
-def get_rng(seed=None):
+    if verbosity > 3:
+        print('parameter space configuration hash:')
+        print(phash)
+
+    return phash
+
+def get_rng(seed=None, verbosity=0):
     entropy_size = 4 # TODO: Probably should reduce to 8 or 4
     if seed != None:
         rng_ss = np.random.SeedSequence(entropy=seed, pool_size=entropy_size)
@@ -245,6 +253,10 @@ def get_rng(seed=None):
         rng_ss = np.random.SeedSequence(pool_size=entropy_size)
     rng_seed = rng_ss.entropy
     rng = np.random.default_rng(rng_ss)
+
+    if verbosity > 3 or (verbosity >= 0 and seed is not None):
+        print('rng_seed:', rng_seed)
+
     return rng, rng_seed
 
 def save_results(output_dir_in, filename, params_in, results=None, plots=None, save_format='pdf', verbosity=0,
@@ -367,6 +379,13 @@ def load_results(output_dir, filename, save_format='pdf'):
     
     return params, results, plots
 
+
+# k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
+k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
+
+# k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
+k_class = lambda func, t_sens, A_sens: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
 def get_peak_k_modes(results_in):
     global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res
@@ -379,11 +398,6 @@ def get_peak_k_modes(results_in):
     win_max  = lambda sens: int(t_num*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # max value / right endpoint
     k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_min(sens):win_max(sens)])) for k_vi, k_v in enumerate(k_values)])])
     
-    # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
-    k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
-    
-    # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
-    k_class = lambda func, t_sens, A_sens: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
     # k mode(s) with the largest contributions to overall number density growth
     k_peak = k_values[np.ma.argmax(k_func(max))]
@@ -540,7 +554,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_sa
 
     plt.tight_layout()
     
-    return plt, params
+    return plt, params, t_res, n_res
 
 P_off = lambda t: np.float64(0)
 B_off = lambda t: np.float64(0)
@@ -1001,17 +1015,17 @@ def print_units(units, unit_args, verbosity=0):
 
 def print_params(units, m=None, p=None, amps=None, Th=None, d=None, m_q=None, m_0=None, m_u=None, natural_units=True, verbosity=0, precision=3):
     if verbosity >= 0:
-        if m != None:
+        if m is not None:
             print('m_dQCD = %.0e [eV%s]' % (m_q, '' if natural_units else '/c^2'))
             if units['m'] == 'm_u': print('m_u = %.3e [eV%s]' % (m_u, '' if natural_units else '/c^2'))
             print('m [' + units['m'] + ']\n'      + pp_param(m, m_0, n=precision))
-        if p != None:
+        if p is not None:
             print('rho [' + units['p'] + ']\n'    + pp_param(p, n=precision))
-        if amps != None:
+        if amps is not None:
             print('amp [' + units['amp'] + ']\n'  + pp_param(amps, n=precision))
-        if Th != None:
+        if Th is not None:
             print('Theta [π]\n'                   + pp_param(Th, 1. / np.pi, n=2, notn='f'))
-        if d != None:
+        if d is not None:
             print('delta [π]\n'                   + pp_param(d,  1. / np.pi, n=2, notn='f'))
 
 def sizeof_fmt(num, suffix='B'):

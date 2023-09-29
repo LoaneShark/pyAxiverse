@@ -1,18 +1,362 @@
 import numpy as np
-from piaxi_utils import init_params
+import pandas as pd
+import argparse
+import datetime
+from piaxi_utils import *
 from piaxi_numerics import solve_piaxi_system, piaxi_system
+
+## PI-AXIVERSE
+version = 'v2.7'
 
 ## Parameters of model
 manual_set = False       # Toggle override mass definitions
 unitful_masses = True    # Toggle whether masses are defined in units of [eV] vs. units of mass-ratio [m_unit] (Currently always True)
 unitful_k = False        # Toggle whether k values are defined unitfully [eV] vs. units of mass-ratio [m_unit] (Default: False)
 
-## TODO
-def main():
+# main loop
+def main(args):
 
-    #init_phases()
-    #sample_phases()
+    ## INPUT PARAMETERS
+    verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
+    use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
+    use_natural_units = args.use_natural_units    # Toggle whether calculations / results are given in c = h = G = 1 (True) or SI units (False)   || NOTE: full SI/phsyical unit support is still WIP!!
+    save_output_files = args.save_output_files    # Toggle whether or not the results from this notebook run are written to a data directory
 
+    config_name       = args.config_name          # Descriptive name for the given parameter case. Output files will be saved in a directory with this name.
+    seed              = args.seed                 # rng_seed, integer value (None for random)
+    num_cores         = args.num_cores            # Number of parallel threads available
+    data_path         = args.data_path            # Path to directory where output files will be saved
+
+    # Initialize rng
+    rng, rng_seed = get_rng(seed=seed, verbosity=verbosity)
+
+    ## CONSTANTS OF MODEL
+    # Unitful fundamental constants
+    c_raw = c = np.float64(2.998e10)    # Speed of light in a vacuum [cm/s]
+    h_raw = h = np.float64(4.136e-15)   # Planck's constant [eV/Hz]
+    G_raw = G = np.float64(1.0693e-19)  # Newtonian constant [cm^5 /(eV s^4)]
+    unitful_c = unitful_h = unitful_G = not(use_natural_units)
+
+    # values to use in calculations in order to ensure correct units
+    c_u = c if unitful_c else 1.
+    h_u = h if unitful_h else 1.
+    G_u = G if unitful_G else 1.
+
+    # Tuneable constants
+    e    = 0.3         # dimensionless electron charge
+    F    = args.F      # pi-axion decay constant (GeV) >= 10^11
+    p_t  = args.rho    # total local DM density (GeV/cm^3)
+    ## --> TODO: Could/Should we support spatially dependent distributions?
+    eps  = args.eps    # millicharge, vary to enable/disable charged species (10e-15 = OFF, 10e-25 = ON)
+    L3   = args.L3     # Coupling constant Lambda_3
+    L4   = args.L4     # Coupling constant Lambda_3
+    l1 = l2 = l3 = l4 = 1
+    
+
+    # Unit scaling:
+    dimensionful_p = not(use_natural_units)
+    #p_unit = 1.906e-12
+    p_unit = (c_raw*h_raw)**3 if not(dimensionful_p) else (c_u*h_u)**3   # convert densities from units of [1/cm^3] to [eV^3]
+    GeV  = 1e9     # GeV -> eV
+    #GeV = 1
+    F   *= GeV
+    p_t *= GeV
+    p_t *= p_unit  # 1/cm^3 -> (eV/hc)^3
+    L3  *= GeV
+    L4  *= GeV
+
+    ## Dark SM Parameters
+    sample_qmass = False # TODO
+    sample_qcons = False
+    # Mass scaling parameters
+    m_scale = args.m_scale             # dark quark mass scale (eV) <= 10-20
+
+    # SM quark masses for all 3 generations
+    qm = m_scale*np.array([1., 2., 40.]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
+
+    # dSM quark scaling constants (up, down, strange, charm, bottom, top) sampled from uniform distribution [0.7, 1.3]
+    qc = np.array([1., 1., 1., 0., 0., 0.]) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
+    #qc = np.array([1., 1., 1., 1., 1., 1.]) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
+
+    # Dark quark masses (up, down, strange, charm, bottom, top)
+    dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
+
+    # Scaling parameters
+    xi     = np.array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])  # Charged species scaling paramters
+    eps_c  = np.array([+1., +1., +1., -1., -1., -1., -1., +1., -1.])  # Millicharge sign
+
+    # Initial Conditions
+    A_0    = 0.1
+    Adot_0 = 0.0
+    A_pm   = +1       # specify A± case (+1 or -1)
+    A_sens = 1.0      # sensitivity for classification of resonance conditions
+
+    # Time domain
+    t_span = [0, args.t]   # Units of 1/m_u
+    t_N = args.tN          # Number of timesteps
+    t_sens = 0.1           # sensitivity for calculating time-averaged values
+
+    # k values
+    use_k_eq_0 = False     # Toggle whether or not k = 0 is included in the numerics (div. by 0 error possible if on)
+    k_min = 0 if use_k_eq_0 else 1
+    k_max = args.kN          # default to a k-mode granularity of 1
+    k_res = 1                # k-mode granularity
+    k_span = [k_min, k_max]  # TODO: replace with the appropriate values
+    k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)    # Number of k-modes
+
+    # Toggle whether mass-energy values should be computed in units of eV (False) or pi-axion mass (True)
+    # (by default, k is defined in units of [m_u] whereas m is defined in units of [eV], so their scaling logic is inverted)
+    unitful_amps   = unitful_m = True
+    rescale_m      = use_mass_units if unitful_masses else not(use_mass_units)
+    rescale_k      = not(rescale_m) if unitful_masses else rescale_m
+    rescale_amps   = use_mass_units if unitful_amps   else not(use_mass_units)
+
+    # Define pi-axiverse mass species
+    m_r, m_n, m_c, counts, masks = define_mass_species(qm=qm, qc=qc, F=F, e=e, eps=eps, eps_c=eps_c, xi=xi)
+    N_r, N_n, N_c = counts
+
+    # Populate masses for real, complex, and charged species (given in units of eV)
+    m, m_u = init_masses(m_r, m_n, m_c, natural_units=use_natural_units, c=c, verbosity=verbosity)
+    # Handle unit rescaling logic
+    m_unit = m_u
+    m0 = 1. if not rescale_m else (1./m_unit if unitful_masses else m_unit)         # [m_u] <--> [eV]
+    k0 = m_unit if rescale_k else 1.
+    t0 = 1./m_unit if unitful_m else 1.
+
+    ## Populate pi-axion dark matter energy densities for all species
+    p = init_densities(masks, p_t=p_t, normalized_subdens=True)
+
+    ## Populate (initial) pi-axion dark matter mass-amplitudes for each species, optional units of [eV/c]
+    amps = init_amplitudes(m, p, m_unit=m_u, h=h, c=c, mass_units=use_mass_units, natural_units=use_natural_units, unitful_amps=unitful_masses, rescale_amps=rescale_amps, verbosity=verbosity)
+
+    # Populate and sample local and global phases from normal distribution  for each species, between 0 and 2pi
+    d, Th = init_phases(masks, rng=rng, sample_delta=True, sample_Theta=True, verbosity=verbosity)
+
+    # For performance gains, omit fully non-existant species from the numerics
+    m    = trim_masked_arrays(m)
+    p    = trim_masked_arrays(p)
+    amps = trim_masked_arrays(amps)
+    Th   = trim_masked_arrays(Th)
+    d    = trim_masked_arrays(d)
+
+    ## Define the system of ODEs
+    # TODO: Verify P(t), B(t), C(t), D(t) are all of the correct form, double check all signs and factors of 2
+    # NOTE: Using cosine definitons for amplitudes
+    #       i = {0,1,2} correspond to {pi_0, pi, pi_±} respectively
+
+    # Rescale all eV unit constants to unit mass
+    rescale_consts = rescale_m if unitful_masses else not(rescale_m)
+    L3_sc = abs(L3) if not rescale_consts else L3 / m_unit
+    L4_sc = abs(L4) if not rescale_consts else L4 / m_unit
+    F_sc  = abs(F)  if not rescale_consts else  F / m_unit
+
+    units = get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p, unitful_c, unitful_h, unitful_G, use_mass_units, verbosity=verbosity)
+    print_params(units, m=m, p=p, amps=amps, Th=Th, d=d, m_q=m_scale, m_0=m0, m_u=m_u, natural_units=use_natural_units, verbosity=verbosity)
+
+    # Shorthand helper function for oscillatory time-dependent terms
+    # (time is assumed to be defined in units of [1/m_u] always)
+    phi = lambda t, s, i, m=m, d=d, t0=t0: (m[s][i])*(t*t0) + d[s][i]
+    #phi = lambda t, s, i, m=m, d=d, M=(1./m_unit if unitful_masses and not rescale_m else 1.): (m[s][i]*M)*t + d[s][i]
+
+    # Define coefficient functions to clean up differential equation representation
+    P = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
+            2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
+                                                for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
+            2*l4/(L4**2) * eps**2 * (np.sum([amps[1][i]*amps[1][j]/c**2 * np.cos(phi(t,1,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][i]-Th[1][j]) \
+                                                for i in range(len(m[1])) for j in range(len(m[1]))], axis=0) + \
+                                        np.sum([amps[0][i]*amps[0][j]/c**2 * np.cos(phi(t,0,i))*np.cos(phi(t,0,j)) \
+                                                for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
+                                    2*np.sum([amps[0][i]*amps[1][j]/c**2 * np.cos(phi(t,0,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][j]) \
+                                                for i in range(len(m[0])) for j in range(len(m[1]))], axis=0))
+
+    B = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
+                (-1)*2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(Th[2][i]-Th[2][j])  * \
+                                                    ((m[2][i]*M/c**2) * np.sin(phi(t,2,i)) * np.cos(phi(t,2,j)) + \
+                                                    (m[2][j]*M/c**2) * np.cos(phi(t,2,i)) * np.sin(phi(t,2,j))) \
+                                                    for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
+                (-1)*2*l4/(L4**2) * eps**2 * (np.sum([amps[0][i]*amps[0][j]/c**2 * ((m[0][i]*M/c**2) * np.sin(phi(t,0,i)) * np.cos(phi(t,0,j)) + \
+                                                                                    (m[0][j]*M/c**2) * np.cos(phi(t,0,i)) * np.sin(phi(t,0,j))) \
+                                                    for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
+                                                    np.sum([amps[1][i]*amps[1][j]/c**2 * np.cos(Th[1][i]-Th[1][j])  * \
+                                                            ((m[1][i]*M/c**2) * np.sin(phi(t,1,i)) * np.cos(phi(t,1,j)) + \
+                                                            (m[1][j]*M/c**2) * np.cos(phi(t,1,i)) * np.sin(phi(t,1,j))) \
+                                                            for i in range(len(m[1])) for j in range(len(m[1]))], axis=0) + \
+                                                    np.sum([np.abs(amps[0][i]*amps[1][j]/c**2) * np.cos(Th[1][j]) * \
+                                                            ((m[0][i]*M/c**2) * np.sin(phi(t,0,i)) * np.cos(phi(t,1,j)) + \
+                                                            (m[1][j]*M/c**2) * np.cos(phi(t,0,i)) * np.sin(phi(t,1,j))) \
+                                                            for i in range(len(m[0])) for j in range(len(m[1]))], axis=0))
+
+    C = lambda t, pm, l1=l1, F=F_sc, eps=eps, amps=amps, m=m, M=m0, d=d, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
+                (-1) * pm * (2*l1 / F) * eps**2 * np.sum([amps[0][i]/c**2 * (m[0][i]*M/c**2) * np.sin(phi(t,0,i)) \
+                                                        for i in range(len(m[0]))], axis=0)
+
+    D = lambda t, l2=l2, e=e, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
+                l2 * eps**2 * e**2 * np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
+                                            for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)
+
+    # TODO: Add support for supplying custom functions
+    disable_P = args.disable_P
+    disable_B = args.disable_B
+    disable_C = args.disable_C
+    disable_D = args.disable_D
+    override_coefficients = True if any([disable_P, disable_B, disable_C, disable_D]) else False
+    if override_coefficients:
+        if disable_P:
+            P = P_off
+        if disable_B:
+            B = B_off
+        if disable_C:
+            C = C_off
+        if disable_D:
+            D = D_off
+        
+    # Prepare the numerical integration
+    k_values, k_step = np.linspace(k_span[0], k_span[1], k_N, retstep=True)
+    #k_values = np.linspace(1./100, 10, 100)
+
+    # Initialize an array to store the solutions
+    t, t_step = np.linspace(t_span[0], t_span[1], t_N, retstep=True)  # Array of times at which to evaluate, t > 0
+    #t = t[1:]
+
+    # Classification sensitivity threshold
+    res_con = 1000
+    #res_con = max(100,1./A_sens)
+
+    # Collect all input parameters
+    parameters = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4, 'res_con': res_con,
+                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 't_sens': t_sens, 'A_sens': A_sens,
+                'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'm_0': m0, 'm_u': m_unit, 'm_scale': m_scale, 'p_unit': p_unit,
+                'm_r': m[0], 'm_n': m[1], 'm_c': m[2], 'p_r': p[0], 'p_n': p[1], 'p_c': p[2], 'Th_r': Th[0], 'Th_n': Th[1], 'Th_c': Th[2],
+                'amp_r': amps[0], 'amp_n': amps[1], 'amp_c': amps[2], 'd_r': d[0], 'd_n': d[1], 'd_c': d[2], 'k_0': k0,
+                'unitful_m': unitful_masses, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
+                'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
+                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units}
+
+    phash = get_parameter_space_hash(parameters, verbosity=verbosity)
+
+    # Solve the system, in parallel for each k-mode
+    os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
+    is_parallel = (num_cores > 1)
+    show_progress = (verbosity >= 0)
+
+    params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
+    #params = set_param_space(init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N))
+
+    local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=+1, k0=k0, c=c_u, h=h_u, G=G_u)
+
+    solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress)
+
+    # Generate plots and optionally show them
+    make_plots = args.make_plots
+    show_plots = args.show_plots
+    result_plots = {}
+
+    # Plot results (Amplitudes)
+    if make_plots:
+        k_peak, k_mean = get_peak_k_modes(solutions)
+
+        if verbosity > 0:
+            print('max (peak) k mode: ' + str(k_peak))
+            print('max (mean) k mode: ' + str(k_mean))
+
+        # Plot the solution
+        plt = make_amplitudes_plot(params, units, solutions)
+        result_plots['amps'] = plt.gcf()
+        if show_plots:
+            plt.show()
+    
+    # Plot the occupation numbers (TODO: Verify units in below equation)
+    #k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
+    w = lambda i, k_u=m_unit, c=c_raw, h=h_raw: np.abs(k_values[i]*k_u*(2*np.pi/h))
+    n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
+    if make_plots:
+        times = t
+
+        scale_n = True
+        plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf=n, omega=w, scale_n=scale_n)
+        n_tot = sum_n_k(n, w, solutions, times)
+        tot_res = params['res_class']
+        result_plots['nums'] = plt.gcf()
+        if show_plots:
+            plt.show()
+
+        print('n_tot in range [%.2e, %.2e]' % (min(n_tot), max(n_tot)))
+        if 'res' in tot_res and verbosity > 2:
+            print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
+
+    if make_plots:
+        # Plot results (Oscillating coefficient values)
+        plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
+        result_plots['coeffs'] = plt.gcf()
+        if show_plots:
+            plt.show()
+
+        if verbosity == 2:
+            print_coefficient_ranges(P, B, C, D)
+        elif verbosity > 2:
+            print_coefficient_ranges(P, B, C, D, print_all=True)
+
+        if verbosity > 5:
+            print('params:\n', params, '\n')
+        if verbosity > 2:
+            print('params[\'class\']:\n', params['class'])
+            if verbosity > 6:
+                print('params[\'k_class_arr\']:\n', params['k_class_arr'])
+                print('k_ratio:\n', k_ratio(np.mean, t_sens, A_sens))
+
+    # E^2 = p^2c^2 + m^2c^4
+    # Assuming k, m are given in units of eV/c and eV/c^2 respectively
+    #k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
+    k_to_Hz = lambda ki, k0=m_unit, h=h, c=c, e=e: ki * ((k0*e*2*np.pi) / h)
+    #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
+    Hz_to_k = lambda fi, k0=m_unit, h=h, c=c, e=e: fi * (h / (k0*e*2*np.pi))
+
+    # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
+    if make_plots:
+        plt = make_resonance_spectrum(params, units, k_to_Hz, Hz_to_k)
+        result_plots['resonance'] = plt.gcf()
+        if show_plots:
+            plt.show()
+
+    # Known observable frequency ranges (Hz)
+    FRB_range = [100e6, 5000e6]
+    GRB_range = [3e19, 3e21]
+
+    Hz_label = lambda f, pd=pd: pd.cut([f],
+                                       [0, 300e6, 3e12, 480e12, 750e12, 30e15, 30e18, np.inf],
+                                       labels=['Radio', 'Microwave', 'Infrared', 'Visible', 'UV', 'X-ray', 'Gamma ray'])
+
+    if 'res' in tot_res and verbosity >= 0:
+        Hz_peak = k_to_Hz(k_peak)
+        print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_peak, Hz_peak, Hz_label(Hz_peak)[0]))
+        if Hz_peak >= FRB_range[0] and Hz_peak <= FRB_range[1]:
+            print('possible FRB signal')
+        if Hz_peak >= GRB_range[0] and Hz_peak <= GRB_range[1]:
+            print('possible GRB signal')
+
+    if make_plots:
+        plt = plot_ALP_survey(verbosity=verbosity)
+
+        result_plots['alp'] = plt.gcf()
+        if show_plots:
+            plt.show()
+    
+    # Optionally save results of this run to data directory
+    save_input_params = True
+    save_integrations = True
+    save_output_plots = make_plots
+
+    if save_output_files:
+        storage_path = data_path
+        output_dir   = '/'.join(storage_path.split('/')) + '/' + version + '/' + config_name + '/'
+        output_name  = '_'.join([config_name, phash])
+        
+        save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
+                     save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots)
+
+
+    if verbosity > 1:
+        print('Done!')
     return None
 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
@@ -261,3 +605,42 @@ def sample_phases(rng, d_in, Th_in, sample_delta=True, sample_Theta=True, mean_d
         print('Theta:\n', Th)
 
     return d, Th
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Parse command line arguments.')
+    parser.add_argument('--t',          type=int, default=300,  help='Ending time value')
+    parser.add_argument('--tN',         type=int, default=300,  help='Number of timesteps')
+    parser.add_argument('--kN',         type=int, default=200,  help='Number of k-modes')
+    parser.add_argument('--seed',       type=int, default=None, help='RNG seed')
+
+    parser.add_argument('--eps',        type=np.float64, default=1,     help='Millicharge value')
+    parser.add_argument('--F',          type=np.float64, default=1e11,  help='F_pi coupling constant in [GeV]')
+    parser.add_argument('--L3',         type=np.float64, default=1e11,  help='Lambda_3 coupling constant in [GeV]')
+    parser.add_argument('--L4',         type=np.float64, default=1e11,  help='Lambda_4 coupling constant in [GeV]')
+    parser.add_argument('--m_scale',    type=np.float64, default=1e-20, help='Mass scale of dQCD quarks in [eV]')
+    parser.add_argument('--rho',        type=np.float64, default=0.4,   help='Local DM energy density, in [GeV/cm^3]')
+
+
+    parser.add_argument('--A_0',        type=np.float64, default=0.1,   help='Photon field initial conditions')
+    parser.add_argument('--Adot_0',     type=np.float64, default=0.0,   help='Photon field rate of change initial conditions')
+    parser.add_argument('--A_pm',       type=int,        default=+1,    help='Polarization case (+1 or -1)')
+
+    parser.add_argument('--use_natural_units', type=bool, default=True,  help='Toggle whether c=h=G=1')
+    parser.add_argument('--use_mass_units',    type=bool, default=True,  help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
+    parser.add_argument('--make_plots',        type=bool, default=True,  help='Toggle whether plots are made at the end of each run')
+    parser.add_argument('--show_plots',        type=bool, default=False, help='Toggle whether plots are displayed at the end of each run')
+
+    parser.add_argument('--verbosity',         type=int,  default=0,            help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
+    parser.add_argument('--save_output_files', type=bool, default=True,         help='Toggle whether or not to save the results from this run')
+    parser.add_argument('--config_name',       type=str,  default='default',    help='Descriptive name to give to this parameter case')
+    parser.add_argument('--num_cores',         type=int,  default=1,            help='Number of parallel processing threads to use')
+    parser.add_argument('--data_path',         type=str,  default='~/scratch',  help='Path to output directory where files should be saved')
+    
+    parser.add_argument('--disable_P', type=bool, default=True, help='Turn off the P(t) coefficient in the numerics')
+    parser.add_argument('--disable_B', type=bool, default=True, help='Turn off the B(t) coefficient in the numerics')
+    parser.add_argument('--disable_C', type=bool, default=True, help='Turn off the C_+/-(t) coefficient in the numerics')
+    parser.add_argument('--disable_D', type=bool, default=True, help='Turn off the D(t) coefficient in the numerics')
+
+    args = parser.parse_args()
+    main(args)
