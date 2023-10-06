@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../tools"
+		}
+	],
+	"settings": {
+		"python.envFile": "/users/sloane1/.conda/environments.txt",
+		"python.terminal.activateEnvInCurrentTerminal": true,
+		"python.autoComplete.extraPaths": [
+
+		],
+		"python.analysis.extraPaths": []
+	}
+}
