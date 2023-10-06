@@ -4,11 +4,14 @@ import datetime
 import matplotlib.pyplot as plt
 import matplotlib.image as image
 import matplotlib.cm as cm
+from matplotlib.figure import Figure
+from matplotlib.pyplot import subplot2grid
 from matplotlib.backends.backend_pdf import PdfPages
 from IPython.display import display, clear_output, HTML, Image
+from pyparsing import line
 from scipy.signal import spectrogram
 from scipy.optimize import curve_fit
-#from collections import OrderedDict
+import dill
 import json
 import hashlib
 import sys
@@ -17,10 +20,13 @@ import os
 signstr = {1: '+', -1: '-', 0: '±'}
 color_purple = '#b042f5'
 GeV = 1e9
+default_output_directory='~/scratch'
+scratch_output_directory='~/scratch'
+version='v2.8'
 # Fundamental constants
-c = np.float64(2.998e10)    # Speed of light       [cm/s]
-h = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
-G = np.float64(1.0693e-19)  # Newtonian constant   [cm^5 /(eV s^4)]
+c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
+h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
+G = G_raw = np.float64(1.0693e-19)  # Newtonian constant   [cm^5 /(eV s^4)]
 e = 0.3                     # Dimensionless electron charge
 # Pointers to global variables
 '''
@@ -193,7 +199,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     if N_c <= 0:
         L3 = -1                   # Turn off Lambda_3 if there are no surviving charged species
 
-    rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=unitful_c, unitful_h=unitful_h, unitful_G=unitful_G)
+    #rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=unitful_c, unitful_h=unitful_h, unitful_G=unitful_G)
             
     # Store for local use, and then return
     params = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4,
@@ -207,9 +213,11 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     
     return params
 
+# TODO: Make sure this actually works
 def get_params():
     return params
 
+# TODO: This is currently deprecated / unused -- is it worth fixing up?
 def rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=False, unitful_h=False, unitful_G=False, verbosity=0):
     global params
     global m, amps, k_values
@@ -259,9 +267,36 @@ def get_rng(seed=None, verbosity=0):
 
     return rng, rng_seed
 
+import dill
+
+def save_coefficient_functions(functions, filename):
+    """
+    Save functions to a file using dill.
+    
+    Parameters:
+    - functions (dict): A dictionary of functions to save. Key is the function name, value is the function object.
+    - filename (str): The name of the file to save the functions to.
+    """
+    with open(filename, 'wb') as f:
+        dill.dump(functions, f)
+
+def load_coefficient_functions(filename):
+    """
+    Load functions from a file using dill.
+    
+    Parameters:
+    - filename (str): The name of the file to load the functions from.
+    
+    Returns:
+    - functions (dict): A dictionary of loaded functions. Key is the function name, value is the function object.
+    """
+    with open(filename, 'rb') as f:
+        functions = dill.load(f)
+    return functions
+
 def save_results(output_dir_in, filename, params_in, results=None, plots=None, save_format='pdf', verbosity=0,
                  save_params=True, save_results=True, save_plots=True, plot_types=['amps', 'nums', 'resonance', 'alp'],
-                 test_run=False, scratch_dir='~/scratch'):
+                 test_run=False, scratch_dir=scratch_output_directory, save_coefficients=True, P=None, B=None, C=None, D=None):
     
     # Don't save to longterm data for a test run
     output_dir = scratch_dir if test_run else output_dir_in
@@ -287,6 +322,17 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
         results_filename = os.path.join(output_dir, filename + '.npy')
         file_list.append(results_filename)
         np.save(results_filename, results)
+
+    # Save P(t), D(t), C(t), and B(t) definitions
+    if save_coefficients:
+        coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
+        functions_in = {
+            'P': P,
+            'B': B,
+            'C': C,
+            'D': D
+        }
+        save_coefficient_functions(functions_in, coeffs_filename)
     
     # Save plots
     doc_formats = ['pdf', 'document', 'doc', 'all']
@@ -348,7 +394,62 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                 fname = file.split('/')[-1]
                 print(f'  {fname:{flen}}  | {sizeof_fmt(fsize)}')
 
-def load_results(output_dir, filename, save_format='pdf'):
+def load_multiple_results(output_dir, label, load_images=False, save_format='pdf'):
+    """
+    Parameters:
+    - output_dir (str): The directory where the output files are saved.
+    - label (str): The unique identifier for the simulation.
+    - load_images (bool): Whether to load the saved plots or not.
+    - save_format (str): The format in which the plots were saved. Options are 'pdf', 'png', 'notebook', 'html'.
+    
+    Returns:
+    - all_params (list of dicts): List of input parameters for each simulation.
+    - all_results (list of np.arrays): List of simulation results.
+    - all_plots (list of lists or None): A list of lists containing matplotlib figures or images for each simulation.
+    """
+    
+    all_files = os.listdir(output_dir)
+    relevant_files = [f for f in all_files if f.startswith(label) and f.endswith('.json')] # Assume input params are being saved for now, at least
+    
+    all_params = []
+    all_results = []
+    all_plots = []
+    all_coeffs = []
+    
+    for filename in relevant_files:
+        # Extract base name without extension
+        base_name = filename.rsplit('.', 1)[0]
+        
+        # Load parameters
+        params_filename = os.path.join(output_dir, base_name + '.json')
+        with open(params_filename, 'r') as f:
+            params = json.load(f, cls=NumpyEncoder)
+        all_params.append(params)
+        
+        # Load results
+        results_filename = os.path.join(output_dir, base_name + '.npy')
+        results = np.load(results_filename)
+        all_results.append(results)
+
+        # Load coefficient functions
+        coeffs_filename = os.path.join(output_dir, base_name, '_funcs.pkl')
+        if os.path.exists(coeffs_filename):
+            all_coeffs.append(load_coefficient_functions(coeffs_filename))
+        else:
+            all_coeffs.append(None)
+        
+        # Load plots
+        plots = []
+        if load_images and save_format == 'png':
+            i = 0
+            while os.path.exists(os.path.join(output_dir, base_name + f'_plot_{i}.png')):
+                plots.append(plt.imread(os.path.join(output_dir, base_name + f'_plot_{i}.png')))
+                i += 1
+        all_plots.append(plots)
+    
+    return all_params, all_results, all_plots, all_coeffs
+
+def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -369,16 +470,142 @@ def load_results(output_dir, filename, save_format='pdf'):
     results_filename = os.path.join(output_dir, filename, '.npy')
     results = np.load(results_filename)
     
+    # Load coefficient functions
+    coeffs_filename = os.path.join(output_dir, filename, '_funcs.pkl')
+    if os.path.exists(coeffs_filename):
+        coeffs_dict = load_coefficient_functions(coeffs_filename)
+    else:
+        coeffs_dict = None
+
     # Load plots
     plots = []
-    if save_format == 'png':
-        i = 0
-        while os.path.exists(os.path.join(output_dir, filename, f'_plot_{i}.png')):
-            plots.append(plt.imread(os.path.join(output_dir, filename, f'_plot_{i}.png')))
-            i += 1
+    if load_plots and save_format != None :
+        if save_format == 'png':
+            i = 0
+            while os.path.exists(os.path.join(output_dir, filename, f'_plot_{i}.png')):
+                plots.append(plt.imread(os.path.join(output_dir, filename, f'_plot_{i}.png')))
+                i += 1
     
-    return params, results, plots
+    return params, results, plots, coeffs_dict
 
+def load_all(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf'):
+    """
+    Load all results given a full path to the output directory or just the simulation label.
+    
+    Parameters:
+    - input_str (str): Either the full path to the output directory or just the simulation label.
+    - output_root (str): Root directory for the outputs. Default is '~/scratch'.
+    - version (str): Version of the simulation. Default is specified at the top of this file.
+    - load_images (bool): Whether to load the saved plots or not.
+    - save_format (str): The format in which the plots were saved. Options are 'pdf', 'png', 'notebook', 'html'.
+    
+    Returns:
+    - all_params, all_results, all_plots as described in the load_multiple_results function.
+    """
+    
+    # Check if the provided input_str is a directory path or just a label
+    if os.path.isdir(input_str):
+        output_dir  = os.path.join(input_str.split('/')[:-1])
+        result_name = input_str.split('/')[-1]
+    else:
+        output_dir  = os.path.join(output_root, version)
+        result_name = input_str
+    
+    return load_multiple_results(output_dir, result_name, load_images, save_format)
+
+def load_single(input_str, label=None, output_root='~/scratch', version='v2.8', save_format='pdf'):
+    """
+    Load results of a single run given a full filepath to any of the files associated with a run, or just the label and unique parameter hash.
+    
+    Parameters:
+    - input_str (str): Either the full filepath to any of the files associated with a run or just the unique parameter hash.
+    - label (str): The unique identifier for the simulation. Required if only the hash is provided.
+    - output_root (str): Root directory for the outputs. Default is '~/scratch'.
+    - version (str): Version of the simulation. Default is 'v2.8'.
+    - save_format (str): The format in which the plots were saved. Options are 'pdf', 'png', 'notebook', 'html'.
+    
+    Returns:
+    - params, results, plots as described in the load_results function.
+    """
+    
+    # Check if the provided input_str is a file path or just a hash
+    if os.path.isfile(input_str):
+        output_dir, filename_with_ext = os.path.split(input_str)
+        filename, _ = os.path.splitext(filename_with_ext)
+    else:
+        if label is None:
+            raise ValueError("If only the hash is provided, the simulation label must also be specified.")
+        output_dir = os.path.join(output_root, version, label)
+        filename = f"{label}_{input_str}"
+    
+    return load_single_result(output_dir, filename, save_format)
+
+def parse_filename(filename):
+    """
+    Parse the given filename to extract the simulation result name and parameter space hash.
+    
+    Parameters:
+    - filename (str): The filename to parse.
+    
+    Returns:
+    - tuple: (result_label, parameter_space_hash)
+    """
+    # Remove directory and file extension from the filename
+    base_filename = os.path.basename(filename)
+    filename_without_ext, _ = os.path.splitext(base_filename)
+    
+    # Split the filename to extract the label and hash
+    parts = filename_without_ext.split('_')
+    parameter_space_hash = parts[-1]
+    result_label = '_'.join(parts[:-1])
+    
+    return result_label, parameter_space_hash
+
+# Main function to load results and plot them, for a single given case
+def plot_single_case(input_str, plot_res=True, plot_nums=True, plot_coeffs=True, k_samples=[]):
+    
+    # Load results
+    params, results, _, coeffs = load_single(input_str)
+    units = get_units()
+    
+    # Define which k values should be plotted
+    logscale_k = False
+    k_peak = np.max(params.get('k_sens_arr', None))
+    k_mean = np.max(params.get('k_mean_arr', None))
+    k_rmax = np.max(params.get('k_peak_arr', None))
+    if len(k_samples) <= 0:
+        if logscale_k:
+            k_samples = np.geomspace(1,len(k_values),num=5)
+        else:
+            k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
+
+    # Extracting parameters from the dictionary
+    unitful_m = params.get('unitful_m', None)
+    rescale_m = params.get('rescale_m', None)
+    unitful_k = params.get('unitful_k', None)
+    rescale_k = params.get('rescale_k', None)
+    unitful_amps = params.get('unitful_amps', None)
+    rescale_amps = params.get('rescale_amps', None)
+    rescale_consts = params.get('rescale_consts', None)
+
+    # Calling get_units
+    units = get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts)
+
+    # Plot results of numerical integration, as imported from file
+    if plot_res:
+        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=params.get('k_samples', []))
+
+    # Plot occupation number of the photon field, as imported from file
+    if plot_nums:
+        plot_occupation_nums(params_in=params, units=units, results=results, numf=None, omega=None, k_samples=params.get('k_samples', []))
+
+    # Plot time-dependent oscillatory coefficients, as imported from file
+    if plot_coeffs:
+        P = coeffs['P']
+        B = coeffs['P']
+        C = coeffs['P']
+        D = coeffs['P']
+        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=params.get('k_samples', []))
 
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
@@ -415,8 +642,8 @@ def get_peak_k_modes(results_in):
     return k_peak, k_mean
 
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, k_samples=[], plot_Adot=True):
-    plt = make_amplitudes_plot(params_in, units_in, k_samples, plot_Adot)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], plot_Adot=True):
+    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, plot_Adot)
     plt.show()
     
 def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], plot_Adot=True):
@@ -431,10 +658,10 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], plot_Ado
     else:
         ydim = 2
 
-    plt.figure(figsize=(4*xdim, 4*ydim))
+    fig = Figure(figsize=(4*xdim, 4*ydim))
 
     #plt.subplot(2,1,1)
-    plt.subplot2grid((ydim,xdim), (0,0), colspan=3)
+    subplot2grid((ydim,xdim), (0,0), fig=fig, colspan=3)
     #plot_colors = cm.get_cmap('plasma').jet(np.linspace(0,1,len(k_samples)))
     for k_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
@@ -486,14 +713,22 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], plot_Ado
     
     return plt
 
+# Plot the occupation numbers (TODO: Verify units in below equation)
+#k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
+w_p = lambda i, params: w(i, k_u=params['m_unit'])
+w = lambda i, k_u, c=c_raw, h=h_raw: np.abs(k_values[i]*k_u*(2*np.pi/h))
+n_p = lambda i, params, solns: n(i, w_p(i, params), solns)
+n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
+
 # Plot occupation number results
-def plot_occupation_nums(params, units, results, numf, omega, k_samples=[], scale_n=True):
-    plt = make_occupation_num_plots(params, units, results, numf, omega, k_samples, scale_n)
+def plot_occupation_nums(params_in, units_in, results_in, numf=n, omega=None, k_samples=[], scale_n=True):
+    plt = make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples, scale_n)
     plt.show()
 
-sum_n_k = lambda n, w, solns, times: np.array([sum([n(i, w, solns)[t_i] for i in range(len(k_values))]) for t_i in range(len(times))])
+sum_n_k   = lambda n, w, solns, times: np.array([sum([n(i, w, solns)[t_i] for i in range(len(k_values))]) for t_i in range(len(times))])
+sum_n_k_p = lambda n, p, solns, times: np.array([sum([n(i, p, solns)[t_i] for i in range(len(k_values))]) for t_i in range(len(times))])
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples_in=[], scale_n=True):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, omega_in=None, k_samples_in=[], scale_n=True):
     global params
     if len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
@@ -501,13 +736,16 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_sa
     else:
         k_samples = k_samples_in
     times = t
+
+    omega = omega_in if omega_in is not None else w_p(params_in)
     
     plt.figure(figsize=(20, 9))
 
     plt.subplot2grid((2,5), (0,0), colspan=3)
     for k_sample in k_samples:
         k_s = int(k_sample)
-        plt.plot(times, numf(k_s, omega, results_in), label='k='+str(k_values[k_s]))
+        k_nums = numf_in(k_s, omega, results_in) if numf_in is not None else n_p(k_s, params_in, results_in)
+        plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
     plt.title('Occupation number per k mode', fontsize=16)
     plt.xlabel('Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.2)
@@ -516,7 +754,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_sa
     plt.legend()
     plt.grid()
 
-    n_tot = sum_n_k(numf, omega, results_in, times)
+    n_tot = sum_n_k(numf_in, omega, results_in, times) if numf_in is not None else sum_n_k_p(n_p, params_in, results_in, times)
     if scale_n:
         n_tot /= abs(n_tot[0])
         n_tot += max(0, np.sign(n_tot[0]))  # Placeholder fix for negative n
@@ -571,21 +809,21 @@ def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None,  k_sa
     
 def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], plot_all=True):
     global k_0
-    P = P_in if P_in != None else P_off
-    B = B_in if B_in != None else B_off
-    D = D_in if D_in != None else D_off
-    C = C_in if C_in != None else C_off
-    Cpm = Cpm_in if Cpm_in != None else params['A_pm']
-    k0 = k_unit if k_unit != None else k_0
+    P = P_in if P_in is not None else P_off
+    B = B_in if B_in is not None else B_off
+    D = D_in if D_in is not None else D_off
+    C = C_in if C_in is not None else C_off
+    Cpm = Cpm_in if Cpm_in is not None else params['A_pm']
+    k0 = k_unit if k_unit is not None else k_0
     
     if len(k_samples_in) <= 0:
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
-    plt.figure(figsize = (20,9))
+    fig = Figure(figsize = (20,9))
     times = t
 
-    plt.subplot2grid((2,5), (0,0), colspan=3, rowspan=1)
+    plt.subplot2grid((2,5), (0,0), fig=fig, colspan=3, rowspan=1)
 
     for (c_t, c_label) in get_coefficient_values(P, B, C, D, times):
         plt.plot(times, c_t, label=c_label)
@@ -702,12 +940,12 @@ def print_coefficient_ranges(P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
-    P    = P_in   if P_in   != None else P_off
-    B    = B_in   if B_in   != None else B_off
-    D    = D_in   if D_in   != None else D_off
-    C    = C_in   if C_in   != None else C_off
-    Cpm  = Cpm_in if Cpm_in != None else params['A_pm']
-    k0   = k_unit if k_unit != None else k_0
+    P    = P_in   if P_in   is not None else P_off
+    B    = B_in   if B_in   is not None else B_off
+    D    = D_in   if D_in   is not None else D_off
+    C    = C_in   if C_in   is not None else C_off
+    Cpm  = Cpm_in if Cpm_in is not None else params['A_pm']
+    k0   = k_unit if k_unit is not None else k_0
     times = t
     
     for c_range_str in get_coefficient_ranges(P, B, C, D, k_samples):
@@ -726,7 +964,7 @@ def print_coefficient_ranges(P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=
             print('Beta(t)    range: [%.1e, %.1e]' % (min(Beta(times, P, B)), max(Beta(times, P, B))))
 
 def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
-    plt = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn)
+    plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn)
     plt.show()
 
 def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
@@ -835,30 +1073,56 @@ def plot_ALP_survey(verbosity=0):
     
     return plt
 
+# TODO: Make this function, which plots the result of a number of runs over a series of preferred metrics, for a given mass and density
 def plot_parameter_space():
     return None
 
-def fit_epsilon_relation(pts_in=[], plot_fit=True):
-    pts_x = [x for x,y in pts_in]
-    pts_y = [y for x,y in pts_in]
+logfit = lambda x, a, b, c: a*np.log10(10*x[0]+b)+c
 
-    logfit = lambda t, a, b, c: a*np.log10(10*t+b)+c
+# Solve for F_pi given epsilon (millicharge) and ALP (unit) mass
+def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
+    if use_old_fit:
+        # TODO: Fix for epsilon != 1?
+        fit_res = fit_crude_epsilon_relation(pts_in=[(0.1,-19.9,eps), (0.5,-18.6,eps), (1,-17.9,eps)], plot_fit=show_plots, verbosity=verbosity)
+        F_pi = logfit((m_scale, eps), a=fit_res[0], b=fit_res[1], c=fit_res[2])
+    else:
+        F_pi = 1./((4.38299e-20)*(eps**2)*(10)*(m_scale**(1/9))/(0.1**2))
+
+    if verbosity >=2:
+        print('solving for F_pi: %.1e GeV' % F_pi)
+
+    return F_pi
+
+# Fits a log-linear relation as an approximation to the pi-axion mass / F_pi coupling relationship
+# TODO: Replace with more robust epsilon relation
+def fit_crude_epsilon_relation(pts_in=[], plot_fit=True, verbosity=0):
+    pts_x = [[x,eps] for x,_,eps in pts_in]
+    pts_y = [y for _,y,_ in pts_in]
+    eps_vals = set([eps for _,_,eps in pts_in])
+
     xspace = np.linspace(0.01, 1.5, 150)
-
-    popt, pcov = curve_fit(logfit, np.array(pts_x),np.array(pts_y),p0=(2,0,-19.9))
+    if all([eps_i == 1 for eps_i in eps_vals]):
+        popt, pcov = curve_fit(logfit, np.array(pts_x),np.array(pts_y),p0=(2,0,-19.9))
+    else:
+        print('TODO: eps != 1 not yet supported')
+        return None
 
     if plot_fit:
-        plt.plot(pts_x, pts_y, marker='x', linewidth=0, ms=10, color='red')
-        plt.plot(xspace, logfit(xspace, a=2, b=0, c=-19.9), color='blue')
-        plt.plot(xspace, logfit(xspace, a=popt[0], b=popt[1], c=popt[2]), color='green')
+        for eps_val in eps_vals:
+            plt.plot([x for x,eps in pts_x if eps == eps_val], pts_y, marker='x', label=r'$\varepsilon = %.0e$' % eps_val, linewidth=0, ms=10)
+            plt.plot(xspace, logfit(xspace, a=2, b=0, c=-19.9), style='--')
+            plt.plot(xspace, logfit(xspace, a=popt[0], b=popt[1], c=popt[2]), style='-')
 
-        plt.ylim(-21, -17)
-        plt.xlim(0, 1.1)
-        plt.yscale('exp')
-        plt.grid()
-        plt.show()
+            plt.ylim(-21, -17)
+            plt.xlim(0, 1.1)
+            #plt.yscale('log')
+            plt.grid()
+            plt.show()
+
+    if verbosity >= 6:
+        print('F_pi = %.3f log_10(10x + %.3f) + %.3f' % (popt[0], popt[1], popt[2]))
     
-    return popt
+    return popt, pcov
 
 # Helper function to pretty print parameters of model alongside plots
 def print_param_space(params, units_in, case='full'):

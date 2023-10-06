@@ -9,7 +9,7 @@ def set_param_space(params_in):
     global params
     global t, t_span, t_num, t_step, t_0
     global k_values, k_span, k_num, k_step
-    global e
+    global e, bg
     global eps
     global F
     global L3, L4
@@ -62,6 +62,7 @@ def set_param_space(params_in):
     amps    = params['amps']
     p_t     = params['p_t']
     t_0     = params['t_0']
+    bg      = params['em_bg']
     
     t, t_step        = np.linspace(t_span[0], t_span[1], t_num, retstep=True)
     k_values, k_step = np.linspace(k_span[0], k_span[1], k_num, retstep=True)

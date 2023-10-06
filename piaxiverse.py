@@ -3,10 +3,8 @@ import pandas as pd
 import argparse
 import datetime
 from piaxi_utils import *
+from piaxi_utils import version, default_output_directory
 from piaxi_numerics import solve_piaxi_system, piaxi_system
-
-## PI-AXIVERSE
-version = 'v2.7'
 
 ## Parameters of model
 manual_set = False       # Toggle override mass definitions
@@ -15,7 +13,78 @@ unitful_k = False        # Toggle whether k values are defined unitfully [eV] vs
 
 # main loop
 def main(args):
+    
+    if any([args.scan_mass is not None, args.scan_Lambda is not None]):
+        run_multiple_cases(args)
+    else:
+        run_single_case(args)
 
+    return None
+
+get_values = lambda xmin, xmax, N: np.geomspace(10**np.float64(xmin), 10**np.float64(xmax), N)
+def run_multiple_cases(args):
+
+    mass_values = [args.m_scale]
+    mass_N      = args.scan_mass_N
+    L3_values   = [args.L3]
+    L4_values   = [args.L4]
+    F_values    = [args.F]
+    fit_F       = args.fit_F
+    F_N         = args.scan_F_N
+    Lambda_N    = args.scan_Lambda_N
+    Lambda3_N   = args.scan_Lambda3_N if args.scan_Lambda3_N is not None else args.scan_Lambda
+    Lambda4_N   = args.scan_Lambda4_N if args.scan_Lambda4_N is not None else args.scan_Lambda
+    eps_values  = [args.eps]
+    eps_N       = args.scan_epsilon_N
+
+    scan_mass     = np.float64(args.scan_mass)    if args.scan_mass    is not None else None
+    scan_F        = np.float64(args.scan_F)       if args.scan_F       is not None else None
+    scan_Lambda   = np.float64(args.scan_Lambda)  if args.scan_Lambda  is not None else None
+    scan_Lambda3  = np.float64(args.scan_Lambda3) if args.scan_Lambda3 is not None else None
+    scan_Lambda4  = np.float64(args.scan_Lambda4) if args.scan_Lambda4 is not None else None
+    scan_eps      = np.float64(args.scan_epsilon) if args.scan_epsilon is not None else None
+
+    if scan_mass is not None:
+        m_min, m_max = scan_mass
+        mass_values = get_values(m_min, m_max, mass_N)
+
+    if scan_eps is not None:
+        eps_min, eps_max = scan_eps
+        eps_values = get_values(eps_min, eps_max, eps_N)
+    
+    if scan_F is not None:
+        F_min, F_max = scan_F
+        F_values = get_values(F_min, F_max, F_N)
+        # TODO: Allow this to scan about inferred value from epsilon if said argument is enabled?
+        fit_F = False
+
+    if args.verbosity >= 9:
+        print('args in: ')
+        print('\n'.join([str(inparam) for inparam in [scan_Lambda, scan_Lambda3, scan_Lambda4, Lambda_N, Lambda3_N, Lambda4_N]]))
+    if scan_Lambda is not None:
+        L_min, L_max = scan_Lambda
+        L3_values = get_values(L_min, L_max, Lambda3_N)
+        L4_values = get_values(L_min, L_max, Lambda4_N)
+    if scan_Lambda3 is not None:
+        L3_min, L3_max = scan_Lambda3
+        L3_values = get_values(L3_min, L3_max, Lambda3_N)
+    if scan_Lambda4 is not None:
+        L4_min, L4_max = scan_Lambda4
+        L4_values = get_values(L4_min, L4_max, Lambda4_N)
+
+    i = 0
+    for mass in mass_values:
+        for eps in eps_values:
+            for F in F_values:
+                for L3 in L3_values:
+                    for L4 in L4_values:
+                        if args.verbosity >= 7:
+                            print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
+                        run_single_case(args, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
+                        i += 1
+    return None
+
+def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
     ## INPUT PARAMETERS
     verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
@@ -44,16 +113,20 @@ def main(args):
 
     # Tuneable constants
     e    = 0.3         # dimensionless electron charge
-    F    = args.F      # pi-axion decay constant (GeV) >= 10^11
+    F    = Fpi_in if Fpi_in is not None else args.F      # pi-axion decay constant (GeV) >= 10^11
     p_t  = args.rho    # total local DM density (GeV/cm^3)
     ## --> TODO: Could/Should we support spatially dependent distributions?
-    eps  = args.eps    # millicharge, vary to enable/disable charged species (10e-15 = OFF, 10e-25 = ON)
-    L3   = args.L3     # Coupling constant Lambda_3
-    L4   = args.L4     # Coupling constant Lambda_3
+    eps  = eps_in if eps_in is not None else args.eps    # millicharge, vary to enable/disable charged species (<= 10e-25 ~ ON, >= 10e-15 ~ OFF)
+    L3   = L3_in  if L3_in  is not None else args.L3     # Coupling constant Lambda_3
+    L4   = L4_in  if L4_in  is not None else args.L4     # Coupling constant Lambda_4
     l1 = l2 = l3 = l4 = 1
     
-
     # Unit scaling:
+    m_scale = args.m_scale             # dark quark mass scale (eV) <= 10-20
+    ## Handle optional fitting of F_pi as a function of fundamental mass scale]
+    fit_F = fit_F_in if fit_F_in is not None else args.fit_F
+    if fit_F:
+        F = fit_Fpi(eps, m_scale, verbosity=verbosity)
     dimensionful_p = not(use_natural_units)
     #p_unit = 1.906e-12
     p_unit = (c_raw*h_raw)**3 if not(dimensionful_p) else (c_u*h_u)**3   # convert densities from units of [1/cm^3] to [eV^3]
@@ -67,16 +140,13 @@ def main(args):
 
     ## Dark SM Parameters
     sample_qmass = False # TODO
-    sample_qcons = False
-    # Mass scaling parameters
-    m_scale = args.m_scale             # dark quark mass scale (eV) <= 10-20
+    sample_qcons = args.dqm_c is None
 
     # SM quark masses for all 3 generations
     qm = m_scale*np.array([1., 2., 40.]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
 
     # dSM quark scaling constants (up, down, strange, charm, bottom, top) sampled from uniform distribution [0.7, 1.3]
-    qc = np.array([1., 1., 1., 0., 0., 0.]) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
-    #qc = np.array([1., 1., 1., 1., 1., 1.]) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
+    qc = np.array(args.dqm_c) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
     dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
@@ -90,6 +160,7 @@ def main(args):
     Adot_0 = 0.0
     A_pm   = +1       # specify A± case (+1 or -1)
     A_sens = 1.0      # sensitivity for classification of resonance conditions
+    em_bg  = 1.0      # photon background (Default 1)
 
     # Time domain
     t_span = [0, args.t]   # Units of 1/m_u
@@ -222,15 +293,16 @@ def main(args):
     res_con = 1000
     #res_con = max(100,1./A_sens)
 
-    # Collect all input parameters
+    # Collect all simulation configuration parameters
     parameters = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4, 'res_con': res_con,
-                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 't_sens': t_sens, 'A_sens': A_sens,
+                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 't_sens': t_sens, 'A_sens': A_sens, 't_step': t_step, 'k_step': k_step,
                 'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'm_0': m0, 'm_u': m_unit, 'm_scale': m_scale, 'p_unit': p_unit,
                 'm_r': m[0], 'm_n': m[1], 'm_c': m[2], 'p_r': p[0], 'p_n': p[1], 'p_c': p[2], 'Th_r': Th[0], 'Th_n': Th[1], 'Th_c': Th[2],
                 'amp_r': amps[0], 'amp_n': amps[1], 'amp_c': amps[2], 'd_r': d[0], 'd_n': d[1], 'd_c': d[2], 'k_0': k0,
                 'unitful_m': unitful_masses, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
                 'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
-                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units}
+                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 
+                'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D, 'em_bg': em_bg}
 
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
 
@@ -242,7 +314,7 @@ def main(args):
     params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
     #params = set_param_space(init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N))
 
-    local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=+1, k0=k0, c=c_u, h=h_u, G=G_u)
+    local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
 
     solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress)
 
@@ -319,8 +391,8 @@ def main(args):
             plt.show()
 
     # Known observable frequency ranges (Hz)
-    FRB_range = [100e6, 5000e6]
-    GRB_range = [3e19, 3e21]
+    FRB_values = [100e6, 5000e6]
+    GRB_values = [3e19, 3e21]
 
     Hz_label = lambda f, pd=pd: pd.cut([f],
                                        [0, 300e6, 3e12, 480e12, 750e12, 30e15, 30e18, np.inf],
@@ -329,9 +401,9 @@ def main(args):
     if 'res' in tot_res and verbosity >= 0:
         Hz_peak = k_to_Hz(k_peak)
         print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_peak, Hz_peak, Hz_label(Hz_peak)[0]))
-        if Hz_peak >= FRB_range[0] and Hz_peak <= FRB_range[1]:
+        if Hz_peak >= FRB_values[0] and Hz_peak <= FRB_values[1]:
             print('possible FRB signal')
-        if Hz_peak >= GRB_range[0] and Hz_peak <= GRB_range[1]:
+        if Hz_peak >= GRB_values[0] and Hz_peak <= GRB_values[1]:
             print('possible GRB signal')
 
     if make_plots:
@@ -354,10 +426,8 @@ def main(args):
         save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
                      save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots)
 
-
     if verbosity > 1:
         print('Done!')
-    return None
 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
 
@@ -607,7 +677,7 @@ def sample_phases(rng, d_in, Th_in, sample_delta=True, sample_Theta=True, mean_d
     return d, Th
 
 if __name__ == '__main__':
-
+    default_outdir = default_output_directory
     parser = argparse.ArgumentParser(description='Parse command line arguments.')
     parser.add_argument('--t',          type=int, default=300,  help='Ending time value')
     parser.add_argument('--tN',         type=int, default=300,  help='Number of timesteps')
@@ -631,16 +701,32 @@ if __name__ == '__main__':
     parser.add_argument('--make_plots',        type=bool, default=True,  help='Toggle whether plots are made at the end of each run')
     parser.add_argument('--show_plots',        type=bool, default=False, help='Toggle whether plots are displayed at the end of each run')
 
-    parser.add_argument('--verbosity',         type=int,  default=0,            help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
-    parser.add_argument('--save_output_files', type=bool, default=True,         help='Toggle whether or not to save the results from this run')
-    parser.add_argument('--config_name',       type=str,  default='default',    help='Descriptive name to give to this parameter case')
-    parser.add_argument('--num_cores',         type=int,  default=1,            help='Number of parallel processing threads to use')
-    parser.add_argument('--data_path',         type=str,  default='~/scratch',  help='Path to output directory where files should be saved')
+    parser.add_argument('--verbosity',         type=int,  default=0,               help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
+    parser.add_argument('--save_output_files', type=bool, default=True,            help='Toggle whether or not to save the results from this run')
+    parser.add_argument('--config_name',       type=str,  default='default',       help='Descriptive name to give to this parameter case')
+    parser.add_argument('--num_cores',         type=int,  default=1,               help='Number of parallel processing threads to use')
+    parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     
-    parser.add_argument('--disable_P', type=bool, default=True, help='Turn off the P(t) coefficient in the numerics')
-    parser.add_argument('--disable_B', type=bool, default=True, help='Turn off the B(t) coefficient in the numerics')
-    parser.add_argument('--disable_C', type=bool, default=True, help='Turn off the C_+/-(t) coefficient in the numerics')
-    parser.add_argument('--disable_D', type=bool, default=True, help='Turn off the D(t) coefficient in the numerics')
+    parser.add_argument('--disable_P', type=bool, default=False, help='Turn off the P(t) coefficient in the numerics')
+    parser.add_argument('--disable_B', type=bool, default=False, help='Turn off the B(t) coefficient in the numerics')
+    parser.add_argument('--disable_C', type=bool, default=False, help='Turn off the C_+/-(t) coefficient in the numerics')
+    parser.add_argument('--disable_D', type=bool, default=False, help='Turn off the D(t) coefficient in the numerics')
+
+    parser.add_argument('--fit_F',          type=bool, default=True,  help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
+    parser.add_argument('--scan_F',         type=int,  nargs=2,       help='Provide min and max values of F_pi values to search, in [log GeV] scale')
+    parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to search within specified F_pi range')
+    parser.add_argument('--scan_mass',      type=int,  nargs=2,       help='Provide min and max values of mass scales to search, in [log eV] scale')
+    parser.add_argument('--scan_mass_N',    type=int,  default=10,    help='Provide number of values to search within specified mass range')
+    parser.add_argument('--scan_Lambda',    type=int,  nargs=2,       help='Provide min and max values of coupling constant scales to search, in [log GeV] units (L_3=L_4)')
+    parser.add_argument('--scan_Lambda3',   type=int,  nargs=2,       help='Provide min and max values of L_3 values to search, in [log GeV]')
+    parser.add_argument('--scan_Lambda4',   type=int,  nargs=2,       help='Provide min and max values of L_4 values to search, in [log GeV]')
+    parser.add_argument('--scan_Lambda_N',  type=int,  default=10,    help='Provide number of values to search within specified Lambda range')
+    parser.add_argument('--scan_Lambda3_N', type=int,  default=None,  help='Provide number of values to search within specified L_3 range')
+    parser.add_argument('--scan_Lambda4_N', type=int,  default=None,  help='Provide number of values to search within specified L_4 range')
+    parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
+    parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
+
+    parser.add_argument('--dqm_c', type=int, nargs=6, default=[1,1,1,1,1,1], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
 
     args = parser.parse_args()
     main(args)
