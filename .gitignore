@@ -1,6 +1,7 @@
 # Custom
 jupyter-log-*.txt
 pi_axiverse_log-*.txt
+test_data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
