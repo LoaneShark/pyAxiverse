@@ -78,8 +78,11 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     global k_count_max
     # Determine the environment
     is_jupyter = jupyter if jupyter != None else 'ipykernel' in sys.modules
-    if verbosity > 3:
-        print('Jupyter?       ', is_jupyter)
+    if is_jupyter and verbosity >= 0:
+            print('Jupyter?       ', is_jupyter)
+    elif verbosity >= 6:
+            print('Jupyter?       ', is_jupyter)
+    if verbosity >= 3:
         print('Parallel?      ', parallelize, ' (N = %d)' % num_cores if parallelize and verbosity >= 8 else '')
 
     if is_jupyter:

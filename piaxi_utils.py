@@ -240,7 +240,14 @@ class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
+        return super(NumpyEncoder, self).default(obj)
+    
+    def decode(dct):
+        if dct.get('__type__') == 'numpy.ndarray':
+            data = dct['data']
+            dtype = dct['dtype']
+            return np.array(data, dtype=dtype)
+        return dct
     
 # Generate a unique but reproduceable hash for the given parameter set
 def get_parameter_space_hash(params_in, verbosity=0):
@@ -266,8 +273,6 @@ def get_rng(seed=None, verbosity=0):
         print('rng_seed:', rng_seed)
 
     return rng, rng_seed
-
-import dill
 
 def save_coefficient_functions(functions, filename):
     """
@@ -423,7 +428,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         # Load parameters
         params_filename = os.path.join(output_dir, base_name + '.json')
         with open(params_filename, 'r') as f:
-            params = json.load(f, cls=NumpyEncoder)
+            params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
         all_params.append(params)
         
         # Load results
@@ -462,16 +467,16 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     """
     
     # Load parameters
-    params_filename = os.path.join(output_dir, filename, '.json')
+    params_filename = os.path.join(output_dir, filename + '.json')
     with open(params_filename, 'r') as f:
-        params = json.load(f, cls=NumpyEncoder)
+        params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
     
     # Load results
-    results_filename = os.path.join(output_dir, filename, '.npy')
+    results_filename = os.path.join(output_dir, filename + '.npy')
     results = np.load(results_filename)
     
     # Load coefficient functions
-    coeffs_filename = os.path.join(output_dir, filename, '_funcs.pkl')
+    coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
     if os.path.exists(coeffs_filename):
         coeffs_dict = load_coefficient_functions(coeffs_filename)
     else:
@@ -513,7 +518,7 @@ def load_all(input_str, output_root='~/scratch', version=version, load_images=Fa
     
     return load_multiple_results(output_dir, result_name, load_images, save_format)
 
-def load_single(input_str, label=None, output_root='~/scratch', version='v2.8', save_format='pdf'):
+def load_single(input_str, label=None, phash=None, output_root='~/scratch', version='v2.8', save_format='pdf', load_plots=False):
     """
     Load results of a single run given a full filepath to any of the files associated with a run, or just the label and unique parameter hash.
     
@@ -533,12 +538,46 @@ def load_single(input_str, label=None, output_root='~/scratch', version='v2.8', 
         output_dir, filename_with_ext = os.path.split(input_str)
         filename, _ = os.path.splitext(filename_with_ext)
     else:
-        if label is None:
-            raise ValueError("If only the hash is provided, the simulation label must also be specified.")
-        output_dir = os.path.join(output_root, version, label)
-        filename = f"{label}_{input_str}"
+        output_dir = output_root
+        input_name, _ = os.path.splitext(input_str.split('/')[-1])
+        input_split = input_name.split('_')
+        input_label = label
+        input_hash  = phash
+        if (input_label is None) or (input_hash is None):
+            if len(list(input_split)) > 1:
+                input_split_first = input_split[:-1]
+                input_split_last  = input_split[-1]
+                if len(input_split_last) == 40:
+                    input_hash = input_split_last
+                    input_label = '_'.join(input_split_first)
+                else:
+                    input_label = '_'.join(input_split)
+                    raise ValueError("If only the label is provided, the simulation parameter hash must also be specified.")
+            else:
+                if len(input_name) == 40:
+                    input_hash = input_name
+                else:
+                    input_label = input_name
+        # Throw error if insufficient information is provided to locate the specific file
+        if input_label is not None:
+            if input_hash is None:
+                raise ValueError("If only the hash is provided, the simulation label must also be specified.")
+        else:
+            if input_label is None:
+                raise ValueError("If only the label is provided, the simulation parameter hash must also be specified.")
+        print('input_str', input_str)
+        print('output_dir_in', output_dir)
+        print('output_dir split', )
+        print('label:  ', label)
+        print('phash:  ', phash)
+        print('input_label:  ', input_label)
+        print('input_phash:  ', input_hash)
+        pathroot, pathrest = os.path.split(output_dir)
+        output_dir = os.path.join(pathroot, pathrest, version, input_label)
+        print('output_dir', output_dir)
+        filename = f"{input_label}_{input_hash}"
     
-    return load_single_result(output_dir, filename, save_format)
+    return load_single_result(output_dir, filename, load_plots, save_format)
 
 def parse_filename(filename):
     """
@@ -548,7 +587,7 @@ def parse_filename(filename):
     - filename (str): The filename to parse.
     
     Returns:
-    - tuple: (result_label, parameter_space_hash)
+    - tuple: (result_label, result_phash)
     """
     # Remove directory and file extension from the filename
     base_filename = os.path.basename(filename)
@@ -556,23 +595,23 @@ def parse_filename(filename):
     
     # Split the filename to extract the label and hash
     parts = filename_without_ext.split('_')
-    parameter_space_hash = parts[-1]
+    result_phash = parts[-1]
     result_label = '_'.join(parts[:-1])
     
-    return result_label, parameter_space_hash
+    return result_label, result_phash
 
 # Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, plot_res=True, plot_nums=True, plot_coeffs=True, k_samples=[]):
+def plot_single_case(input_str, input_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, k_samples=[]):
     
     # Load results
-    params, results, _, coeffs = load_single(input_str)
+    params, results, _, coeffs = load_single(input_str, output_root=input_dir)
     units = get_units()
     
     # Define which k values should be plotted
-    logscale_k = False
     k_peak = np.max(params.get('k_sens_arr', None))
     k_mean = np.max(params.get('k_mean_arr', None))
     k_rmax = np.max(params.get('k_peak_arr', None))
+    logscale_k = False
     if len(k_samples) <= 0:
         if logscale_k:
             k_samples = np.geomspace(1,len(k_values),num=5)
@@ -1077,7 +1116,7 @@ def plot_ALP_survey(verbosity=0):
 def plot_parameter_space():
     return None
 
-logfit = lambda x, a, b, c: a*np.log10(10*x[0]+b)+c
+logfit = lambda x, a, b, c: a*np.log10(10*x+b)+c
 
 # Solve for F_pi given epsilon (millicharge) and ALP (unit) mass
 def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
@@ -1097,21 +1136,21 @@ def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
 # TODO: Replace with more robust epsilon relation
 def fit_crude_epsilon_relation(pts_in=[], plot_fit=True, verbosity=0):
     pts_x = [[x,eps] for x,_,eps in pts_in]
-    pts_y = [y for _,y,_ in pts_in]
+    pts_y = [[y,eps] for _,y,eps in pts_in]
     eps_vals = set([eps for _,_,eps in pts_in])
-
+    
     xspace = np.linspace(0.01, 1.5, 150)
     if all([eps_i == 1 for eps_i in eps_vals]):
-        popt, pcov = curve_fit(logfit, np.array(pts_x),np.array(pts_y),p0=(2,0,-19.9))
+        popt, pcov = curve_fit(logfit, np.array(pts_x)[:,0],np.array(pts_y)[:,0],p0=(2,0,-19.9))
     else:
         print('TODO: eps != 1 not yet supported')
         return None
 
     if plot_fit:
         for eps_val in eps_vals:
-            plt.plot([x for x,eps in pts_x if eps == eps_val], pts_y, marker='x', label=r'$\varepsilon = %.0e$' % eps_val, linewidth=0, ms=10)
-            plt.plot(xspace, logfit(xspace, a=2, b=0, c=-19.9), style='--')
-            plt.plot(xspace, logfit(xspace, a=popt[0], b=popt[1], c=popt[2]), style='-')
+            plt.plot([x for x,_,eps in pts_in if eps == eps_val], [y for _,y,eps in pts_in if eps == eps_val], marker='x', label=r'$\varepsilon = %.0e$' % eps_val, linewidth=0, ms=10)
+            plt.plot(xspace, logfit(xspace, a=2, b=0, c=-19.9), linestyle='--')
+            plt.plot(xspace, logfit(xspace, a=popt[0], b=popt[1], c=popt[2]), linestyle='-')
 
             plt.ylim(-21, -17)
             plt.xlim(0, 1.1)

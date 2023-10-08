@@ -13,8 +13,8 @@ unitful_k = False        # Toggle whether k values are defined unitfully [eV] vs
 
 # main loop
 def main(args):
-    
-    if any([args.scan_mass is not None, args.scan_Lambda is not None]):
+    scan_args = [args.scan_mass, args.scan_Lambda, args.scan_Lambda3, args.scan_Lambda3, args.scanF, args.scanEpsilon]
+    if any([scan_arg is not None for scan_arg in scan_args]):
         run_multiple_cases(args)
     else:
         run_single_case(args)
