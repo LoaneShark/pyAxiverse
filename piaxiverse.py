@@ -3,7 +3,7 @@ import pandas as pd
 import argparse
 import datetime
 from piaxi_utils import *
-from piaxi_utils import version, default_output_directory
+from piaxi_utils import version, default_output_directory, k_to_HZ, Hz_to_k
 from piaxi_numerics import solve_piaxi_system, piaxi_system
 
 ## Parameters of model
@@ -388,13 +388,13 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
         # E^2 = p^2c^2 + m^2c^4
         # Assuming k, m are given in units of eV/c and eV/c^2 respectively
         #k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
-        k_to_Hz = lambda ki, k0=m_unit, h=h, c=c, e=e: ki * ((k0*e*2*np.pi) / h)
+        k_to_Hz_local = lambda ki, k0=m_unit, h=h_raw, c=c_raw, e=e: k_to_Hz(ki, k0, h, c, e)
         #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
-        Hz_to_k = lambda fi, k0=m_unit, h=h, c=c, e=e: fi * (h / (k0*e*2*np.pi))
+        Hz_to_k_local = lambda fi, k0=m_unit, h=h_raw, c=c_raw, e=e: Hz_to_k(fi, k0, h, c, e)
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
-            plt = make_resonance_spectrum(params, units, k_to_Hz, Hz_to_k)
+            plt = make_resonance_spectrum(params, units, k_to_Hz_local, Hz_to_k_local)
             result_plots['resonance'] = plt.gcf()
             if show_plots:
                 plt.show()

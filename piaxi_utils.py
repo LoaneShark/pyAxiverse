@@ -713,7 +713,7 @@ def if_output_exists(directory, phash):
     return False
 
 # Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, k_samples_in=[], set_params_globally=False):
+def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False):
 
     # Load results
     params, results, _, coeffs = load_single(input_str, output_root=output_dir)
@@ -771,11 +771,16 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
-        P = coeffs['P']
-        B = coeffs['P']
-        C = coeffs['P']
-        D = coeffs['P']
+        P = coeffs['P'] if coeffs is not None else P_off
+        B = coeffs['B'] if coeffs is not None else B_off
+        C = coeffs['C'] if coeffs is not None else C_off
+        D = coeffs['D'] if coeffs is not None else D_off
         plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times)
+    
+    if plot_spectrum:
+        k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw, e=e: k_to_Hz(ki, k0, h, c, e)
+        Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw, e=e: Hz_to_k(fi, k0, h, c, e)
+        plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local)
 
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
@@ -788,6 +793,7 @@ get_times = lambda params_in, times_in: times_in if times_in is not None else t 
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
 def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res
+    t_num = len(results_in[0][0])
     k_values = k_values_in if k_values_in is not None else k_values if k_values is not None else None
 
     # k_func : apply [func] on the time-series for each k mode, e.g. max or mean
@@ -837,11 +843,13 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     else:
         ydim = 2
 
-    fig = Figure(figsize=(4*xdim, 4*ydim))
+    #fig = Figure(figsize=(4*xdim, 4*ydim))
+    #plt.subplot2grid((ydim,xdim), (0,0), fig=fig, colspan=3)
+    plt.figure(figsize=(4*xdim, 4*ydim))
+    plt.subplot2grid((ydim,xdim), (0,0), colspan=3)
 
-    #plt.subplot(2,1,1)
-    subplot2grid((ydim,xdim), (0,0), fig=fig, colspan=3)
     #plot_colors = cm.get_cmap('plasma').jet(np.linspace(0,1,len(k_samples)))
+
     for k_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
         #print(results_in[k_s, 0])
@@ -881,11 +889,11 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((ydim,xdim), (max(0,ydim-3),3), rowspan=(3 if plot_Adot else 2))
-    plt.text(0.15, 0.2, textstr1, fontsize=14)
+    plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=14)
     plt.axis('off')
 
     plt.subplot2grid((ydim,xdim), (max(0,ydim-3),4), rowspan=(3 if plot_Adot else 2))
-    plt.text(0, 0.2, textstr2, fontsize=14)
+    plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=14)
     plt.axis('off')
 
     plt.tight_layout()
@@ -900,14 +908,14 @@ n_p = lambda i, params, solns: n(i, lambda j: w_p(j, params), solns)
 n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, omega=None, k_samples=[], times=None, scale_n=True):
-    plt = make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples, times, scale_n)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, omega=None, k_samples=[], times=None, scale_n=False):
+    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples, times, scale_n)
     plt.show()
 
 sum_n_k   = lambda n, w, k_v, solns, times: np.array([sum([n(i, w, solns)[t_i] for i in range(len(k_v))]) for t_i in range(len(times))])
 sum_n_k_p = lambda n, p, k_v, solns, times: np.array([sum([n(i, p, solns)[t_i] for i in range(len(k_v))]) for t_i in range(len(times))])
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, omega_in=None, k_samples_in=[], times_in=None, scale_n=True, write_to_params=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, omega_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     if len(k_samples_in) <= 0:
@@ -975,7 +983,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, ome
 
     plt.tight_layout()
     
-    return plt, params, t_res, n_res
+    return plt, params_in, t_res, n_res
 
 P_off = lambda t: np.float64(0)
 B_off = lambda t: np.float64(0)
@@ -998,17 +1006,19 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     B = B_in if B_in is not None else B_off
     D = D_in if D_in is not None else D_off
     C = C_in if C_in is not None else C_off
-    Cpm = Cpm_in if Cpm_in is not None else params['A_pm']
-    k0 = k_unit if k_unit is not None else k_0 if k_0 is not None else 1.
+    Cpm = Cpm_in if Cpm_in is not None else params_in['A_pm']
+    k0 = k_unit if k_unit is not None else params_in['k_0'] if 'k_0' in params_in else k_0 if k_0 is not None else 1.
     
     if len(k_samples_in) <= 0:
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
-    fig = Figure(figsize = (20,9))
     times = get_times(params_in, times_in)
 
-    plt.subplot2grid((2,5), (0,0), fig=fig, colspan=3, rowspan=1)
+    #fig = Figure(figsize = (20,9))
+    #plt.subplot2grid((2,5), (0,0), fig=fig, colspan=3, rowspan=1)
+    plt.figure(figsize = (20,9))
+    plt.subplot2grid((2,5), (0,0), colspan=3, rowspan=1)
 
     for (c_t, c_label) in get_coefficient_values(params_in, P, B, C, D, times):
         plt.plot(times, c_t, label=c_label)
@@ -1029,7 +1039,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
 
         if all([type(Alpha(times, k_values[k_s], k0, P, C, D, Cpm)) is np.float64 for k_s in k_samples]):
             label_a = r'[[$\alpha(t)$]]'
-            alpha_s = np.ma.array(np.full(len(t), 0.0, dtype=np.float64), mask=True)
+            alpha_s = np.ma.array(np.full(len(times), 0.0, dtype=np.float64), mask=True)
             plt.plot(times, alpha_s, label=label_a)
         else:
             for k_sample in k_samples:
@@ -1037,7 +1047,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
                 alpha_s = Alpha(times, k_values[k_s], k0, P, C, D, Cpm)
                 if type(alpha_s) is np.float64:
                     label_a = r'[[$\alpha_k(t)$  k=%d]]' % k_values[k_s]
-                    alpha_s = np.ma.array(alpha_s + np.full(len(t), 0.0, dtype=np.float64), mask=True)
+                    alpha_s = np.ma.array(alpha_s + np.full(len(times), 0.0, dtype=np.float64), mask=True)
                     plt.plot(times, alpha_s, label=label_a)
                 else:
                     label_a = r'$\alpha_k(t)$  k=%d' % k_values[k_s]
@@ -1046,7 +1056,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
         beta_s = Beta(times, P, B)
         if type(beta_s) is np.float64:
             label_b = r'[[$\beta(t)$]]'
-            beta_s  = np.ma.array(beta_s + np.full(len(t), 0.0, dtype=np.float64), mask=True)
+            beta_s  = np.ma.array(beta_s + np.full(len(times), 0.0, dtype=np.float64), mask=True)
         else:
             label_b = r'$\beta(t)$'
         plt.plot(times, beta_s, label=label_b)
@@ -1086,7 +1096,7 @@ def get_coefficient_values(params_in, P, B, C, D, times_in=[]):
 
         if type(c_t) is np.float64:
             label   = '[[$' + l_root + '$]]'
-            c_t     = np.ma.array(c_t + np.full(len(t), 0.0, dtype=float), mask=True)
+            c_t     = np.ma.array(c_t + np.full(len(times), 0.0, dtype=float), mask=True)
             c_range = (np.nan, np.nan)
         else:
             label   = '$' + l_root + '$'
@@ -1148,6 +1158,13 @@ def print_coefficient_ranges(params_in, P_in=None, B_in=None, C_in=None, D_in=No
         else:
             print('Beta(t)    range: [%.1e, %.1e]' % (min(Beta(times, P, B)), max(Beta(times, P, B))))
 
+# E^2 = p^2c^2 + m^2c^4
+# Assuming k, m are given in units of eV/c and eV/c^2 respectively
+#k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
+k_to_Hz = lambda ki, k0, h, c, e: ki * ((k0*e*2*np.pi) / h)
+#Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
+Hz_to_k = lambda fi, k0, h, c, e: fi * (h / (k0*e*2*np.pi))
+
 def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn)
     plt.show()
@@ -1155,6 +1172,9 @@ def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
 def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'semi': 'blue', 'res': 'red'}
+
+    t_sens = params_in['t_sens']
+    A_sens = params_in['A_sens']
     
     plt.figure(figsize = (20,6))
     plt.suptitle('Resonance Classification')
