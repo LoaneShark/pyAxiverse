@@ -1,5 +1,5 @@
 import numpy as np
-#import pandas as pd
+import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 import matplotlib.image as image
@@ -16,13 +16,14 @@ import json
 import hashlib
 import sys
 import os
+import ast
+import glob
 
 signstr = {1: '+', -1: '-', 0: '±'}
-color_purple = '#b042f5'
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v2.8'
+version='v2.9'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
@@ -49,6 +50,10 @@ rescale_m = rescale_k = rescale_amps = rescale_consts = None
 unitful_c = unitful_h = unitful_G = None
 L3_sc = L4_sc = F_sc = c_u = h_u = G_u = None
 '''
+# Formatting Colors
+colordict = {
+    'purple': '#b042f5'
+}
 
 ## Set parameters of model for use in numerical integration
 def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, t_min=0, t_N=500,
@@ -236,6 +241,86 @@ def rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c
     L4_sc = abs(L4) if not rescale_consts else L4 / m_u
     F_sc  = abs(F)  if not rescale_consts else  F / m_u
 
+prune_char = ['[',']','',' ','\n',None,[]]
+str_split  = lambda str_in: str_in.replace('\n','').replace('\\n','').replace(',','').replace('\'','').replace('"','').replace('[','').replace(']','').split(' ')[1:-1]
+str_to_arr = lambda str_in: [arr_val for arr_val in str_split(str_in) if len(arr_val) > 0]
+
+# Helper functions to handle string to array conversion
+def str_to_float_array(s):
+    try:
+        return [np.float64(x) for x in s.split()]
+    except ValueError:
+        return s
+
+def str_to_int_array(s):
+    try:
+        return [int(x) for x in s.split()]
+    except ValueError:
+        return s
+
+# Convert space-separated strings to lists of strings for specific keys
+def convert_string_to_list(data, key):
+    if key in data and isinstance(data[key], str):
+        data[key] = data[key].split()
+
+def parse_array_string(value):
+    arrays = []
+    array_dtype = value.replace(')','').replace(']','').split('dtype=')[1] if 'dtype=' in value else 'float64'
+    parts = value.split('array(')
+    for part in parts:
+        if part:
+            start_index = part.find('[')
+            end_index = part.find(']')
+            if start_index != -1 and end_index != -1:
+                array_str = part[start_index+1:end_index]
+                array_values = [x for x in array_str.split(',') if len(x) > 0]
+                arrays.append(np.array(array_values, dtype=array_dtype))
+    return arrays
+
+def parse_value(value):
+    value = value.replace('\n', '')
+    
+    # Handling lists of numpy arrays
+    if value.startswith('[array'):
+        return parse_array_string(value)
+    # Handling list-like strings
+    elif value.startswith('[') and value.endswith(']'):
+        array_str = value[1:-1]
+        array_values = [x for x in array_str.split(',') if x.strip()]
+        # Check if it's a list of strings
+        if all("'" in val or '"' in val for val in array_values):
+            return [x.strip("'\"") for x in array_values]
+        elif all('.' in val for val in array_values):
+            return str_to_float_array(array_str)
+        else:
+            return str_to_int_array(array_str)
+    '''
+    elif value.startswith('[') and value.endswith(']'):
+        parsed_value = np.array([pval for pval in str_to_arr(value)])
+        return parsed_value
+    '''
+    
+    # Other types
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        return value
+    '''
+    try:
+        parsed_value = ast.literal_eval(value)
+        if isinstance(parsed_value, tuple):
+            return np.array(parsed_value)
+        return parsed_value
+    except (ValueError, SyntaxError):
+        return value
+    '''
+
+def parse_dictionary(data):
+    for key, value in data.items():
+        if isinstance(value, str):
+            data[key] = parse_value(value)
+    return data
+
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
@@ -247,7 +332,10 @@ class NumpyEncoder(json.JSONEncoder):
             data = dct['data']
             dtype = dct['dtype']
             return np.array(data, dtype=dtype)
-        return dct
+        elif type(dct) is dict:
+            return parse_dictionary(dct)
+        else:
+            return parse_value(dct)
     
 # Generate a unique but reproduceable hash for the given parameter set
 def get_parameter_space_hash(params_in, verbosity=0):
@@ -433,7 +521,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         
         # Load results
         results_filename = os.path.join(output_dir, base_name + '.npy')
-        results = np.load(results_filename)
+        results = np.array(np.load(results_filename), dtype=np.float64)
         all_results.append(results)
 
         # Load coefficient functions
@@ -469,16 +557,16 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     # Load parameters
     params_filename = os.path.join(output_dir, filename + '.json')
     with open(params_filename, 'r') as f:
-        params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
+        params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
     
     # Load results
     results_filename = os.path.join(output_dir, filename + '.npy')
-    results = np.load(results_filename)
+    results = np.array(np.load(results_filename),dtype=np.float64)
     
     # Load coefficient functions
     coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
     if os.path.exists(coeffs_filename):
-        coeffs_dict = load_coefficient_functions(coeffs_filename)
+        coeffs_dict = dict(load_coefficient_functions(coeffs_filename))
     else:
         coeffs_dict = None
 
@@ -579,6 +667,7 @@ def load_single(input_str, label=None, phash=None, output_root='~/scratch', vers
     
     return load_single_result(output_dir, filename, load_plots, save_format)
 
+# TODO: Merge logic in loading file function to here
 def parse_filename(filename):
     """
     Parse the given filename to extract the simulation result name and parameter space hash.
@@ -600,23 +689,65 @@ def parse_filename(filename):
     
     return result_label, result_phash
 
+def if_output_exists(directory, phash):
+    """
+    Check if any file in the given directory contains the provided phash.
+    
+    Args:
+    - directory (str): The directory path to search in.
+    - phash (str): The parameter hash to search for.
+    
+    Returns:
+    - bool: True if a file with the phash exists, False otherwise.
+    """
+    
+    # List all files in the directory
+    if '~' in directory:
+        directory = os.path.expanduser(directory)
+    all_files = glob.glob(os.path.join(directory, '*'))
+    
+    # Check if any of the files contain the phash
+    for file in all_files:
+        if phash in file:
+            return True
+    return False
+
 # Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, input_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, k_samples=[]):
-    
+def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, k_samples_in=[], set_params_globally=False):
+
     # Load results
-    params, results, _, coeffs = load_single(input_str, output_root=input_dir)
-    units = get_units()
-    
+    params, results, _, coeffs = load_single(input_str, output_root=output_dir)
+
+    t_span = params['t_span']
+    t_num  = params['t_num']
+    k_span = params['k_span']
+    k_num  = params['k_num']
+
+    if set_params_globally:
+        params = init_params(params, sample_delta=False, sample_theta=False, 
+                             t_max=t_span[1], t_min=t_span[0], t_N=t_num, 
+                             k_max=k_span[1], k_min=k_span[0], k_N=k_num)
+
+    k_sens_arr = np.array(params.get('k_sens_arr', None), dtype=np.float64)
+    k_mean_arr = np.array(params.get('k_mean_arr', None), dtype=np.float64)
+    k_peak_arr = np.array(params.get('k_peak_arr', None), dtype=np.float64)
+
     # Define which k values should be plotted
-    k_peak = np.max(params.get('k_sens_arr', None))
-    k_mean = np.max(params.get('k_mean_arr', None))
-    k_rmax = np.max(params.get('k_peak_arr', None))
+    k_peak = np.max(k_sens_arr) # peak (running avg) value per k-mode
+    k_mean = np.max(k_mean_arr) # mean value per k-mode
+    k_rmax = np.max(k_peak_arr) # (raw) peak value per k-mode
     logscale_k = False
-    if len(k_samples) <= 0:
-        if logscale_k:
-            k_samples = np.geomspace(1,len(k_values),num=5)
-        else:
-            k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
+    k_values = np.arange(t_span[0], k_span[1], k_num)
+    k_samples = params.get('k_samples', [])
+    times = np.linspace(t_span[0], t_span[1], t_num)
+    if len(k_samples_in) <= 0:
+        if len(k_samples) <= 0:
+            if logscale_k:
+                k_samples = np.geomspace(1, k_span[1], num=15)
+            else:
+                k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
+    else:
+        k_samples = k_samples_in
 
     # Extracting parameters from the dictionary
     unitful_m = params.get('unitful_m', None)
@@ -632,11 +763,11 @@ def plot_single_case(input_str, input_dir=default_output_directory, plot_res=Tru
 
     # Plot results of numerical integration, as imported from file
     if plot_res:
-        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=params.get('k_samples', []))
+        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times)
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
-        plot_occupation_nums(params_in=params, units=units, results=results, numf=None, omega=None, k_samples=params.get('k_samples', []))
+        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, omega=None, k_samples=k_samples, times=times)
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
@@ -644,7 +775,7 @@ def plot_single_case(input_str, input_dir=default_output_directory, plot_res=Tru
         B = coeffs['P']
         C = coeffs['P']
         D = coeffs['P']
-        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=params.get('k_samples', []))
+        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times)
 
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
@@ -652,9 +783,12 @@ k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_s
 # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
 k_class = lambda func, t_sens, A_sens: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
+get_times = lambda params_in, times_in: times_in if times_in is not None else t if t is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
+
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
-def get_peak_k_modes(results_in):
+def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res
+    k_values = k_values_in if k_values_in is not None else k_values if k_values is not None else None
 
     # k_func : apply [func] on the time-series for each k mode, e.g. max or mean
     k_func = lambda func: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][:])) for k_vi, k_v in enumerate(k_values)])])
@@ -663,33 +797,39 @@ def get_peak_k_modes(results_in):
     win_min  = lambda sens: int(t_num*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # min value / left endpoint (of the sensitivity window over which to average)
     win_max  = lambda sens: int(t_num*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # max value / right endpoint
     k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_min(sens):win_max(sens)])) for k_vi, k_v in enumerate(k_values)])])
-    
 
     # k mode(s) with the largest contributions to overall number density growth
     k_peak = k_values[np.ma.argmax(k_func(max))]
     k_mean = k_values[np.ma.argmax(k_func(np.ma.mean))]
     
-    # store max, all-time mean, and late-time mean for each k-mode locally
-    params['k_peak_arr']  = k_func(max)
-    params['k_mean_arr']  = k_func(np.mean)
-    params['k_sens_arr']  = k_sens(np.mean, t_sens)
-    params['k_class_arr'] = k_class(np.mean, t_sens, A_sens)
+    # store max, all-time mean, and late-time mean for each k-mode locally, as well as resonance classifications
+    if write_to_params:
+        global params
+        params['k_peak_arr']  = k_func(max)
+        params['k_mean_arr']  = k_func(np.mean)
+        params['k_sens_arr']  = k_sens(np.mean, t_sens)
+        params['k_class_arr'] = k_class(np.mean, t_sens, A_sens)
 
-    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
-    params['class'] = tot_res
+        #t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
+        #t_res   = t[t_res_i]
+        #params['t_res'] = t_res
+        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
+        params['res_class'] = tot_res
     
     return k_peak, k_mean
 
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, results_in, k_samples=[], plot_Adot=True):
-    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, plot_Adot)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True):
+    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot)
     plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], plot_Adot=True):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in=None, plot_Adot=True):
+    k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
+    k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     if len(k_samples) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
-    times = t
+    times = get_times(params_in, times_in)
 
     xdim = 5
     if plot_Adot:
@@ -705,7 +845,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], plot_Ado
     for k_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
         #print(results_in[k_s, 0])
-        plt.plot(times, results_in[k_s][0], label='k='+str(k_values[k_s]))
+        plt.plot(times, results_in[k_s][0], label='k='+str(k_s))
     plt.title('Evolution of the mode function $A_{'+signstr[0]+'}$(k)')
     plt.xlabel('Time [%s]' % units_in['t'])
     plt.ylabel('$A_{'+signstr[0]+'}$(k)')
@@ -754,29 +894,30 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], plot_Ado
 
 # Plot the occupation numbers (TODO: Verify units in below equation)
 #k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
-w_p = lambda i, params: w(i, k_u=params['m_unit'])
-w = lambda i, k_u, c=c_raw, h=h_raw: np.abs(k_values[i]*k_u*(2*np.pi/h))
-n_p = lambda i, params, solns: n(i, w_p(i, params), solns)
+w_p = lambda i, params: w(i, np.linspace(params['k_span'][0], params['k_span'][1], params['k_num']), params['m_u'])
+w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
+n_p = lambda i, params, solns: n(i, lambda j: w_p(j, params), solns)
 n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=n, omega=None, k_samples=[], scale_n=True):
-    plt = make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples, scale_n)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, omega=None, k_samples=[], times=None, scale_n=True):
+    plt = make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples, times, scale_n)
     plt.show()
 
-sum_n_k   = lambda n, w, solns, times: np.array([sum([n(i, w, solns)[t_i] for i in range(len(k_values))]) for t_i in range(len(times))])
-sum_n_k_p = lambda n, p, solns, times: np.array([sum([n(i, p, solns)[t_i] for i in range(len(k_values))]) for t_i in range(len(times))])
+sum_n_k   = lambda n, w, k_v, solns, times: np.array([sum([n(i, w, solns)[t_i] for i in range(len(k_v))]) for t_i in range(len(times))])
+sum_n_k_p = lambda n, p, k_v, solns, times: np.array([sum([n(i, p, solns)[t_i] for i in range(len(k_v))]) for t_i in range(len(times))])
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, omega_in=None, k_samples_in=[], scale_n=True):
-    global params
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, omega_in=None, k_samples_in=[], times_in=None, scale_n=True, write_to_params=False):
+    k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
+    k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     if len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
-    times = t
+    times = get_times(params_in, times_in)
 
-    omega = omega_in if omega_in is not None else w_p(params_in)
+    omega = omega_in if omega_in is not None else lambda i: w_p(i, params_in)
     
     plt.figure(figsize=(20, 9))
 
@@ -793,16 +934,19 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, ome
     plt.legend()
     plt.grid()
 
-    n_tot = sum_n_k(numf_in, omega, results_in, times) if numf_in is not None else sum_n_k_p(n_p, params_in, results_in, times)
+    n_tot = sum_n_k(numf_in, omega, k_values, results_in, times) if numf_in is not None else sum_n_k_p(n_p, params_in, k_values, results_in, times)
+    res_con = params_in['res_con']
     if scale_n:
         n_tot /= abs(n_tot[0])
         n_tot += max(0, np.sign(n_tot[0]))  # Placeholder fix for negative n
 
     t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
-    t_res   = t[t_res_i]
+    t_res   = times[t_res_i]
     n_res   = n_tot[t_res_i]
-    params['res_class'] = tot_res
-    params['t_res'] = t_res
+    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, params_in['t_sens'], params_in['A_sens'])) > res_con else 'none'
+    if write_to_params:
+        params_in['t_res'] = t_res
+        params_in['res_class'] = tot_res
     #n_res = res_con*sum(k_sens(np.mean, -t_sens))
 
     #with plt.xkcd():
@@ -842,29 +986,31 @@ Alpha = lambda t, k, k0, P, C, D, A_pm: ((C(t, A_pm)*(k*k0) + D(t)) / (1. + P(t)
 Beta  = lambda t, B, P: B(t) / (1. + P(t))
 
 # Plot time-dependent coefficient values of the model
-def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None,  k_samples=[]):
-    plt = make_coefficients_plot(params_in, units_in, P_in=P, B_in=B, C_in=C, D_in=D, k_samples_in=k_samples)
+def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True):
+    plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all)
     plt.show()
     
-def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], plot_all=True):
+def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True):
     global k_0
+    k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
+    #k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     P = P_in if P_in is not None else P_off
     B = B_in if B_in is not None else B_off
     D = D_in if D_in is not None else D_off
     C = C_in if C_in is not None else C_off
     Cpm = Cpm_in if Cpm_in is not None else params['A_pm']
-    k0 = k_unit if k_unit is not None else k_0
+    k0 = k_unit if k_unit is not None else k_0 if k_0 is not None else 1.
     
     if len(k_samples_in) <= 0:
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
     fig = Figure(figsize = (20,9))
-    times = t
+    times = get_times(params_in, times_in)
 
     plt.subplot2grid((2,5), (0,0), fig=fig, colspan=3, rowspan=1)
 
-    for (c_t, c_label) in get_coefficient_values(P, B, C, D, times):
+    for (c_t, c_label) in get_coefficient_values(params_in, P, B, C, D, times):
         plt.plot(times, c_t, label=c_label)
 
     plt.xlabel('Time $[%s]$' % units_in['t'])
@@ -926,8 +1072,8 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     
     return plt
 
-def get_coefficient_values(P, B, C, D, times_in=[]):
-    global params, t
+def get_coefficient_values(params_in, P, B, C, D, times_in=[]):
+    global t
     func_vals = []
     times = times_in if len(times_in) > 0 else t
     for c_func, l_root, sign in zip([P, B, C, C, D], 
@@ -949,8 +1095,8 @@ def get_coefficient_values(P, B, C, D, times_in=[]):
         func_vals.append((c_t, label))
     return func_vals
 
-def get_coefficient_ranges(P, B, C, D, k_samples, times_in=[]):
-    global params, t
+def get_coefficient_ranges(params_in, P, B, C, D, k_samples, times_in=None):
+    global t
     c_ranges = []
     times = times_in if len(times_in) > 0 else t
     
@@ -973,8 +1119,8 @@ def get_coefficient_ranges(P, B, C, D, k_samples, times_in=[]):
     
     return c_ranges
 
-def print_coefficient_ranges(P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], print_all=False):
-    global params
+def print_coefficient_ranges(params_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, print_all=False):
+    
     if len(k_samples_in) <= 0:
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
@@ -983,11 +1129,11 @@ def print_coefficient_ranges(P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=
     B    = B_in   if B_in   is not None else B_off
     D    = D_in   if D_in   is not None else D_off
     C    = C_in   if C_in   is not None else C_off
-    Cpm  = Cpm_in if Cpm_in is not None else params['A_pm']
+    Cpm  = Cpm_in if Cpm_in is not None else params_in['A_pm']
     k0   = k_unit if k_unit is not None else k_0
-    times = t
+    times = get_times(params_in, times_in)
     
-    for c_range_str in get_coefficient_ranges(P, B, C, D, k_samples):
+    for c_range_str in get_coefficient_ranges(params_in, P, B, C, D, k_samples, times):
         print(c_range_str)
     if print_all:
         print('------------------------------------------------------')
@@ -1007,6 +1153,7 @@ def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     plt.show()
 
 def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
+    k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'semi': 'blue', 'res': 'red'}
     
     plt.figure(figsize = (20,6))
@@ -1032,14 +1179,14 @@ def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     
     return plt
 
-def plot_ALP_survey(verbosity=0):
+def plot_ALP_survey(params_in, verbosity=0):
     plt.figure(figsize = (16,12))
     #plt.suptitle('ALP Survey Results')
 
     plt.subplot2grid((1,1), (0,0), colspan=1, rowspan=1)
     xmin, xmax = (1e-12, 1e7)   # Scale limits
     ymin, ymax = (1e-21, 2e-6)   # Scale limits
-    res_color  = color_purple
+    res_color  = colordict['purple']
     plot_masses = True
     show_mass_ranges = False
 
@@ -1164,7 +1311,9 @@ def fit_crude_epsilon_relation(pts_in=[], plot_fit=True, verbosity=0):
     return popt, pcov
 
 # Helper function to pretty print parameters of model alongside plots
-def print_param_space(params, units_in, case='full'):
+def print_param_space(params, units_in):
+    k_step_in = (params['k_span'][1] - params['k_span'][0] + 1.) / params['k_num']
+    t_step_in = (params['t_span'][1] - params['t_span'][0] + 1.) / params['t_num']
     units = units_in.copy()
     for key in ['c', 'h', 'G', 'm', 'k', 'p', 'amp', 'Lambda', 'lambda', 'F', 't', 'Theta', 'delta', 'eps']:
         if key not in units_in or units_in[key] == 1:
@@ -1176,97 +1325,56 @@ def print_param_space(params, units_in, case='full'):
         else:
             units[key] = '\quad[%s]' % (units_in[key])
     
-    if case == 'simple':
-        textstr1 = '\n'.join((
-                r'$A_\pm(t = 0)=%.2f$' % (params['A_0'], ),
-                r'$\dot{A}_\pm (t = 0)=%.2f$' % (params['Adot_0'], ),
-                r'$\pm=%s$' % (signstr[params['A_pm']], ),
-                '\n',
-                r'$\varepsilon=%.0e%s$' % (params['eps'], ),
-                r'$F_{\pi}=%.0e%s$' % (params['F'], units['F']),
-                '\n',
-                r'$\lambda_1=%d%s$' % (params['l1'], units['lambda']),
-                r'$\lambda_2=%d%s$' % (params['l2'], units['lambda']),
-                r'$\lambda_3=%d%s$' % (params['l3'], units['lambda']),
-                r'$\lambda_4=%d%s$' % (params['l4'], units['lambda']),
-                r'$\Lambda_3=%.0e%s$' % (params['L3'], units['Lambda']),
-                r'$\Lambda_4=%.0e%s$' % (params['L4'], units['Lambda']),
-                '\n',
-                r'$\Delta k=%.2f%s$' % (params['k_step'], units['k']),
-                r'$k \in \left[%d, %d\\right]$' % (params['k_span[0]'], params['k_span'][1]),
-
+    textstr1 = '\n'.join((
+        r'$A_\pm(t = 0)=%.2f$' % (params['A_0'], ),
+        r'$\dot{A}_\pm (t = 0)=%.2f$' % (params['Adot_0'], ),
+        r'$\pm=%s$' % (signstr[params['A_pm']], ),
+        '\n',
+        r'$\varepsilon=%.0e$' % (params['eps'], ),
+        r'$F_{\pi}=%.0e%s$' % (params['F'], units['F']),
+        r'$c = h = G = 1$' if all([units[key] == '' for key in ['c', 'h', 'G']]) else '\n'.join([r'$%s=%.2e%s$' % (key, val, units[key]) for key, val in zip(['c', 'h', 'G'], [params['c'], params['h'], params['G']])]),
+        '\n',
+        r'$\lambda_1=%d%s$' % (params['l1'], units['lambda']),
+        r'$\lambda_2=%d%s$' % (params['l2'], units['lambda']),
+        r'$\lambda_3=%d%s$' % (params['l3'], units['lambda']),
+        r'$\lambda_4=%d%s$' % (params['l4'], units['lambda']),
+        r'$\Lambda_3=%.0e%s$' % (params['L3'], units['Lambda']) if params['L3'] > 0 else r'$[\Lambda_3=%s]$' % ('N/A'),
+        r'$\Lambda_4=%.0e%s$' % (params['L4'], units['Lambda']) if params['L4'] > 0 else r'$[\Lambda_4=%s]$' % ('N/A'),
+        '\n',
+        r'$\Delta k=%.2f%s$' % (k_step_in, units['k']),
+        r'$k \in [%d, %d]$' % (params['k_span'][0], params['k_span'][1]),
+        '\n',
+        r'$\Delta t=%f%s$' % (t_step_in, units['t']),
+        r'$t \in [%d, %d]$' % (params['t_span'][0], params['t_span'][1]),
         ))
-
-        textstr2 = '\n'.join((
-                r'$m_{(0)}=%.0e%s$' % (m[0], units['m']),
-                r'$m_{(\pi)}=%.0e%s$' % (m[1], units['m']),
-                r'$m_{(\pm)}=%.0e%s$' % (m[2], units['m']),
-                '\n',
-                r'$\pi_{(0)}=%.2f%s$' % (amps[0], units['amp']),
-                r'$\pi_{(\pi)}=%.2f%s$' % (amps[1], units['amp']),
-                r'$\pi_{(\pm)}=%.2f%s$' % (amps[2], units['amp']),
-                '\n',
-                r'$\delta_{(0)}=%.2f \pi$' % (d[0]/np.pi, ),
-                r'$\delta_{(\pi)}=%.2f \pi$' % (d[1]/np.pi, ),
-                r'$\delta_{(\pm)}=%.2f \pi$' % (d[2]/np.pi, ),
-                '\n',
-                r'$\Theta_{(\pi)}=%.2f \pi$' % (Th[1]/np.pi, ),
-                '\n',
-                r'$\Delta t=%f%s$' % (t_step, units['t']),
-                r'$t \in \left[%d, %d\\right]$' % (t_span[0], t_span[1]),
-        ))
-    else:
-        textstr1 = '\n'.join((
-                r'$A_\pm(t = 0)=%.2f$' % (A_0, ),
-                r'$\dot{A}_\pm (t = 0)=%.2f$' % (Adot_0, ),
-                r'$\pm=%s$' % (signstr[A_pm], ),
-                '\n',
-                r'$\varepsilon=%.0e$' % (eps, ),
-                r'$F_{\pi}=%.0e%s$' % (F, units['F']),
-                r'$c = h = G = 1$' if all([units[key] == '' for key in ['c', 'h', 'G']]) else '\n'.join([r'$%s=%.2e%s$' % (key, val, units[key]) for key, val in zip(['c', 'h', 'G'], [c, h, G])]),
-                '\n',
-                r'$\lambda_1=%d%s$' % (l1, units['lambda']),
-                r'$\lambda_2=%d%s$' % (l2, units['lambda']),
-                r'$\lambda_3=%d%s$' % (l3, units['lambda']),
-                r'$\lambda_4=%d%s$' % (l4, units['lambda']),
-                r'$\Lambda_3=%.0e%s$' % (L3, units['Lambda']) if L3 > 0 else r'$[\Lambda_3=%s]$' % ('N/A'),
-                r'$\Lambda_4=%.0e%s$' % (L4, units['Lambda']) if L4 > 0 else r'$[\Lambda_4=%s]$' % ('N/A'),
-                '\n',
-                r'$\Delta k=%.2f%s$' % (k_step, units['k']),
-                r'$k \in [%d, %d]$' % (k_span[0], k_span[1]),
-                '\n',
-                r'$\Delta t=%f%s$' % (t_step, units['t']),
-                r'$t \in [%d, %d]$' % (t_span[0], t_span[1]),
-
-        ))
-        m0_mask = np.ma.getmask(m[0]) if np.ma.getmask(m[0]) else np.full_like(m[0], False)
-        m1_mask = np.ma.getmask(m[1]) if np.ma.getmask(m[1]) else np.full_like(m[1], False)
-        m2_mask = np.ma.getmask(m[2]) if np.ma.getmask(m[2]) else np.full_like(m[2], False)
-        textstr2 = '\n'.join((
-                r'$m_{q, dQCD} = [%s]\quad%.0e eV$' % (', '.join('%d' % q for q in qm / m_q), m_q),
-                '' if units['m'] == 'eV' else r'$m_{u} = %.2e\quad[eV]$' % (m_u, ),
-                r'$m%s$' % units['m'],
-                ' '.join([r'$m_{(0),%d}=%.2e$'   % (i+1, m[0][i]*m_0, ) for i in range(len(m[0])) if not m0_mask[i]]),
-                ' '.join([r'$m_{(\pi),%d}=%.2e$' % (i+1, m[1][i]*m_0, ) for i in range(len(m[1])) if not m1_mask[i]]),
-                ' '.join([r'$m_{(\pm),%d}=%.2e$' % (i+1, m[2][i]*m_0, ) for i in range(len(m[2])) if not m2_mask[i]]),
-                '\n',
-                r'$\pi%s$' % units['amp'],
-                ' '.join([r'$\pi_{(0),%d}=%.2e$'   % (i+1, amps[0][i], ) for i in range(len(amps[0])) if not m0_mask[i]]),
-                ' '.join([r'$\pi_{(\pi),%d}=%.2e$' % (i+1, amps[1][i], ) for i in range(len(amps[1])) if not m1_mask[i]]),
-                ' '.join([r'$\pi_{(\pm),%d}=%.2e$' % (i+1, amps[2][i], ) for i in range(len(amps[2])) if not m2_mask[i]]),
-                '\n',
-                r'$\rho\quad[eV/cm^3]$',
-                ' '.join([r'$\rho_{(0),%d}=%.2e$'   % (i+1, p[0][i]/p_0, ) for i in range(len(p[0])) if not m0_mask[i]]),
-                ' '.join([r'$\rho_{(\pi),%d}=%.2e$' % (i+1, p[1][i]/p_0, ) for i in range(len(p[1])) if not m1_mask[i]]),
-                ' '.join([r'$\rho_{(\pm),%d}=%.2e$' % (i+1, p[2][i]/p_0, ) for i in range(len(p[2])) if not m2_mask[i]]),
-                '\n',
-                ' '.join([r'$\delta_{(0),%d}=%.2f \pi$'   % (i+1, d[0][i]/np.pi, ) for i in range(len(d[0])) if not m0_mask[i]]),
-                ' '.join([r'$\delta_{(\pi),%d}=%.2f \pi$' % (i+1, d[1][i]/np.pi, ) for i in range(len(d[1])) if not m1_mask[i]]),
-                ' '.join([r'$\delta_{(\pm),%d}=%.2f \pi$' % (i+1, d[2][i]/np.pi, ) for i in range(len(d[2])) if not m2_mask[i]]),
-                '\n',
-                #' '.join([r'$\Theta_{(0),%d}=%.2f \pi$' % (i+1, Th[0][i]/np.pi, ) for i in range(len(Th[0])) if not m0_mask[i]]),
-                ' '.join([r'$\Theta_{(\pi),%d}=%.2f \pi$' % (i+1, Th[1][i]/np.pi, ) for i in range(len(Th[1])) if not m1_mask[i]]),
-                ' '.join([r'$\Theta_{(\pm),%d}=%.2f \pi$' % (i+1, Th[2][i]/np.pi, ) for i in range(len(Th[2])) if not m2_mask[i]]),
+    m0_mask = np.ma.getmask(params['m'][0]) if np.ma.getmask(params['m'][0]) else np.full_like(params['m'][0], False)
+    m1_mask = np.ma.getmask(params['m'][1]) if np.ma.getmask(params['m'][1]) else np.full_like(params['m'][1], False)
+    m2_mask = np.ma.getmask(params['m'][2]) if np.ma.getmask(params['m'][2]) else np.full_like(params['m'][2], False)
+    textstr2 = '\n'.join((
+        r'$m_{q, dQCD} = [%s]\quad%.0e eV$' % (', '.join('%d' % q for q in np.array(params['qm']) / params['m_q']), params['m_q']),
+        '' if units['m'] == 'eV' else r'$m_{u} = %.2e\quad[eV]$' % (params['m_u'], ),
+        r'$m%s$' % units['m'],
+        ' '.join([r'$m_{(0),%d}=%.2e$'   % (i+1, params['m'][0][i]*params['m_0'], ) for i in range(len(params['m'][0])) if not m0_mask[i]]),
+        ' '.join([r'$m_{(\pi),%d}=%.2e$' % (i+1, params['m'][1][i]*params['m_0'], ) for i in range(len(params['m'][1])) if not m1_mask[i]]),
+        ' '.join([r'$m_{(\pm),%d}=%.2e$' % (i+1, params['m'][2][i]*params['m_0'], ) for i in range(len(params['m'][2])) if not m2_mask[i]]),
+        '\n',
+        r'$\pi%s$' % units['amp'],
+        ' '.join([r'$\pi_{(0),%d}=%.2e$'   % (i+1, params['amps'][0][i], ) for i in range(len(params['amps'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\pi_{(\pi),%d}=%.2e$' % (i+1, params['amps'][1][i], ) for i in range(len(params['amps'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\pi_{(\pm),%d}=%.2e$' % (i+1, params['amps'][2][i], ) for i in range(len(params['amps'][2])) if not m2_mask[i]]),
+        '\n',
+        r'$\rho\quad[eV/cm^3]$',
+        ' '.join([r'$\rho_{(0),%d}=%.2e$'   % (i+1, params['p'][0][i]/params['p_0'], ) for i in range(len(params['p'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\rho_{(\pi),%d}=%.2e$' % (i+1, params['p'][1][i]/params['p_0'], ) for i in range(len(params['p'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\rho_{(\pm),%d}=%.2e$' % (i+1, params['p'][2][i]/params['p_0'], ) for i in range(len(params['p'][2])) if not m2_mask[i]]),
+        '\n',
+        ' '.join([r'$\delta_{(0),%d}=%.2f \pi$'   % (i+1, params['d'][0][i]/np.pi, ) for i in range(len(params['d'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\delta_{(\pi),%d}=%.2f \pi$' % (i+1, params['d'][1][i]/np.pi, ) for i in range(len(params['d'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\delta_{(\pm),%d}=%.2f \pi$' % (i+1, params['d'][2][i]/np.pi, ) for i in range(len(params['d'][2])) if not m2_mask[i]]),
+        '\n',
+        #' '.join([r'$\Theta_{(0),%d}=%.2f \pi$' % (i+1, params['Th'][0][i]/np.pi, ) for i in range(len(params['Th'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\Theta_{(\pi),%d}=%.2f \pi$' % (i+1, params['Th'][1][i]/np.pi, ) for i in range(len(params['Th'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\Theta_{(\pm),%d}=%.2f \pi$' % (i+1, params['Th'][2][i]/np.pi, ) for i in range(len(params['Th'][2])) if not m2_mask[i]]),
         ))
         
     return textstr1, textstr2
@@ -1337,3 +1445,75 @@ def sizeof_fmt(num, suffix='B'):
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
+
+# Return sector of EM spectrum where given k-mode frequency resides, and any possible corresponding phenomenological EM observables
+def get_frequency_class(k_mode_in, k_to_HZ, res_label, verbosity=0):
+    # Known observable frequency ranges (Hz)
+    FRB_values = [100e6, 5000e6]
+    CMB_values = []              # TODO: Any possible connection to CMB features? Explore this.
+    UIE_values = [1.58e13, 6e13] # TODO: Sharper UIE feature lines? This fitting within a weak spectrum currently.
+    AXP_values = []              # TODO: Identify ranges of frequencies for AXP anomalous emissions
+    GRB_values = [3e19, 3e21]    # TODO: Identify potential relation to afterglow features
+
+    Hz_label = lambda f, pd=pd: pd.cut([f],
+                                       [0, 300e6, 3e12, 480e12, 750e12, 30e15, 30e18, np.inf],
+                                       labels=['Radio', 'Microwave', 'Infrared', 'Visible', 'UV', 'X-ray', 'Gamma ray'])
+    
+    Hz_class  = None
+    obs_class = {'FRB': None, 'UIE': None, 'GRB': None, 'CMB': 'N/A', 'AXP': 'N/A', 'Afterglow':'N/A'}
+
+    if 'res' in res_label:
+        Hz_peak  = k_to_HZ(k_mode_in)
+        Hz_class = Hz_label(Hz_peak)[0]
+        if verbosity >= 0:
+            print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_peak, Hz_peak, Hz_class))
+        if Hz_peak >= FRB_values[0] and Hz_peak <= FRB_values[1]:
+            obs_class['FRB'] = True
+            if verbosity >= 0:
+                print('possible FRB signal')
+        if Hz_peak >= UIE_values[0] and Hz_peak <= UIE_values[1]:
+            obs_class['UIE'] = True
+            if verbosity >= 0:
+                print('possible UIE signal')
+        if Hz_peak >= GRB_values[0] and Hz_peak <= GRB_values[1]:
+            obs_class['GRB'] = True
+            if verbosity >= 0:
+                print('possible GRB signal')
+    
+    return Hz_class, obs_class
+
+# TODO: return a tuple containing the min/max resonant k-modes, and the resonance classification (broad-band / narrow-band / multi-band)
+def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbosity=0):
+    # Initialize lists to store start and end indices of resonant segments
+    start_indices = []
+    end_indices = []
+
+    # Identify continuous segments with 'res' classification
+    start_idx = None
+    for i, label in enumerate(k_class_arr):
+        if label == 'res' and start_idx is None:
+            start_idx = i
+        elif label != 'res' and start_idx is not None:
+            start_indices.append(start_idx)
+            end_indices.append(i-1)
+            start_idx = None
+    if start_idx is not None:  # Handle case where last segment reaches the end
+        start_indices.append(start_idx)
+        end_indices.append(len(k_class_arr)-1)
+
+    # Determine resonance classification
+    if not start_indices:  # No resonance segments found
+        return None, None, None
+    elif len(start_indices) == 1:  # Only one resonance segment
+        if start_indices[0] == 0 and end_indices[0] == len(k_class_arr) - 1:
+            classification = "broad-band"
+        else:
+            classification = "narrow-band"
+    else:  # Multiple resonance segments
+        classification = "multi-band"
+
+    # Convert k-values to HZ and return results
+    min_res_k = k_to_HZ(min(k_values_in[start_indices[0]:end_indices[-1] + 1]))
+    max_res_k = k_to_HZ(max(k_values_in[start_indices[0]:end_indices[-1] + 1]))
+    
+    return min_res_k, max_res_k, classification

@@ -13,7 +13,7 @@ unitful_k = False        # Toggle whether k values are defined unitfully [eV] vs
 
 # main loop
 def main(args):
-    scan_args = [args.scan_mass, args.scan_Lambda, args.scan_Lambda3, args.scan_Lambda3, args.scanF, args.scanEpsilon]
+    scan_args = [args.scan_mass, args.scan_Lambda, args.scan_Lambda3, args.scan_Lambda3, args.scan_F, args.scan_epsilon]
     if any([scan_arg is not None for scan_arg in scan_args]):
         run_multiple_cases(args)
     else:
@@ -95,9 +95,14 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     seed              = args.seed                 # rng_seed, integer value (None for random)
     num_cores         = args.num_cores            # Number of parallel threads available
     data_path         = args.data_path            # Path to directory where output files will be saved
+    skip_existing     = args.skip_existing
 
     # Initialize rng
     rng, rng_seed = get_rng(seed=seed, verbosity=verbosity)
+
+    # Establish file paths
+    storage_path = data_path
+    output_dir   = '/'.join(storage_path.split('/')) + '/' + version + '/' + config_name + '/'
 
     ## CONSTANTS OF MODEL
     # Unitful fundamental constants
@@ -306,128 +311,123 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
 
-    # Solve the system, in parallel for each k-mode
-    os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
-    is_parallel = (num_cores > 1)
-    show_progress = (verbosity >= 0)
+    if skip_existing and if_output_exists(output_dir, phash):
+        if verbosity >= 1:
+            print('SKIP: output file already exists for this configuration')
+    else:
 
-    params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
-    #params = set_param_space(init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N))
+        # Solve the system, in parallel for each k-mode
+        os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
+        is_parallel = (num_cores > 1)
+        show_progress = (verbosity >= 0)
 
-    local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
+        params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
+        #params = set_param_space(init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N))
 
-    solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress)
+        local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
 
-    # Generate plots and optionally show them
-    make_plots = args.make_plots
-    show_plots = args.show_plots
-    result_plots = {}
+        solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress)
 
-    # Plot results (Amplitudes)
-    if make_plots:
-        k_peak, k_mean = get_peak_k_modes(solutions)
+        # Generate plots and optionally show them
+        make_plots = args.make_plots
+        show_plots = args.show_plots
+        result_plots = {}
 
-        if verbosity > 0:
-            print('max (peak) k mode: ' + str(k_peak))
-            print('max (mean) k mode: ' + str(k_mean))
+        # Plot results (Amplitudes)
+        k_peak, k_mean = get_peak_k_modes(solutions, k_values, write_to_params=True)
+        if make_plots:
+            if verbosity > 0:
+                print('max (peak) k mode: ' + str(k_peak))
+                print('max (mean) k mode: ' + str(k_mean))
 
-        # Plot the solution
-        plt = make_amplitudes_plot(params, units, solutions)
-        result_plots['amps'] = plt.gcf()
-        if show_plots:
-            plt.show()
-    
-    # Plot the occupation numbers (TODO: Verify units in below equation)
-    #k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
-    w = lambda i, k_u=m_unit, c=c_raw, h=h_raw: np.abs(k_values[i]*k_u*(2*np.pi/h))
-    n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
-    if make_plots:
-        times = t
-
-        scale_n = True
-        plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf=n, omega=w, scale_n=scale_n)
-        n_tot = sum_n_k(n, w, solutions, times)
-        tot_res = params['res_class']
-        result_plots['nums'] = plt.gcf()
-        if show_plots:
-            plt.show()
-
-        print('n_tot in range [%.2e, %.2e]' % (min(n_tot), max(n_tot)))
-        if 'res' in tot_res and verbosity > 2:
-            print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
-
-    if make_plots:
-        # Plot results (Oscillating coefficient values)
-        plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
-        result_plots['coeffs'] = plt.gcf()
-        if show_plots:
-            plt.show()
-
-        if verbosity == 2:
-            print_coefficient_ranges(P, B, C, D)
-        elif verbosity > 2:
-            print_coefficient_ranges(P, B, C, D, print_all=True)
-
-        if verbosity > 5:
-            print('params:\n', params, '\n')
-        if verbosity > 2:
-            print('params[\'class\']:\n', params['class'])
-            if verbosity > 6:
-                print('params[\'k_class_arr\']:\n', params['k_class_arr'])
-                print('k_ratio:\n', k_ratio(np.mean, t_sens, A_sens))
-
-    # E^2 = p^2c^2 + m^2c^4
-    # Assuming k, m are given in units of eV/c and eV/c^2 respectively
-    #k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
-    k_to_Hz = lambda ki, k0=m_unit, h=h, c=c, e=e: ki * ((k0*e*2*np.pi) / h)
-    #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
-    Hz_to_k = lambda fi, k0=m_unit, h=h, c=c, e=e: fi * (h / (k0*e*2*np.pi))
-
-    # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
-    if make_plots:
-        plt = make_resonance_spectrum(params, units, k_to_Hz, Hz_to_k)
-        result_plots['resonance'] = plt.gcf()
-        if show_plots:
-            plt.show()
-
-    # Known observable frequency ranges (Hz)
-    FRB_values = [100e6, 5000e6]
-    GRB_values = [3e19, 3e21]
-
-    Hz_label = lambda f, pd=pd: pd.cut([f],
-                                       [0, 300e6, 3e12, 480e12, 750e12, 30e15, 30e18, np.inf],
-                                       labels=['Radio', 'Microwave', 'Infrared', 'Visible', 'UV', 'X-ray', 'Gamma ray'])
-
-    if 'res' in tot_res and verbosity >= 0:
-        Hz_peak = k_to_Hz(k_peak)
-        print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_peak, Hz_peak, Hz_label(Hz_peak)[0]))
-        if Hz_peak >= FRB_values[0] and Hz_peak <= FRB_values[1]:
-            print('possible FRB signal')
-        if Hz_peak >= GRB_values[0] and Hz_peak <= GRB_values[1]:
-            print('possible GRB signal')
-
-    if make_plots:
-        plt = plot_ALP_survey(verbosity=verbosity)
-
-        result_plots['alp'] = plt.gcf()
-        if show_plots:
-            plt.show()
-    
-    # Optionally save results of this run to data directory
-    save_input_params = True
-    save_integrations = True
-    save_output_plots = make_plots
-
-    if save_output_files:
-        storage_path = data_path
-        output_dir   = '/'.join(storage_path.split('/')) + '/' + version + '/' + config_name + '/'
-        output_name  = '_'.join([config_name, phash])
+            # Plot the solution
+            plt = make_amplitudes_plot(params, units, solutions)
+            result_plots['amps'] = plt.gcf()
+            if show_plots:
+                plt.show()
         
-        save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
-                     save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots)
+        # Plot the occupation numbers (TODO: Verify units in below equation)
+        #k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
+        w = lambda i, k_u=m_unit, c=c_raw, h=h_raw: np.abs(k_values[i]*k_u*(2*np.pi/h))
+        n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
+        if make_plots:
+            times = t
 
-    if verbosity > 1:
-        print('Done!')
+            scale_n = True
+            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n, omega_in=w, scale_n=scale_n, write_to_params=True)
+            n_tot = sum_n_k(n, w, k_values, solutions, times)
+            tot_res = params['res_class']
+            result_plots['nums'] = plt.gcf()
+            if show_plots:
+                plt.show()
+
+            print('n_tot in range [%.2e, %.2e]' % (min(n_tot), max(n_tot)))
+            if 'res' in tot_res and verbosity > 2:
+                print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
+
+        if make_plots:
+            # Plot results (Oscillating coefficient values)
+            plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
+            result_plots['coeffs'] = plt.gcf()
+            if show_plots:
+                plt.show()
+
+            if verbosity == 2:
+                print_coefficient_ranges(params, P, B, C, D)
+            elif verbosity > 2:
+                print_coefficient_ranges(params, P, B, C, D, print_all=True)
+
+            if verbosity > 5:
+                print('params:\n', params, '\n')
+            if verbosity > 2:
+                print('params[\'class\']:\n', params['res_class'])
+                if verbosity > 6:
+                    print('params[\'k_class_arr\']:\n', params['k_class_arr'])
+                    print('k_ratio:\n', k_ratio(np.mean, t_sens, A_sens))
+
+        # E^2 = p^2c^2 + m^2c^4
+        # Assuming k, m are given in units of eV/c and eV/c^2 respectively
+        #k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
+        k_to_Hz = lambda ki, k0=m_unit, h=h, c=c, e=e: ki * ((k0*e*2*np.pi) / h)
+        #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
+        Hz_to_k = lambda fi, k0=m_unit, h=h, c=c, e=e: fi * (h / (k0*e*2*np.pi))
+
+        # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
+        if make_plots:
+            plt = make_resonance_spectrum(params, units, k_to_Hz, Hz_to_k)
+            result_plots['resonance'] = plt.gcf()
+            if show_plots:
+                plt.show()
+
+        # Known observable frequency ranges (Hz)
+
+        res_freq, res_freq_class = get_frequency_class(k_peak, k_to_Hz, tot_res, verbosity=verbosity)
+        res_band_min, res_band_max, res_band_class = get_resonance_band(k_values, params['k_class_arr'], k_to_Hz, tot_res, verbosity=verbosity)
+
+        params['res_freq'] = res_freq
+        params['res_band'] = [res_band_min, res_band_max]
+        params['res_freq_class'] = res_freq_class
+        params['res_band_class'] = res_band_class
+
+        if make_plots:
+            plt = plot_ALP_survey(params, verbosity=verbosity)
+
+            result_plots['alp'] = plt.gcf()
+            if show_plots:
+                plt.show()
+        
+        # Optionally save results of this run to data directory
+        save_input_params = True
+        save_integrations = True
+        save_output_plots = make_plots
+
+        if save_output_files:
+            output_name  = '_'.join([config_name, phash])
+            save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
+                        save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots)
+
+        if verbosity > 1:
+            print('Done!')
 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
 
@@ -700,6 +700,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_mass_units',    type=bool, default=True,  help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
     parser.add_argument('--make_plots',        type=bool, default=True,  help='Toggle whether plots are made at the end of each run')
     parser.add_argument('--show_plots',        type=bool, default=False, help='Toggle whether plots are displayed at the end of each run')
+    parser.add_argument('--skip_existing',     type=bool, default=True,  help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
 
     parser.add_argument('--verbosity',         type=int,  default=0,               help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
     parser.add_argument('--save_output_files', type=bool, default=True,            help='Toggle whether or not to save the results from this run')
