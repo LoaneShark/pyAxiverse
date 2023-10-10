@@ -286,7 +286,7 @@ def parse_value(value):
     # Handling list-like strings
     elif value.startswith('[') and value.endswith(']'):
         array_str = value[1:-1]
-        array_values = [x for x in array_str.split(',') if x.strip()]
+        array_values = [x for x in array_str.split(' ') if x.strip()]
         # Check if it's a list of strings
         if all("'" in val or '"' in val for val in array_values):
             return [x.strip("'\"") for x in array_values]
@@ -501,7 +501,9 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     - all_plots (list of lists or None): A list of lists containing matplotlib figures or images for each simulation.
     """
     
-    all_files = os.listdir(output_dir)
+    file_dir  = os.path.join(output_dir, label)
+    all_files = os.listdir(file_dir)
+    
     relevant_files = [f for f in all_files if f.startswith(label) and f.endswith('.json')] # Assume input params are being saved for now, at least
     
     all_params = []
@@ -514,18 +516,18 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         base_name = filename.rsplit('.', 1)[0]
         
         # Load parameters
-        params_filename = os.path.join(output_dir, base_name + '.json')
+        params_filename = os.path.join(file_dir, base_name + '.json')
         with open(params_filename, 'r') as f:
             params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
         all_params.append(params)
         
         # Load results
-        results_filename = os.path.join(output_dir, base_name + '.npy')
+        results_filename = os.path.join(file_dir, base_name + '.npy')
         results = np.array(np.load(results_filename), dtype=np.float64)
         all_results.append(results)
 
         # Load coefficient functions
-        coeffs_filename = os.path.join(output_dir, base_name, '_funcs.pkl')
+        coeffs_filename = os.path.join(file_dir, base_name, '_funcs.pkl')
         if os.path.exists(coeffs_filename):
             all_coeffs.append(load_coefficient_functions(coeffs_filename))
         else:
@@ -535,8 +537,8 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         plots = []
         if load_images and save_format == 'png':
             i = 0
-            while os.path.exists(os.path.join(output_dir, base_name + f'_plot_{i}.png')):
-                plots.append(plt.imread(os.path.join(output_dir, base_name + f'_plot_{i}.png')))
+            while os.path.exists(os.path.join(file_dir, base_name + f'_plot_{i}.png')):
+                plots.append(plt.imread(os.path.join(file_dir, base_name + f'_plot_{i}.png')))
                 i += 1
         all_plots.append(plots)
     
@@ -606,7 +608,7 @@ def load_all(input_str, output_root='~/scratch', version=version, load_images=Fa
     
     return load_multiple_results(output_dir, result_name, load_images, save_format)
 
-def load_single(input_str, label=None, phash=None, output_root='~/scratch', version='v2.8', save_format='pdf', load_plots=False):
+def load_single(input_str, label=None, phash=None, output_root='~/scratch', version='v2.8', save_format='pdf', load_plots=False, verbosity=0):
     """
     Load results of a single run given a full filepath to any of the files associated with a run, or just the label and unique parameter hash.
     
@@ -653,16 +655,18 @@ def load_single(input_str, label=None, phash=None, output_root='~/scratch', vers
         else:
             if input_label is None:
                 raise ValueError("If only the label is provided, the simulation parameter hash must also be specified.")
-        print('input_str', input_str)
-        print('output_dir_in', output_dir)
-        print('output_dir split', )
-        print('label:  ', label)
-        print('phash:  ', phash)
-        print('input_label:  ', input_label)
-        print('input_phash:  ', input_hash)
+        if verbosity > 3:
+            print('input_str', input_str)
+            print('output_dir_in', output_dir)
+            print('output_dir split', )
+            print('label:  ', label)
+            print('phash:  ', phash)
+            print('input_label:  ', input_label)
+            print('input_phash:  ', input_hash)
         pathroot, pathrest = os.path.split(output_dir)
         output_dir = os.path.join(pathroot, pathrest, version, input_label)
-        print('output_dir', output_dir)
+        if verbosity > 3:
+            print('output_dir', output_dir)
         filename = f"{input_label}_{input_hash}"
     
     return load_single_result(output_dir, filename, load_plots, save_format)
