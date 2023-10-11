@@ -214,7 +214,8 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u, 't_u': t_0,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
-              'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed}
+              'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 
+              'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p}
     
     return params
 
@@ -350,7 +351,7 @@ def get_parameter_space_hash(params_in, verbosity=0):
 
 def get_rng(seed=None, verbosity=0):
     entropy_size = 4 # TODO: Probably should reduce to 8 or 4
-    if seed != None:
+    if seed is not None:
         rng_ss = np.random.SeedSequence(entropy=seed, pool_size=entropy_size)
     else:
         rng_ss = np.random.SeedSequence(pool_size=entropy_size)
@@ -404,14 +405,14 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
         os.makedirs(output_dir)
 
     # Save parameters
-    if save_params and params_in != None:
+    if save_params and params_in is not None:
         params_filename = os.path.join(output_dir, filename + '.json')
         file_list.append(params_filename)
         with open(params_filename, 'w') as f:
             json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
     
     # Save results
-    if save_results and results != None:
+    if save_results and results is not None:
         results_filename = os.path.join(output_dir, filename + '.npy')
         file_list.append(results_filename)
         np.save(results_filename, results)
@@ -433,7 +434,7 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
     img_formats = ['png', 'img', 'image', 'jpg', 'all']
     nbk_formats = ['notebook', 'nb', 'ipynb', 'jupyter', 'all']
     web_formats = ['html', 'web', 'all']
-    if save_plots and plots != None:
+    if save_plots and plots is not None:
         if save_format == 'all' or any([save_format in fmt_set for fmt_set in [doc_formats, img_formats, nbk_formats, web_formats]]):
             plot_figs = [plots[p_type] for p_type in plot_types]
             if save_format in doc_formats:
@@ -574,7 +575,7 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
 
     # Load plots
     plots = []
-    if load_plots and save_format != None :
+    if load_plots and save_format is not None :
         if save_format == 'png':
             i = 0
             while os.path.exists(os.path.join(output_dir, filename, f'_plot_{i}.png')):
@@ -741,7 +742,7 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
     k_mean = np.max(k_mean_arr) # mean value per k-mode
     k_rmax = np.max(k_peak_arr) # (raw) peak value per k-mode
     logscale_k = False
-    k_values = np.arange(t_span[0], k_span[1], k_num)
+    k_values = np.linspace(k_span[0], k_span[1], k_num)
     k_samples = params.get('k_samples', [])
     times = np.linspace(t_span[0], t_span[1], t_num)
     if len(k_samples_in) <= 0:
@@ -749,7 +750,7 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
             if logscale_k:
                 k_samples = np.geomspace(1, k_span[1], num=15)
             else:
-                k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
+                k_samples = [k_i for k_i, k_val in enumerate(k_values) if k_val in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
 
@@ -857,7 +858,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     for k_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
         #print(results_in[k_s, 0])
-        plt.plot(times, results_in[k_s][0], label='k='+str(k_s))
+        plt.plot(times, results_in[k_s][0], label='k='+str(k_values[k_s]))
     plt.title('Evolution of the mode function $A_{'+signstr[0]+'}$(k)')
     plt.xlabel('Time [%s]' % units_in['t'])
     plt.ylabel('$A_{'+signstr[0]+'}$(k)')
@@ -924,7 +925,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, ome
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     if len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
-        k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
+        k_samples = [k_i for k_i, k_val in enumerate(k_values) if k_val in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
     times = get_times(params_in, times_in)

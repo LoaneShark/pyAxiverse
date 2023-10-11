@@ -553,8 +553,8 @@ def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
     else:
         p_loc = p_t
 
-    ## Accept more specific density profiles
-    if densities_in != None:
+    ## TODO: Accept more specific density profiles (WIP)
+    if densities_in is not None:
         if all([len(dens_in) <= 1 for dens_in in densities_in]):
             p_r  = np.ma.masked_where(masks[0], np.full(densities_in[0], dtype=float), copy=True)
             p_n  = np.ma.masked_where(masks[1], np.full(densities_in[1], dtype=float), copy=True)

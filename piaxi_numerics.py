@@ -77,7 +77,7 @@ k_count_max = 0  # TODO: Make sure this max counter works
 def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False):
     global k_count_max
     # Determine the environment
-    is_jupyter = jupyter if jupyter != None else 'ipykernel' in sys.modules
+    is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
     if is_jupyter and verbosity >= 0:
             print('Jupyter?       ', is_jupyter)
     elif verbosity >= 6:
@@ -205,8 +205,8 @@ def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_mode
     global params, k_values
     k_modes = k_modes if len(k_modes) > 0 else k_values
     num_modes = len(k_modes)
-    y0  = y0_in  if y0_in  != None else params['A_0']    if 'A_0'    in params else 0
-    yp0 = yp0_in if yp0_in != None else params['Adot_0'] if 'Adot_0' in params else 0.1
+    y0  = y0_in  if y0_in  is not None else params['A_0']    if 'A_0'    in params else 0
+    yp0 = yp0_in if yp0_in is not None else params['Adot_0'] if 'Adot_0' in params else 0.1
     
     # Convert the second-order differential equations to a system of first-order equations
     def floq_sys(t, Y):
