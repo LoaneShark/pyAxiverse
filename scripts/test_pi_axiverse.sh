@@ -14,4 +14,4 @@ source /gpfs/runtime/opt/anaconda/latest/etc/profile.d/conda.sh
 conda activate piaxiverse
 conda info
 
-python piaxiverse.py --skip_existing False --num_cores 10 --tN 50 --use_mass_units True --verbosity 9 --kN 50 --scan_mass -20 -40 --scan_mass_N 5 --scan_Lambda4 10 30 --scan_Lambda4_N 5 --config_name '3_neutrals_test' --dqm_c 1 1 1 0 0 0 --scan_F 16 18 --scan_F_N 3
+python piaxiverse.py --skip_existing False --num_cores 10 --tN 50 --use_mass_units True --verbosity 9 --kN 50 --scan_mass -20 -40 --scan_mass_N 5 --scan_Lambda4 10 30 --scan_Lambda4_N 5 --config_name '3_neutrals_full_test' --scan_F 16 18 --scan_F_N 3

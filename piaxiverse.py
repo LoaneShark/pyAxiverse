@@ -3,7 +3,7 @@ import pandas as pd
 import argparse
 import datetime
 from piaxi_utils import *
-from piaxi_utils import version, default_output_directory, k_to_HZ, Hz_to_k
+from piaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
 from piaxi_numerics import solve_piaxi_system, piaxi_system
 
 ## Parameters of model
@@ -198,6 +198,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     m0 = 1. if not rescale_m else (1./m_unit if unitful_masses else m_unit)         # [m_u] <--> [eV]
     k0 = m_unit if rescale_k else 1.
     t0 = 1./m_unit if unitful_m else 1.
+
+    print('masks: ', masks)
+    print('counts: ', counts)
 
     ## Populate pi-axion dark matter energy densities for all species
     p = init_densities(masks, p_t=p_t, normalized_subdens=True)
@@ -546,7 +549,7 @@ def init_masses(m_r: np.ma, m_n: np.ma, m_c: np.ma, natural_units=True, c=1, ver
 def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
     ## local DM densities for each species, assume equal mix for now.
     # TODO: More granular / nontrivial distribution of densities? Spacial dependence? Sampling?
-    N_r, N_n, N_c = [len(mask) for mask in masks]
+    N_r, N_n, N_c = [mask.count() for mask in masks]
     
     if normalized_subdens:
         p_loc = p_t/3.
@@ -727,7 +730,7 @@ if __name__ == '__main__':
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
     parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
 
-    parser.add_argument('--dqm_c', type=int, nargs=6, default=[1,1,1,1,1,1], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
+    parser.add_argument('--dqm_c', type=float, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
 
     args = parser.parse_args()
     main(args)

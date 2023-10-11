@@ -31,7 +31,7 @@ PIAXI_N_KMODE=400
 # Expect critical threshold between rho ~ 1e17 GeV and 1e18 GeV
 
 # Density [GeV] ~ (amp_a)^2*m_a / 2
-PIAXI_DENSITY="1e22"
+PIAXI_DENSITY="1e17"
 # F_pi [GeV] ~ 2/g_a
 PIAXI_F="2e10"
 # m_I [eV] ~ (m_a)^2 / F_pi
