@@ -502,7 +502,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     - all_plots (list of lists or None): A list of lists containing matplotlib figures or images for each simulation.
     """
     
-    file_dir  = os.path.join(output_dir, label)
+    file_dir  = os.path.join(os.path.expanduser(output_dir), label) if '~' in output_dir else os.path.join(output_dir, label)
     all_files = os.listdir(file_dir)
     
     relevant_files = [f for f in all_files if f.startswith(label) and f.endswith('.json')] # Assume input params are being saved for now, at least
@@ -524,7 +524,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         
         # Load results
         results_filename = os.path.join(file_dir, base_name + '.npy')
-        results = np.array(np.load(results_filename), dtype=np.float64)
+        results = np.array(np.load(results_filename), dtype=object)
         all_results.append(results)
 
         # Load coefficient functions

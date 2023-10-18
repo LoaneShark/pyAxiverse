@@ -102,7 +102,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     # Establish file paths
     storage_path = data_path
-    output_dir   = '/'.join(storage_path.split('/')) + '/' + version + '/' + config_name + '/'
+    output_dir   = os.path.join(storage_path, version, config_name,)
 
     ## CONSTANTS OF MODEL
     # Unitful fundamental constants
@@ -175,10 +175,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     # k values
     use_k_eq_0 = False     # Toggle whether or not k = 0 is included in the numerics (div. by 0 error possible if on)
     k_min = 0 if use_k_eq_0 else 1
-    k_max = args.kN          # default to a k-mode granularity of 1
-    k_res = 1                # k-mode granularity
+    k_max = args.k if args.k > 0 else args.kN  # default to a k-mode granularity of 1
     k_span = [k_min, k_max]  # TODO: replace with the appropriate values
+    k_res = args.k/args.kN if args.k > 0 else 1.         # k-mode granularity
     k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)    # Number of k-modes
+    #k_N = args.kN
 
     # Toggle whether mass-energy values should be computed in units of eV (False) or pi-axion mass (True)
     # (by default, k is defined in units of [m_u] whereas m is defined in units of [eV], so their scaling logic is inverted)
@@ -199,8 +200,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     k0 = m_unit if rescale_k else 1.
     t0 = 1./m_unit if unitful_m else 1.
 
-    print('masks: ', masks)
-    print('counts: ', counts)
+    if verbosity >= 6:
+        print('masks: ', masks)
+        print('counts: ', counts)
 
     ## Populate pi-axion dark matter energy densities for all species
     p = init_densities(masks, p_t=p_t, normalized_subdens=True)
@@ -273,11 +275,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
                 l2 * eps**2 * e**2 * np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
                                             for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)
 
-    # TODO: Add support for supplying custom functions
-    disable_P = args.disable_P
-    disable_B = args.disable_B
-    disable_C = args.disable_C
-    disable_D = args.disable_D
+    # TODO: Add support for supplying custom functions?
+    disable_P = not(args.P)
+    disable_B = not(args.B)
+    disable_C = not(args.C)
+    disable_D = not(args.D)
     override_coefficients = True if any([disable_P, disable_B, disable_C, disable_D]) else False
     if override_coefficients:
         if disable_P:
@@ -338,6 +340,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Plot results (Amplitudes)
         k_peak, k_mean = get_peak_k_modes(solutions, k_values, write_to_params=True)
+        tot_res = params['res_class']
         if make_plots:
             if verbosity > 0:
                 print('max (peak) k mode: ' + str(k_peak))
@@ -359,7 +362,6 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             scale_n = True
             plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n, omega_in=w, scale_n=scale_n, write_to_params=True)
             n_tot = sum_n_k(n, w, k_values, solutions, times)
-            tot_res = params['res_class']
             result_plots['nums'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -549,7 +551,7 @@ def init_masses(m_r: np.ma, m_n: np.ma, m_c: np.ma, natural_units=True, c=1, ver
 def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
     ## local DM densities for each species, assume equal mix for now.
     # TODO: More granular / nontrivial distribution of densities? Spacial dependence? Sampling?
-    N_r, N_n, N_c = [mask.count() for mask in masks]
+    N_r, N_n, N_c = [len(mask) for mask in masks]
     
     if normalized_subdens:
         p_loc = p_t/3.
@@ -684,6 +686,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Parse command line arguments.')
     parser.add_argument('--t',          type=int, default=300,  help='Ending time value')
     parser.add_argument('--tN',         type=int, default=300,  help='Number of timesteps')
+    parser.add_argument('--k' ,         type=int, default=-1,   help='Max k-mode to include in calculations (-1 to assume kN)')
     parser.add_argument('--kN',         type=int, default=200,  help='Number of k-modes')
     parser.add_argument('--seed',       type=int, default=None, help='RNG seed')
 
@@ -694,29 +697,28 @@ if __name__ == '__main__':
     parser.add_argument('--m_scale',    type=np.float64, default=1e-20, help='Mass scale of dQCD quarks in [eV]')
     parser.add_argument('--rho',        type=np.float64, default=0.4,   help='Local DM energy density, in [GeV/cm^3]')
 
-
     parser.add_argument('--A_0',        type=np.float64, default=0.1,   help='Photon field initial conditions')
     parser.add_argument('--Adot_0',     type=np.float64, default=0.0,   help='Photon field rate of change initial conditions')
     parser.add_argument('--A_pm',       type=int,        default=+1,    help='Polarization case (+1 or -1)')
 
-    parser.add_argument('--use_natural_units', type=bool, default=True,  help='Toggle whether c=h=G=1')
-    parser.add_argument('--use_mass_units',    type=bool, default=True,  help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
-    parser.add_argument('--make_plots',        type=bool, default=True,  help='Toggle whether plots are made at the end of each run')
+    parser.add_argument('--use_natural_units', action=argparse.BooleanOptionalAction,  help='Toggle whether c=h=G=1')
+    parser.add_argument('--use_mass_units',    action=argparse.BooleanOptionalAction,  help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
+    parser.add_argument('--make_plots',        action=argparse.BooleanOptionalAction,  help='Toggle whether plots are made at the end of each run')
     parser.add_argument('--show_plots',        type=bool, default=False, help='Toggle whether plots are displayed at the end of each run')
-    parser.add_argument('--skip_existing',     type=bool, default=True,  help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
+    parser.add_argument('--skip_existing',     action=argparse.BooleanOptionalAction,  help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
 
     parser.add_argument('--verbosity',         type=int,  default=0,               help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
-    parser.add_argument('--save_output_files', type=bool, default=True,            help='Toggle whether or not to save the results from this run')
+    parser.add_argument('--save_output_files', action=argparse.BooleanOptionalAction, help='Toggle whether or not to save the results from this run')
     parser.add_argument('--config_name',       type=str,  default='default',       help='Descriptive name to give to this parameter case')
     parser.add_argument('--num_cores',         type=int,  default=1,               help='Number of parallel processing threads to use')
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     
-    parser.add_argument('--disable_P', type=bool, default=False, help='Turn off the P(t) coefficient in the numerics')
-    parser.add_argument('--disable_B', type=bool, default=False, help='Turn off the B(t) coefficient in the numerics')
-    parser.add_argument('--disable_C', type=bool, default=False, help='Turn off the C_+/-(t) coefficient in the numerics')
-    parser.add_argument('--disable_D', type=bool, default=False, help='Turn off the D(t) coefficient in the numerics')
+    parser.add_argument('--P',     action=argparse.BooleanOptionalAction, help='Turn on/off the P(t) coefficient in the numerics')
+    parser.add_argument('--B',     action=argparse.BooleanOptionalAction, help='Turn on/off the B(t) coefficient in the numerics')
+    parser.add_argument('--C',     action=argparse.BooleanOptionalAction, help='Turn on/off the C_+/-(t) coefficient in the numerics')
+    parser.add_argument('--D',     action=argparse.BooleanOptionalAction, help='Turn on/off the D(t) coefficient in the numerics')
 
-    parser.add_argument('--fit_F',          type=bool, default=True,  help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
+    parser.add_argument('--fit_F', action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
     parser.add_argument('--scan_F',         type=int,  nargs=2,       help='Provide min and max values of F_pi values to search, in [log GeV] scale')
     parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to search within specified F_pi range')
     parser.add_argument('--scan_mass',      type=int,  nargs=2,       help='Provide min and max values of mass scales to search, in [log eV] scale')
