@@ -31,10 +31,10 @@ PIAXI_N_KMODE=400
 # Expect critical threshold between rho ~ 1e17 GeV and 1e18 GeV
 
 # Density [GeV] ~ (amp_a)^2*m_a / 2
-PIAXI_DENSITY="1e18"
+PIAXI_DENSITY="1e22"
 # F_pi [GeV] ~ 2/g_a
 PIAXI_F="2e10"
 # m_I [eV] ~ (m_a)^2 / F_pi
 PIAXI_MASS="5e-32"
 
-python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --tN $PIAXI_N_TIMES --verbosity $PIAXI_VERBOSITY --kN $PIAXI_N_KMODE --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c 0.5 0.5 0 0 0 0 --fit_F False --F $PIAXI_F
+python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --tN $PIAXI_N_TIMES --verbosity $PIAXI_VERBOSITY --kN $PIAXI_N_KMODE --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c 0.5 0.5 0 0 0 0 --no-fit_F --F $PIAXI_F --save_output_files --make_plots

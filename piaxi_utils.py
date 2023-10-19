@@ -23,12 +23,12 @@ signstr = {1: '+', -1: '-', 0: '±'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v2.9'
+version='v3.1'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
 G = G_raw = np.float64(1.0693e-19)  # Newtonian constant   [cm^5 /(eV s^4)]
-e = 0.3                     # Dimensionless electron charge
+e = 0.3                             # Dimensionless electron charge
 # Pointers to global variables
 '''
 params = None
@@ -905,22 +905,38 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     
     return plt
 
-# Plot the occupation numbers (TODO: Verify units in below equation)
+# Amplitude getter functions for occupation number function
+A_i     = lambda i, solns: solns[i][0]
+Adot_i  = lambda i, solns: solns[i][1]
+k_i     = lambda i, k_vals=None: k_vals[i]
+#ImAAdot = lambda k, t: (1/2)*np.abs(np.cos(2*k*t))
+ImAAdot = lambda k, t: -(1/2)
+k_vals_p = lambda params: np.linspace(params['k_span'][0], params['k_span'][1], params['k_num'])
+
+# Particle number for k_mode value at index i (TODO: Verify units in below equation)
+n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot) - 2*k*Im(k))
+# Wrapper function for the above, using only params and results as inputs
+n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)), 
+                                                                A=A_i(i, solns), Adot=Adot_i(i, solns), Im=lambda k: ImAAdot(k, t=get_times(params, t_in)))
+
+'''(Deprecated)
 #k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
-w_p = lambda i, params: w(i, np.linspace(params['k_span'][0], params['k_span'][1], params['k_num']), params['m_u'])
+w_p = lambda i, params: w(i, k_vals_p(params), params['m_u'])
 w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
-n_p = lambda i, params, solns: n(i, lambda j: w_p(j, params), solns)
-n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
+#n_p = lambda i, params, solns: n(i, lambda j: w_p(j, params), solns)
+#n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
+'''
+
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, omega=None, k_samples=[], times=None, scale_n=False):
-    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, omega, k_samples, times, scale_n)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False):
+    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n)
     plt.show()
 
-sum_n_k   = lambda n, w, k_v, solns, times: np.array([sum([n(i, w, solns)[t_i] for i in range(len(k_v))]) for t_i in range(len(times))])
-sum_n_k_p = lambda n, p, k_v, solns, times: np.array([sum([n(i, p, solns)[t_i] for i in range(len(k_v))]) for t_i in range(len(times))])
+sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
+sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(i, p_in, sol_in, k_v, times, n=n_in) for i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, omega_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     if len(k_samples_in) <= 0:
@@ -929,15 +945,14 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, ome
     else:
         k_samples = k_samples_in
     times = get_times(params_in, times_in)
-
-    omega = omega_in if omega_in is not None else lambda i: w_p(i, params_in)
+    numf = numf_in if numf_in is not None else n_k
     
     plt.figure(figsize=(20, 9))
 
     plt.subplot2grid((2,5), (0,0), colspan=3)
     for k_sample in k_samples:
         k_s = int(k_sample)
-        k_nums = numf_in(k_s, omega, results_in) if numf_in is not None else n_p(k_s, params_in, results_in)
+        k_nums = n_p(k_s, params_in, results_in, k_values, times, n=numf)
         plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
     plt.title('Occupation number per k mode', fontsize=16)
     plt.xlabel('Time $[%s]$' % units_in['t'])
@@ -947,11 +962,12 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, ome
     plt.legend()
     plt.grid()
 
-    n_tot = sum_n_k(numf_in, omega, k_values, results_in, times) if numf_in is not None else sum_n_k_p(n_p, params_in, k_values, results_in, times)
+    n_tot = sum_n_p(numf, params_in, results_in, k_values, times)
+
     res_con = params_in['res_con']
     if scale_n:
         n_tot /= abs(n_tot[0])
-        n_tot += max(0, np.sign(n_tot[0]))  # Placeholder fix for negative n
+        #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
 
     t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
     t_res   = times[t_res_i]
@@ -1166,9 +1182,9 @@ def print_coefficient_ranges(params_in, P_in=None, B_in=None, C_in=None, D_in=No
 # E^2 = p^2c^2 + m^2c^4
 # Assuming k, m are given in units of eV/c and eV/c^2 respectively
 #k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
-k_to_Hz = lambda ki, k0, h, c, e: ki * ((k0*e*2*np.pi) / h)
+k_to_Hz = lambda ki, k0, h, c: ki * ((k0*c) / (2*np.pi*h))
 #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
-Hz_to_k = lambda fi, k0, h, c, e: fi * (h / (k0*e*2*np.pi))
+Hz_to_k = lambda fi, k0, h, c: fi * ((h*2*np.pi) / (k0*c))
 
 def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn)
@@ -1351,55 +1367,55 @@ def print_param_space(params, units_in):
             units[key] = '\quad[%s]' % (units_in[key])
     
     textstr1 = '\n'.join((
-        r'$A_\pm(t = 0)=%.2f$' % (params['A_0'], ),
-        r'$\dot{A}_\pm (t = 0)=%.2f$' % (params['Adot_0'], ),
+        r'$A_\pm(t = 0)=%.2g$' % (params['A_0'], ),
+        r'$\dot{A}_\pm (t = 0)=%.2g$' % (params['Adot_0'], ),
         r'$\pm=%s$' % (signstr[params['A_pm']], ),
         '\n',
-        r'$\varepsilon=%.0e$' % (params['eps'], ),
-        r'$F_{\pi}=%.0e%s$' % (params['F'], units['F']),
-        r'$c = h = G = 1$' if all([units[key] == '' for key in ['c', 'h', 'G']]) else '\n'.join([r'$%s=%.2e%s$' % (key, val, units[key]) for key, val in zip(['c', 'h', 'G'], [params['c'], params['h'], params['G']])]),
+        r'$\varepsilon=%.0g$' % (params['eps'], ),
+        r'$F_{\pi}=%.0g%s$' % (params['F'], units['F']),
+        r'$c = h = G = 1$' if all([units[key] == '' for key in ['c', 'h', 'G']]) else '\n'.join([r'$%s=%.2g%s$' % (key, val, units[key]) for key, val in zip(['c', 'h', 'G'], [params['c'], params['h'], params['G']])]),
         '\n',
-        r'$\lambda_1=%d%s$' % (params['l1'], units['lambda']),
-        r'$\lambda_2=%d%s$' % (params['l2'], units['lambda']),
-        r'$\lambda_3=%d%s$' % (params['l3'], units['lambda']),
-        r'$\lambda_4=%d%s$' % (params['l4'], units['lambda']),
-        r'$\Lambda_3=%.0e%s$' % (params['L3'], units['Lambda']) if params['L3'] > 0 else r'$[\Lambda_3=%s]$' % ('N/A'),
-        r'$\Lambda_4=%.0e%s$' % (params['L4'], units['Lambda']) if params['L4'] > 0 else r'$[\Lambda_4=%s]$' % ('N/A'),
+        r'$\lambda_1=%g%s$' % (params['l1'], units['lambda']),
+        r'$\lambda_2=%g%s$' % (params['l2'], units['lambda']),
+        r'$\lambda_3=%g%s$' % (params['l3'], units['lambda']),
+        r'$\lambda_4=%g%s$' % (params['l4'], units['lambda']),
+        r'$\Lambda_3=%.0g%s$' % (params['L3'], units['Lambda']) if params['L3'] > 0 else r'$[\Lambda_3=%s]$' % ('N/A'),
+        r'$\Lambda_4=%.0g%s$' % (params['L4'], units['Lambda']) if params['L4'] > 0 else r'$[\Lambda_4=%s]$' % ('N/A'),
         '\n',
-        r'$\Delta k=%.2f%s$' % (k_step_in, units['k']),
+        r'$\Delta k=%.2g%s$' % (k_step_in, units['k']),
         r'$k \in [%d, %d]$' % (params['k_span'][0], params['k_span'][1]),
         '\n',
-        r'$\Delta t=%f%s$' % (t_step_in, units['t']),
+        r'$\Delta t=%g%s$' % (t_step_in, units['t']),
         r'$t \in [%d, %d]$' % (params['t_span'][0], params['t_span'][1]),
         ))
     m0_mask = np.ma.getmask(params['m'][0]) if np.ma.getmask(params['m'][0]) else np.full_like(params['m'][0], False)
     m1_mask = np.ma.getmask(params['m'][1]) if np.ma.getmask(params['m'][1]) else np.full_like(params['m'][1], False)
     m2_mask = np.ma.getmask(params['m'][2]) if np.ma.getmask(params['m'][2]) else np.full_like(params['m'][2], False)
     textstr2 = '\n'.join((
-        r'$m_{q, dQCD} = [%s]\quad%.0e eV$' % (', '.join('%d' % q for q in np.array(params['qm']) / params['m_q']), params['m_q']),
+        r'$m_{q, dQCD} = [%s]\quad%.2g eV$' % (', '.join('%d' % q for q in np.array(params['qm']) / params['m_q']), params['m_q']),
         '' if units['m'] == 'eV' else r'$m_{u} = %.2e\quad[eV]$' % (params['m_u'], ),
         r'$m%s$' % units['m'],
-        ' '.join([r'$m_{(0),%d}=%.2e$'   % (i+1, params['m'][0][i]*params['m_0'], ) for i in range(len(params['m'][0])) if not m0_mask[i]]),
-        ' '.join([r'$m_{(\pi),%d}=%.2e$' % (i+1, params['m'][1][i]*params['m_0'], ) for i in range(len(params['m'][1])) if not m1_mask[i]]),
-        ' '.join([r'$m_{(\pm),%d}=%.2e$' % (i+1, params['m'][2][i]*params['m_0'], ) for i in range(len(params['m'][2])) if not m2_mask[i]]),
+        ' '.join([r'$m_{(0),%d}=%.2g$'   % (i+1, params['m'][0][i]*params['m_0'], ) for i in range(len(params['m'][0])) if not m0_mask[i]]),
+        ' '.join([r'$m_{(\pi),%d}=%.2g$' % (i+1, params['m'][1][i]*params['m_0'], ) for i in range(len(params['m'][1])) if not m1_mask[i]]),
+        ' '.join([r'$m_{(\pm),%d}=%.2g$' % (i+1, params['m'][2][i]*params['m_0'], ) for i in range(len(params['m'][2])) if not m2_mask[i]]),
         '\n',
         r'$\pi%s$' % units['amp'],
-        ' '.join([r'$\pi_{(0),%d}=%.2e$'   % (i+1, params['amps'][0][i], ) for i in range(len(params['amps'][0])) if not m0_mask[i]]),
-        ' '.join([r'$\pi_{(\pi),%d}=%.2e$' % (i+1, params['amps'][1][i], ) for i in range(len(params['amps'][1])) if not m1_mask[i]]),
-        ' '.join([r'$\pi_{(\pm),%d}=%.2e$' % (i+1, params['amps'][2][i], ) for i in range(len(params['amps'][2])) if not m2_mask[i]]),
+        ' '.join([r'$\pi_{(0),%d}=%.2g$'   % (i+1, params['amps'][0][i], ) for i in range(len(params['amps'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\pi_{(\pi),%d}=%.2g$' % (i+1, params['amps'][1][i], ) for i in range(len(params['amps'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\pi_{(\pm),%d}=%.2g$' % (i+1, params['amps'][2][i], ) for i in range(len(params['amps'][2])) if not m2_mask[i]]),
         '\n',
         r'$\rho\quad[eV/cm^3]$',
-        ' '.join([r'$\rho_{(0),%d}=%.2e$'   % (i+1, params['p'][0][i]/params['p_0'], ) for i in range(len(params['p'][0])) if not m0_mask[i]]),
-        ' '.join([r'$\rho_{(\pi),%d}=%.2e$' % (i+1, params['p'][1][i]/params['p_0'], ) for i in range(len(params['p'][1])) if not m1_mask[i]]),
-        ' '.join([r'$\rho_{(\pm),%d}=%.2e$' % (i+1, params['p'][2][i]/params['p_0'], ) for i in range(len(params['p'][2])) if not m2_mask[i]]),
+        ' '.join([r'$\rho_{(0),%d}=%.2g$'   % (i+1, params['p'][0][i]/params['p_0'], ) for i in range(len(params['p'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\rho_{(\pi),%d}=%.2g$' % (i+1, params['p'][1][i]/params['p_0'], ) for i in range(len(params['p'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\rho_{(\pm),%d}=%.2g$' % (i+1, params['p'][2][i]/params['p_0'], ) for i in range(len(params['p'][2])) if not m2_mask[i]]),
         '\n',
-        ' '.join([r'$\delta_{(0),%d}=%.2f \pi$'   % (i+1, params['d'][0][i]/np.pi, ) for i in range(len(params['d'][0])) if not m0_mask[i]]),
-        ' '.join([r'$\delta_{(\pi),%d}=%.2f \pi$' % (i+1, params['d'][1][i]/np.pi, ) for i in range(len(params['d'][1])) if not m1_mask[i]]),
-        ' '.join([r'$\delta_{(\pm),%d}=%.2f \pi$' % (i+1, params['d'][2][i]/np.pi, ) for i in range(len(params['d'][2])) if not m2_mask[i]]),
+        ' '.join([r'$\delta_{(0),%d}=%.2g \pi$'   % (i+1, params['d'][0][i]/np.pi, ) for i in range(len(params['d'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\delta_{(\pi),%d}=%.2g \pi$' % (i+1, params['d'][1][i]/np.pi, ) for i in range(len(params['d'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\delta_{(\pm),%d}=%.2g \pi$' % (i+1, params['d'][2][i]/np.pi, ) for i in range(len(params['d'][2])) if not m2_mask[i]]),
         '\n',
-        #' '.join([r'$\Theta_{(0),%d}=%.2f \pi$' % (i+1, params['Th'][0][i]/np.pi, ) for i in range(len(params['Th'][0])) if not m0_mask[i]]),
-        ' '.join([r'$\Theta_{(\pi),%d}=%.2f \pi$' % (i+1, params['Th'][1][i]/np.pi, ) for i in range(len(params['Th'][1])) if not m1_mask[i]]),
-        ' '.join([r'$\Theta_{(\pm),%d}=%.2f \pi$' % (i+1, params['Th'][2][i]/np.pi, ) for i in range(len(params['Th'][2])) if not m2_mask[i]]),
+        ' '.join([r'$\Theta_{(0),%d}=%.2g \pi$' % (i+1, params['Th'][0][i]/np.pi, ) for i in range(len(params['Th'][0])) if not m0_mask[i]]),
+        ' '.join([r'$\Theta_{(\pi),%d}=%.2g \pi$' % (i+1, params['Th'][1][i]/np.pi, ) for i in range(len(params['Th'][1])) if not m1_mask[i]]),
+        ' '.join([r'$\Theta_{(\pm),%d}=%.2g \pi$' % (i+1, params['Th'][2][i]/np.pi, ) for i in range(len(params['Th'][2])) if not m2_mask[i]]),
         ))
         
     return textstr1, textstr2
@@ -1507,7 +1523,7 @@ def get_frequency_class(k_mode_in, k_to_HZ, res_label, verbosity=0):
     
     return Hz_class, obs_class
 
-# TODO: return a tuple containing the min/max resonant k-modes, and the resonance classification (broad-band / narrow-band / multi-band)
+# Returns a tuple containing the min/max resonant k-modes, and the resonance classification (broad-band / narrow-band / multi-band)
 def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbosity=0):
     # Initialize lists to store start and end indices of resonant segments
     start_indices = []
@@ -1518,7 +1534,7 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
     for i, label in enumerate(k_class_arr):
         if label == 'res' and start_idx is None:
             start_idx = i
-        elif label != 'res' and start_idx is not None:
+        elif label not in ['res', 'semi'] and start_idx is not None:
             start_indices.append(start_idx)
             end_indices.append(i-1)
             start_idx = None
@@ -1527,10 +1543,14 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
         end_indices.append(len(k_class_arr)-1)
 
     # Determine resonance classification
+    res_count  = np.ma.masked_where(k_class_arr != 'res', k_class_arr, copy=True).count()
+    semi_count = np.ma.masked_where(k_class_arr != 'semi', k_class_arr, copy=True).count()
     if not start_indices:  # No resonance segments found
         return None, None, None
     elif len(start_indices) == 1:  # Only one resonance segment
         if start_indices[0] == 0 and end_indices[0] == len(k_class_arr) - 1:
+            classification = "broad-band"
+        elif (int(res_count) / int(len(k_class_arr))) >= float(class_sens):
             classification = "broad-band"
         else:
             classification = "narrow-band"
@@ -1538,7 +1558,10 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
         classification = "multi-band"
 
     # Convert k-values to HZ and return results
-    min_res_k = k_to_HZ(min(k_values_in[start_indices[0]:end_indices[-1] + 1]))
-    max_res_k = k_to_HZ(max(k_values_in[start_indices[0]:end_indices[-1] + 1]))
+    min_res_Hz = float(k_to_HZ(min(k_values_in[start_indices[0]:end_indices[-1] + 1])))
+    max_res_Hz = float(k_to_HZ(max(k_values_in[start_indices[0]:end_indices[-1] + 1])))
+
+    if verbosity >= 0:
+        print('%s resonance detected from %.0g to %.0g Hz' % (classification, min_res_Hz, max_res_Hz))
     
-    return min_res_k, max_res_k, classification
+    return min_res_Hz, max_res_Hz, classification

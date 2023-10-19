@@ -14,7 +14,7 @@ unitful_k = False        # Toggle whether k values are defined unitfully [eV] vs
 # main loop
 def main(args):
     scan_args = [args.scan_mass, args.scan_Lambda, args.scan_Lambda3, args.scan_Lambda3, args.scan_F, args.scan_epsilon]
-    if any([scan_arg is not None for scan_arg in scan_args]):
+    if any([scan_arg is not None for scan_arg in scan_args]) or args.num_samples > 1:
         run_multiple_cases(args)
     else:
         run_single_case(args)
@@ -43,6 +43,7 @@ def run_multiple_cases(args):
     scan_Lambda3  = np.float64(args.scan_Lambda3) if args.scan_Lambda3 is not None else None
     scan_Lambda4  = np.float64(args.scan_Lambda4) if args.scan_Lambda4 is not None else None
     scan_eps      = np.float64(args.scan_epsilon) if args.scan_epsilon is not None else None
+    N_samples     = args.num_samples if args.num_samples is not None else 1
 
     if scan_mass is not None:
         m_min, m_max = scan_mass
@@ -59,8 +60,8 @@ def run_multiple_cases(args):
         fit_F = False
 
     if args.verbosity >= 9:
-        print('args in: ')
-        print('\n'.join([str(inparam) for inparam in [scan_Lambda, scan_Lambda3, scan_Lambda4, Lambda_N, Lambda3_N, Lambda4_N]]))
+        print('scanning args in: ')
+        print('  \n'.join([str(inparam) for inparam in [scan_Lambda, scan_Lambda3, scan_Lambda4, Lambda_N, Lambda3_N, Lambda4_N]]))
     if scan_Lambda is not None:
         L_min, L_max = scan_Lambda
         L3_values = get_values(L_min, L_max, Lambda3_N)
@@ -73,15 +74,16 @@ def run_multiple_cases(args):
         L4_values = get_values(L4_min, L4_max, Lambda4_N)
 
     i = 0
-    for mass in mass_values:
-        for eps in eps_values:
-            for F in F_values:
-                for L3 in L3_values:
-                    for L4 in L4_values:
-                        if args.verbosity >= 7:
-                            print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
-                        run_single_case(args, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
-                        i += 1
+    for Ni in range(N_samples):
+        for mass in mass_values:
+            for eps in eps_values:
+                for F in F_values:
+                    for L3 in L3_values:
+                        for L4 in L4_values:
+                            if args.verbosity >= 7:
+                                print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
+                            run_single_case(args, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
+                            i += 1
     return None
 
 def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
@@ -90,6 +92,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
     use_natural_units = args.use_natural_units    # Toggle whether calculations / results are given in c = h = G = 1 (True) or SI units (False)   || NOTE: full SI/phsyical unit support is still WIP!!
     save_output_files = args.save_output_files    # Toggle whether or not the results from this notebook run are written to a data directory
+    int_method        = args.int_method           # Scipy.integrate.solve_ivp() integration method
 
     config_name       = args.config_name          # Descriptive name for the given parameter case. Output files will be saved in a directory with this name.
     seed              = args.seed                 # rng_seed, integer value (None for random)
@@ -160,19 +163,12 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     xi     = np.array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])  # Charged species scaling paramters
     eps_c  = np.array([+1., +1., +1., -1., -1., -1., -1., +1., -1.])  # Millicharge sign
 
-    # Initial Conditions
-    A_0    = 0.1
-    Adot_0 = 0.0
-    A_pm   = +1       # specify A± case (+1 or -1)
-    A_sens = 1.0      # sensitivity for classification of resonance conditions
-    em_bg  = 1.0      # photon background (Default 1)
-
     # Time domain
     t_span = [0, args.t]   # Units of 1/m_u
     t_N = args.tN          # Number of timesteps
     t_sens = 0.1           # sensitivity for calculating time-averaged values
 
-    # k values
+    # k-space domain
     use_k_eq_0 = False     # Toggle whether or not k = 0 is included in the numerics (div. by 0 error possible if on)
     k_min = 0 if use_k_eq_0 else 1
     k_max = args.k if args.k > 0 else args.kN  # default to a k-mode granularity of 1
@@ -181,12 +177,23 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)    # Number of k-modes
     #k_N = args.kN
 
+    # Initial Conditions
+    A_0    = args.A_0
+    Adot_0 = args.Adot_0
+    A_pm   = +1       # specify A± case (+1 or -1)
+    A_sens = 1.0      # sensitivity for classification of resonance conditions
+    em_bg  = 1.0      # photon background (Default 1)
+
     # Toggle whether mass-energy values should be computed in units of eV (False) or pi-axion mass (True)
     # (by default, k is defined in units of [m_u] whereas m is defined in units of [eV], so their scaling logic is inverted)
     unitful_amps   = unitful_m = True
     rescale_m      = use_mass_units if unitful_masses else not(use_mass_units)
     rescale_k      = not(rescale_m) if unitful_masses else rescale_m
     rescale_amps   = use_mass_units if unitful_amps   else not(use_mass_units)
+
+    # Toggle whether or not local and global phases should be sampled
+    sample_delta = args.sample_delta
+    sample_theta = args.sample_theta
 
     # Define pi-axiverse mass species
     m_r, m_n, m_c, counts, masks = define_mass_species(qm=qm, qc=qc, F=F, e=e, eps=eps, eps_c=eps_c, xi=xi)
@@ -195,10 +202,14 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     # Populate masses for real, complex, and charged species (given in units of eV)
     m, m_u = init_masses(m_r, m_n, m_c, natural_units=use_natural_units, c=c, verbosity=verbosity)
     # Handle unit rescaling logic
-    m_unit = m_u
-    m0 = 1. if not rescale_m else (1./m_unit if unitful_masses else m_unit)         # [m_u] <--> [eV]
-    k0 = m_unit if rescale_k else 1.
-    t0 = 1./m_unit if unitful_m else 1.
+    m_unit = m_u      # value of m_u in [eV]
+
+    m0     = m0_f(m_u, c_u, rescale_m, unitful_m)      # Desired units  (m --> m_u)
+    m0_raw = m0_f(m_u, c_raw, rescale_m, unitful_m)    # Physical units (eV/c^2)
+    k0     = k0_f(m_u, c_u, rescale_k, unitful_m)      # Desired units  (k --> m_u)
+    k0_raw = k0_f(m_u, c_raw, rescale_k, unitful_m)    # Physical units (eV/c)
+    t0     = t0_f(m_u, h_u, rescale_m, unitful_m)      # Desired units  (t --> 1/m_u)
+    t0_raw = t0_f(m_u, h_raw, rescale_m, unitful_m)    # Physical units (s)
 
     if verbosity >= 6:
         print('masks: ', masks)
@@ -211,7 +222,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     amps = init_amplitudes(m, p, m_unit=m_u, h=h, c=c, mass_units=use_mass_units, natural_units=use_natural_units, unitful_amps=unitful_masses, rescale_amps=rescale_amps, verbosity=verbosity)
 
     # Populate and sample local and global phases from normal distribution  for each species, between 0 and 2pi
-    d, Th = init_phases(masks, rng=rng, sample_delta=True, sample_Theta=True, verbosity=verbosity)
+    d, Th = init_phases(masks, rng, sample_delta, sample_theta, verbosity=verbosity, sample_dist='uniform')
 
     # For performance gains, omit fully non-existant species from the numerics
     m    = trim_masked_arrays(m)
@@ -241,38 +252,38 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     # Define coefficient functions to clean up differential equation representation
     P = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-            2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
+            2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j] * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
                                                 for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
-            2*l4/(L4**2) * eps**2 * (np.sum([amps[1][i]*amps[1][j]/c**2 * np.cos(phi(t,1,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][i]-Th[1][j]) \
+            2*l4/(L4**2) * eps**2 * (np.sum([amps[1][i]*amps[1][j] * np.cos(phi(t,1,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][i]-Th[1][j]) \
                                                 for i in range(len(m[1])) for j in range(len(m[1]))], axis=0) + \
-                                        np.sum([amps[0][i]*amps[0][j]/c**2 * np.cos(phi(t,0,i))*np.cos(phi(t,0,j)) \
+                                     np.sum([amps[0][i]*amps[0][j] * np.cos(phi(t,0,i))*np.cos(phi(t,0,j)) \
                                                 for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
-                                    2*np.sum([amps[0][i]*amps[1][j]/c**2 * np.cos(phi(t,0,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][j]) \
+                                   2*np.sum([amps[0][i]*amps[1][j] * np.cos(phi(t,0,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][j]) \
                                                 for i in range(len(m[0])) for j in range(len(m[1]))], axis=0))
 
     B = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-                (-1)*2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(Th[2][i]-Th[2][j])  * \
-                                                    ((m[2][i]*M/c**2) * np.sin(phi(t,2,i)) * np.cos(phi(t,2,j)) + \
-                                                    (m[2][j]*M/c**2) * np.cos(phi(t,2,i)) * np.sin(phi(t,2,j))) \
+                (-1)*2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j] * np.cos(Th[2][i]-Th[2][j])  * \
+                                                    ((m[2][i]*M) * np.sin(phi(t,2,i)) * np.cos(phi(t,2,j)) + \
+                                                     (m[2][j]*M) * np.cos(phi(t,2,i)) * np.sin(phi(t,2,j))) \
                                                     for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
-                (-1)*2*l4/(L4**2) * eps**2 * (np.sum([amps[0][i]*amps[0][j]/c**2 * ((m[0][i]*M/c**2) * np.sin(phi(t,0,i)) * np.cos(phi(t,0,j)) + \
-                                                                                    (m[0][j]*M/c**2) * np.cos(phi(t,0,i)) * np.sin(phi(t,0,j))) \
+                (-1)*2*l4/(L4**2) * eps**2 * (np.sum([amps[0][i]*amps[0][j] * ((m[0][i]*M) * np.sin(phi(t,0,i)) * np.cos(phi(t,0,j)) + \
+                                                                               (m[0][j]*M) * np.cos(phi(t,0,i)) * np.sin(phi(t,0,j))) \
                                                     for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
-                                                    np.sum([amps[1][i]*amps[1][j]/c**2 * np.cos(Th[1][i]-Th[1][j])  * \
-                                                            ((m[1][i]*M/c**2) * np.sin(phi(t,1,i)) * np.cos(phi(t,1,j)) + \
-                                                            (m[1][j]*M/c**2) * np.cos(phi(t,1,i)) * np.sin(phi(t,1,j))) \
+                                                    np.sum([amps[1][i]*amps[1][j] * np.cos(Th[1][i]-Th[1][j])  * \
+                                                            ((m[1][i]*M) * np.sin(phi(t,1,i)) * np.cos(phi(t,1,j)) + \
+                                                             (m[1][j]*M) * np.cos(phi(t,1,i)) * np.sin(phi(t,1,j))) \
                                                             for i in range(len(m[1])) for j in range(len(m[1]))], axis=0) + \
-                                                    np.sum([np.abs(amps[0][i]*amps[1][j]/c**2) * np.cos(Th[1][j]) * \
-                                                            ((m[0][i]*M/c**2) * np.sin(phi(t,0,i)) * np.cos(phi(t,1,j)) + \
-                                                            (m[1][j]*M/c**2) * np.cos(phi(t,0,i)) * np.sin(phi(t,1,j))) \
+                                                    np.sum([np.abs(amps[0][i]*amps[1][j]) * np.cos(Th[1][j]) * \
+                                                            ((m[0][i]*M) * np.sin(phi(t,0,i)) * np.cos(phi(t,1,j)) + \
+                                                             (m[1][j]*M) * np.cos(phi(t,0,i)) * np.sin(phi(t,1,j))) \
                                                             for i in range(len(m[0])) for j in range(len(m[1]))], axis=0))
 
     C = lambda t, pm, l1=l1, F=F_sc, eps=eps, amps=amps, m=m, M=m0, d=d, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-                (-1) * pm * (2*l1 / F) * eps**2 * np.sum([amps[0][i]/c**2 * (m[0][i]*M/c**2) * np.sin(phi(t,0,i)) \
+                (-1) * pm * (2*l1 / F) * eps**2 * np.sum([amps[0][i] * (m[0][i]*M) * np.sin(phi(t,0,i)) \
                                                         for i in range(len(m[0]))], axis=0)
 
     D = lambda t, l2=l2, e=e, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-                l2 * eps**2 * e**2 * np.sum([amps[2][i]*amps[2][j]/c**2 * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
+                l2 * eps**2 * e**2 * np.sum([amps[2][i]*amps[2][j] * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
                                             for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)
 
     # TODO: Add support for supplying custom functions?
@@ -311,7 +322,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
                 'amp_r': amps[0], 'amp_n': amps[1], 'amp_c': amps[2], 'd_r': d[0], 'd_n': d[1], 'd_c': d[2], 'k_0': k0,
                 'unitful_m': unitful_masses, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
                 'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
-                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 
+                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'int_method': int_method, 
                 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D, 'em_bg': em_bg}
 
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
@@ -331,7 +342,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
 
-        solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress)
+        solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress, method=int_method)
 
         # Generate plots and optionally show them
         make_plots = args.make_plots
@@ -352,16 +363,12 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             if show_plots:
                 plt.show()
         
-        # Plot the occupation numbers (TODO: Verify units in below equation)
-        #k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
-        w = lambda i, k_u=m_unit, c=c_raw, h=h_raw: np.abs(k_values[i]*k_u*(2*np.pi/h))
-        n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
         if make_plots:
             times = t
 
             scale_n = True
-            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n, omega_in=w, scale_n=scale_n, write_to_params=True)
-            n_tot = sum_n_k(n, w, k_values, solutions, times)
+            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, scale_n=scale_n, write_to_params=True)
+            n_tot = sum_n_p(n_k, params, solutions, k_values, times)
             result_plots['nums'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -393,9 +400,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
         # E^2 = p^2c^2 + m^2c^4
         # Assuming k, m are given in units of eV/c and eV/c^2 respectively
         #k_to_Hz = lambda ki, mi=0, m_0=m0, e=e: 1/h * np.sqrt((ki*k0*e)**2 + ((mi*m_0 * e))**2)
-        k_to_Hz_local = lambda ki, k0=m_unit, h=h_raw, c=c_raw, e=e: k_to_Hz(ki, k0, h, c, e)
+        k_to_Hz_local = lambda ki, k0=k0_raw, h=h_raw, c=c_raw: k_to_Hz(ki, k0, h, c)
         #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
-        Hz_to_k_local = lambda fi, k0=m_unit, h=h_raw, c=c_raw, e=e: Hz_to_k(fi, k0, h, c, e)
+        Hz_to_k_local = lambda fi, k0=k0_raw, h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
@@ -404,10 +411,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             if show_plots:
                 plt.show()
 
-        # Known observable frequency ranges (Hz)
-
-        res_freq, res_freq_class = get_frequency_class(k_peak, k_to_Hz, tot_res, verbosity=verbosity)
-        res_band_min, res_band_max, res_band_class = get_resonance_band(k_values, params['k_class_arr'], k_to_Hz, tot_res, verbosity=verbosity)
+        # Known observable frequency range and bandwidth classification
+        res_freq, res_freq_class = get_frequency_class(k_peak, k_to_Hz_local, tot_res, verbosity=verbosity)
+        res_band_min, res_band_max, res_band_class = get_resonance_band(k_values, params['k_class_arr'], k_to_Hz_local, verbosity=verbosity)
 
         params['res_freq'] = res_freq
         params['res_band'] = [res_band_min, res_band_max]
@@ -435,6 +441,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             print('Done!')
 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
+
+# Functions to rescale mass, k-modes, and time to desired units
+m0_f = lambda m_u, c, rescale_m, unitful_m: 1./c**2 if not rescale_m else (1./(m_u*c**2) if unitful_m else (m_u/c**2))
+k0_f = lambda m_u, c, rescale_k, unitful_m: m_u/c if rescale_k else 1.
+t0_f = lambda m_u, h, rescale_m, unitful_m: h/m_u if unitful_m else 1.
 
 ## Pi-axion Species Mass Definitions
 def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
@@ -514,9 +525,9 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     m_r = np.ma.masked_where(m_r == 0.0, m_r, copy=True)
     m_n = np.ma.masked_where(m_n == 0.0, m_n, copy=True)
     m_c = np.ma.masked_where(m_c == 0.0, m_c, copy=True)
-    r_mask = np.ma.getmask(m_r)
-    n_mask = np.ma.getmask(m_n)
-    c_mask = np.ma.getmask(m_c)
+    r_mask = np.ma.getmaskarray(m_r)
+    n_mask = np.ma.getmaskarray(m_n)
+    c_mask = np.ma.getmaskarray(m_c)
     masks = np.array([r_mask, n_mask, c_mask], dtype=object)
     N_r = m_r.count()
     N_n = m_n.count()
@@ -551,7 +562,6 @@ def init_masses(m_r: np.ma, m_n: np.ma, m_c: np.ma, natural_units=True, c=1, ver
 def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
     ## local DM densities for each species, assume equal mix for now.
     # TODO: More granular / nontrivial distribution of densities? Spacial dependence? Sampling?
-    N_r, N_n, N_c = [len(mask) for mask in masks]
     
     if normalized_subdens:
         p_loc = p_t/3.
@@ -576,15 +586,13 @@ def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
             
             p = np.array([p_r*p_loc, p_n*p_loc, p_c*p_loc], dtype=object)
     else:
+        N_r, N_n, N_c = [len(mask) for mask in masks]
         p_r  = np.ma.masked_where(masks[0], np.full(N_r, 1./max(1., N_r), dtype=float), copy=True)
         p_n  = np.ma.masked_where(masks[1], np.full(N_n, 1./max(1., N_n), dtype=float), copy=True)
         p_c  = np.ma.masked_where(masks[2], np.full(N_c, 1./max(1., N_c), dtype=float), copy=True)
-        #p_r  = np.ma.masked_where(masks[0], np.full(N_r, 1./max(1., N_r), dtype=float), copy=True)
-        #p_n  = np.ma.masked_where(masks[1], np.full(N_n, 1./max(1., N_n), dtype=float), copy=True)
-        #p_c  = np.ma.masked_where(masks[2], np.full(N_c, 1./max(1., N_c), dtype=float), copy=True)
-        #np.ma.set_fill_value(p_r, 0.0)
-        #np.ma.set_fill_value(p_n, 0.0)
-        #np.ma.set_fill_value(p_c, 0.0)
+        np.ma.set_fill_value(p_r, 0.0)
+        np.ma.set_fill_value(p_n, 0.0)
+        np.ma.set_fill_value(p_c, 0.0)
 
         p = np.array([p_r.compressed()*p_loc, p_n.compressed()*p_loc, p_c.compressed()*p_loc], dtype=object, copy=True)
 
@@ -617,7 +625,7 @@ def init_amplitudes(m, p, m_unit=1, mass_units=True, natural_units=True, unitful
     return amps
 
 # Sample global and local phases from normal distribution, between 0 and 2pi
-def init_phases(masks, rng=None, sample_delta=True, sample_Theta=True, delta_in=None, Theta_in=None, cosine_form=True, verbosity=0):
+def init_phases(masks, rng=None, sample_delta=True, sample_Theta=True, delta_in=None, Theta_in=None, cosine_form=True, verbosity=0, sample_dist='uniform'):
     #global d, Th
     N_r, N_n, N_c = [len(mask) for mask in masks]
     ## local phases for each species (to be sampled)
@@ -638,42 +646,53 @@ def init_phases(masks, rng=None, sample_delta=True, sample_Theta=True, delta_in=
         Th_raw = Theta_in
     Th = Th_raw
 
-    if verbosity > 3:
+    if verbosity > 3 and sample_dist == 'normal':
         print('delta (raw):\n', d_raw)
         print('Theta (raw):\n', Th_raw)
 
-    d, Th = sample_phases(rng, d, Th, sample_delta, sample_Theta, verbosity=verbosity)
+    d, Th = sample_phases(rng, d, Th, sample_delta, sample_Theta, distribution=sample_dist, cosine_form=cosine_form, verbosity=verbosity)
 
     return d, Th
 
 mu  = np.pi      # mean
 sig = np.pi / 3  # standard deviation
-def sample_phases(rng, d_in, Th_in, sample_delta=True, sample_Theta=True, mean_delta=mu, mean_theta=mu, stdev_delta=sig, stdev_theta=sig, cosine_form=True, verbosity=0):
+def sample_phases(rng, d_in, Th_in, sample_delta=True, sample_Theta=True, mean_delta=mu, mean_theta=mu, stdev_delta=sig, stdev_theta=sig, distribution='uniform', cosine_form=True, verbosity=0):
 
     mu_delta  = mu  if mean_delta  is None else mean_delta
     mu_theta  = mu  if mean_theta  is None else mean_theta
     sig_delta = sig if stdev_delta is None else stdev_delta
     sig_theta = sig if stdev_theta is None else stdev_theta
 
-    # Modulo 2pi to ensure value is within range
+    # Shift local phase by pi to account for cosine/sine convention in EoM definitions
     shift_val = np.pi if cosine_form else 0.
+    # Modulo 2pi to ensure value is within range
     if sample_delta:
-        #d  = np.array([np.ma.masked_where(mask[i], np.mod(rng.normal(mu_delta, sig_delta, len(mask)) + shift_val, 2*np.pi)).compressed() for i,mask in enumerate(masks)], dtype=object)
-        d  = np.array([np.mod(rng.normal(mu_delta, sig_delta, len(d_i)) + shift_val, 2*np.pi) for d_i in d_in], dtype=object)
+        if distribution == 'uniform':
+            d  = np.array([np.mod(rng.uniform(0, 2*np.pi, len(d_i)) + shift_val, 2*np.pi) for d_i in d_in], dtype=object)
+        elif distribution == 'normal':
+            #d  = np.array([np.ma.masked_where(mask[i], np.mod(rng.normal(mu_delta, sig_delta, len(mask)) + shift_val, 2*np.pi)).compressed() for i,mask in enumerate(masks)], dtype=object)
+            d  = np.array([np.mod(rng.normal(mu_delta, sig_delta, len(d_i)) + shift_val, 2*np.pi) for d_i in d_in], dtype=object)
+        else:
+            d = d_in
     else:
         d = d_in
     if sample_Theta:
-        #Th = np.array([np.ma.masked_where(mask[i], np.mod(rng.normal(mu_theta, sig_theta, len(mask)) + shift_val, 2*np.pi)).compressed() for i,mask in enumerate(masks)], dtype=object)
-        Th = np.array([np.mod(rng.normal(mu_theta, sig_theta, len(Th_i)) + shift_val, 2*np.pi) for Th_i in Th_in], dtype=object)
+        if distribution == 'uniform':
+            Th  = np.array([np.mod(rng.uniform(0, 2*np.pi, len(Th_i)) + shift_val, 2*np.pi) for Th_i in Th_in], dtype=object)
+        elif distribution == 'normal':
+            #Th = np.array([np.ma.masked_where(mask[i], np.mod(rng.normal(mu_theta, sig_theta, len(mask)) + shift_val, 2*np.pi)).compressed() for i,mask in enumerate(masks)], dtype=object)
+            Th = np.array([np.mod(rng.normal(mu_theta, sig_theta, len(Th_i)) + shift_val, 2*np.pi) for Th_i in Th_in], dtype=object)
+        else:
+            Th = Th_in
     else:
         Th = Th_in
 
     if verbosity > 3:
-        print('Sample delta?  ', sample_delta)
-        if sample_delta: print('  mu: %.2f  |  sigma: %.2f' % (mu_delta, sig_delta))
+        print('Sample delta?  ', sample_delta, '(%s distribution)' % distribution if sample_delta else '')
+        if sample_delta and distribution == 'normal': print('  mu: %.2f  |  sigma: %.2f' % (mu_delta, sig_delta))
         print('delta (out):\n', d)
-        print('Sample Theta?  ', sample_Theta)
-        if sample_Theta: print('  mu: %.2f  |  sigma: %.2f' % (mu_theta, sig_theta))
+        print('Sample Theta?  ', sample_Theta,  '(%s distribution)' % distribution if sample_Theta else '')
+        if sample_Theta and distribution == 'normal': print('  mu: %.2f  |  sigma: %.2f' % (mu_theta, sig_theta))
         print('Theta (out):\n', Th)
     elif verbosity > 0:
         print('delta:\n', d)
@@ -697,26 +716,32 @@ if __name__ == '__main__':
     parser.add_argument('--m_scale',    type=np.float64, default=1e-20, help='Mass scale of dQCD quarks in [eV]')
     parser.add_argument('--rho',        type=np.float64, default=0.4,   help='Local DM energy density, in [GeV/cm^3]')
 
-    parser.add_argument('--A_0',        type=np.float64, default=0.1,   help='Photon field initial conditions')
-    parser.add_argument('--Adot_0',     type=np.float64, default=0.0,   help='Photon field rate of change initial conditions')
+    parser.add_argument('--sample_delta', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether local phases are randomly sampled')
+    parser.add_argument('--sample_theta', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether global phases are randomly sampled')
+
+    parser.add_argument('--A_0',        type=np.float64, default=1.0,   help='Photon field initial conditions')
+    parser.add_argument('--Adot_0',     type=np.float64, default=1.0,   help='Photon field rate of change initial conditions')
     parser.add_argument('--A_pm',       type=int,        default=+1,    help='Polarization case (+1 or -1)')
 
-    parser.add_argument('--use_natural_units', action=argparse.BooleanOptionalAction,  help='Toggle whether c=h=G=1')
-    parser.add_argument('--use_mass_units',    action=argparse.BooleanOptionalAction,  help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
-    parser.add_argument('--make_plots',        action=argparse.BooleanOptionalAction,  help='Toggle whether plots are made at the end of each run')
-    parser.add_argument('--show_plots',        type=bool, default=False, help='Toggle whether plots are displayed at the end of each run')
-    parser.add_argument('--skip_existing',     action=argparse.BooleanOptionalAction,  help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
+    parser.add_argument('--use_natural_units', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether c=h=G=1')
+    parser.add_argument('--use_mass_units',    action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
+    parser.add_argument('--make_plots',        action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether plots are made at the end of each run')
+    parser.add_argument('--show_plots',        action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether plots are displayed at the end of each run')
+    parser.add_argument('--skip_existing',     action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
 
     parser.add_argument('--verbosity',         type=int,  default=0,               help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
-    parser.add_argument('--save_output_files', action=argparse.BooleanOptionalAction, help='Toggle whether or not to save the results from this run')
+    parser.add_argument('--save_output_files', action=argparse.BooleanOptionalAction, default=True, help='Toggle whether or not to save the results from this run')
     parser.add_argument('--config_name',       type=str,  default='default',       help='Descriptive name to give to this parameter case')
     parser.add_argument('--num_cores',         type=int,  default=1,               help='Number of parallel processing threads to use')
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
-    
-    parser.add_argument('--P',     action=argparse.BooleanOptionalAction, help='Turn on/off the P(t) coefficient in the numerics')
-    parser.add_argument('--B',     action=argparse.BooleanOptionalAction, help='Turn on/off the B(t) coefficient in the numerics')
-    parser.add_argument('--C',     action=argparse.BooleanOptionalAction, help='Turn on/off the C_+/-(t) coefficient in the numerics')
-    parser.add_argument('--D',     action=argparse.BooleanOptionalAction, help='Turn on/off the D(t) coefficient in the numerics')
+    parser.add_argument('--int_method',        type=str,  default='RK45',          help='Numerical integration method, to be used by scipy solve_ivp')
+    parser.add_argument('--num_samples',       type=int,  default=1,               help='Number of times to rerun a parameter set, except randomly sampled variables')
+
+
+    parser.add_argument('--P', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the P(t) coefficient in the numerics')
+    parser.add_argument('--B', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the B(t) coefficient in the numerics')
+    parser.add_argument('--C', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the C_+/-(t) coefficient in the numerics')
+    parser.add_argument('--D', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the D(t) coefficient in the numerics')
 
     parser.add_argument('--fit_F', action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
     parser.add_argument('--scan_F',         type=int,  nargs=2,       help='Provide min and max values of F_pi values to search, in [log GeV] scale')

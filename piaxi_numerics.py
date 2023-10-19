@@ -74,7 +74,7 @@ def get_param_space():
 
 k_count_max = 0  # TODO: Make sure this max counter works
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
-def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False):
+def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45'):
     global k_count_max
     # Determine the environment
     is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
@@ -84,6 +84,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             print('Jupyter?       ', is_jupyter)
     if verbosity >= 3:
         print('Parallel?      ', parallelize, ' (N = %d)' % num_cores if parallelize and verbosity >= 8 else '')
+        print('Integrating using %s' % method)
 
     if is_jupyter:
         import multiprocess as mp
@@ -123,23 +124,29 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
         pprint.pp(params)
         print('-----------------------------------------------------')
 
+    # Initialize photon apmlitudes via bunch-davies initial conditions
+    A_scale    = params['A_0']
+    Adot_scale = params['Adot_0']
+    k_N = len(k_values)
+    y0_k = init_photons(k_N, A_scale=A_scale, Adot_scale=Adot_scale)
+
     # Solve the differential equation for each k, in parallel
     if parallelize:
         with mp.Pool(num_cores) as pool:
             #solutions = np.array(p.map(solve_subsystem, k_values))
-            pool_params = [(system_in, params, k_i, verbosity) for k_i in k_values]
-            pool_inputs = tqdm.tqdm(pool_params, total=len(k_values)) if show_progress_bar else pool_params
+            pool_params = [(system_in, params, y0, k, verbosity, method) for k, y0 in zip(k_values, y0_k)]
+            pool_inputs = tqdm.tqdm(pool_params, total=k_N) if show_progress_bar else pool_params
             solutions = pool.starmap(solve_subsystem, pool_inputs)
     else:
         t_span = params['t_span']
         t = np.linspace(t_span[0], t_span[1], params['t_num'])
-        solutions = np.zeros((len(k_values), 2, len(t)))
+        solutions = np.zeros((k_N, 2, len(t)))
         k_count_max = 0
         for i, k in enumerate(k_values):
             if verbosity > 7 and show_progress_bar:
                 #print('i = %d,   k[i] = %d' % (i, k))
                 progress_val(i)
-            solutions[i] = solve_subsystem(system_in, params, k, verbosity=0) # Store the solution
+            solutions[i] = solve_subsystem(system_in, params, y0_k[i], k, verbosity=0, method=method) # Store the solution
     
     # `solutions` contains the solutions for A(t) for each k.
     # e.g. `solutions[i]` is the solution for `k_values[i]`.
@@ -162,13 +169,13 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     return solutions, params, time_elapsed
 
 # Solve the differential equation for a singular given k
-def solve_subsystem(system_in, params, k, verbosity=0):
+def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45'):
     # Initial conditions
-    y0 = [params['A_0'], params['Adot_0']]
+    y0 = y0_in
 
     # Debug print statements
     if verbosity > 7:
-        print('  k=%d  ' % k)
+        print('  k=%.2f  ' % k)
     if verbosity > 9:
         print('y0:   ', y0)
     
@@ -176,7 +183,7 @@ def solve_subsystem(system_in, params, k, verbosity=0):
     t_span = params['t_span']
     t = np.linspace(t_span[0], t_span[1], params['t_num'])
 
-    sol = solve_ivp(system_in, t_span, y0, args=(k, params), dense_output=True)
+    sol = solve_ivp(system_in, t_span, y0, args=(k, params), dense_output=True, method=method)
     
     # Evaluate the solution at the times in the array
     y = sol.sol(t)
@@ -187,6 +194,13 @@ def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G):
     dy0dt = y[1]
     dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*k0) + D(t))*y[0]) - (k*k0)**2*y[0]
     return [dy0dt, dy1dt]
+
+def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):
+
+    A_0 = np.fromfunction(lambda k: 1./np.sqrt(2.*(k+1)), (k_N,), dtype=np.float64) * A_scale
+    Adot_0 = np.fromfunction(lambda k: np.sqrt((k+1)/2.), (k_N,), dtype=np.float64) * Adot_scale
+
+    return np.array([A_0, Adot_0], dtype=np.float64).T
 
 def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_modes=[]):
     """
