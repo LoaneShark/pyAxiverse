@@ -127,14 +127,14 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     # Initialize photon apmlitudes via bunch-davies initial conditions
     A_scale    = params['A_0']
     Adot_scale = params['Adot_0']
-    k_N = len(k_values)
+    k_N  = len(k_values)
     y0_k = init_photons(k_N, A_scale=A_scale, Adot_scale=Adot_scale)
 
     # Solve the differential equation for each k, in parallel
     if parallelize:
         with mp.Pool(num_cores) as pool:
             #solutions = np.array(p.map(solve_subsystem, k_values))
-            pool_params = [(system_in, params, y0, k, verbosity, method) for k, y0 in zip(k_values, y0_k)]
+            pool_params = [(system_in, params, np.float64(y0), np.float64(k), verbosity, method) for k, y0 in zip(k_values, y0_k)]
             pool_inputs = tqdm.tqdm(pool_params, total=k_N) if show_progress_bar else pool_params
             solutions = pool.starmap(solve_subsystem, pool_inputs)
     else:
@@ -146,7 +146,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             if verbosity > 7 and show_progress_bar:
                 #print('i = %d,   k[i] = %d' % (i, k))
                 progress_val(i)
-            solutions[i] = solve_subsystem(system_in, params, y0_k[i], k, verbosity=0, method=method) # Store the solution
+            solutions[i] = solve_subsystem(system_in, params, np.float64(y0_k[i]), np.float64(k), verbosity=0, method=method) # Store the solution
     
     # `solutions` contains the solutions for A(t) for each k.
     # e.g. `solutions[i]` is the solution for `k_values[i]`.
@@ -192,7 +192,7 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45'):
 def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G):
     # System of differential equations to be solved (bg = photon background)
     dy0dt = y[1]
-    dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*k0) + D(t))*y[0]) - (k*k0)**2*y[0]
+    dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*np.float64(k0)) + D(t))*y[0]) - (k*np.float64(k0))**2*y[0]
     return [dy0dt, dy1dt]
 
 def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):

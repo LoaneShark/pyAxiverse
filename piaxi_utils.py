@@ -23,7 +23,7 @@ signstr = {1: '+', -1: '-', 0: '±'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v3.1'
+version='v3.2'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
@@ -182,6 +182,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
             Th = [np.mod(np.random.normal(mu_Th, sig_Th, len(Th_i)), 2*np.pi) for Th_i in Th]
             
     # rescaling and unit configuration
+    int_method = params_in['int_method']
     use_natural_units = params_in['use_natural_units']
     use_mass_units    = params_in['use_mass_units']
     unitful_m      = params_in['unitful_m']
@@ -214,7 +215,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u, 't_u': t_0,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
-              'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 
+              'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 'int_method': int_method,
               'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p}
     
     return params
@@ -266,9 +267,9 @@ def convert_string_to_list(data, key):
 
 def parse_array_string(value):
     arrays = []
-    array_dtype = value.replace(')','').replace(']','').split('dtype=')[1] if 'dtype=' in value else 'float64'
-    parts = value.split('array(')
+    parts = [subval.strip() for subval in value.split('array(')]
     for part in parts:
+        array_dtype = part.replace(')','').replace(']','').split('dtype=')[1] if 'dtype=' in part else 'float64'
         if part:
             start_index = part.find('[')
             end_index = part.find(']')
@@ -390,7 +391,7 @@ def load_coefficient_functions(filename):
 
 def save_results(output_dir_in, filename, params_in, results=None, plots=None, save_format='pdf', verbosity=0,
                  save_params=True, save_results=True, save_plots=True, plot_types=['amps', 'nums', 'resonance', 'alp'],
-                 test_run=False, scratch_dir=scratch_output_directory, save_coefficients=True, P=None, B=None, C=None, D=None):
+                 test_run=False, scratch_dir=scratch_output_directory, save_coefficients=False, P=None, B=None, C=None, D=None):
     
     # Don't save to longterm data for a test run
     output_dir = scratch_dir if test_run else output_dir_in
@@ -772,7 +773,7 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
-        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, omega=None, k_samples=k_samples, times=times)
+        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times)
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
@@ -783,8 +784,8 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times)
     
     if plot_spectrum:
-        k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw, e=e: k_to_Hz(ki, k0, h, c, e)
-        Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw, e=e: Hz_to_k(fi, k0, h, c, e)
+        k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw: k_to_Hz(ki, k0, h, c)
+        Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
         plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local)
 
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
@@ -995,11 +996,11 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.1, textstr1, fontsize=14)
+    plt.text(0.15, 0.05, textstr1, fontsize=14)
     plt.axis('off')
 
     plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.1, textstr2, fontsize=14)
+    plt.text(0, 0.05, textstr2, fontsize=14)
     plt.axis('off')
 
     plt.tight_layout()
@@ -1092,11 +1093,11 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.1, textstr1, fontsize=14)
+    plt.text(0.15, 0.05, textstr1, fontsize=14)
     plt.axis('off')
 
     plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.1, textstr2, fontsize=14)
+    plt.text(0, 0.05, textstr2, fontsize=14)
     plt.axis('off')
 
     plt.tight_layout()

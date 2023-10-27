@@ -435,7 +435,8 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
         if save_output_files:
             output_name  = '_'.join([config_name, phash])
             save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
-                        save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots)
+                        save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots,
+                        save_coefficients=True, P=P, B=B, C=C, D=D, plot_types=['amps', 'nums', 'coeffs', 'resonance', 'alp'])
 
         if verbosity > 1:
             print('Done!')
@@ -443,9 +444,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
 
 # Functions to rescale mass, k-modes, and time to desired units
-m0_f = lambda m_u, c, rescale_m, unitful_m: 1./c**2 if not rescale_m else (1./(m_u*c**2) if unitful_m else (m_u/c**2))
-k0_f = lambda m_u, c, rescale_k, unitful_m: m_u/c if rescale_k else 1.
-t0_f = lambda m_u, h, rescale_m, unitful_m: h/m_u if unitful_m else 1.
+m0_f = lambda m_in, c_in, rescale_m, unitful_m: 1./c_in**2 if not rescale_m else (1./(m_in*c_in**2) if unitful_m else (m_in/c_in**2))
+k0_f = lambda m_in, c_in, rescale_k, unitful_m: m_in/c_in if rescale_k else 1./c_in
+t0_f = lambda m_in, h_in, rescale_m, unitful_m: h_in/m_in if unitful_m else h_in
 
 ## Pi-axion Species Mass Definitions
 def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
