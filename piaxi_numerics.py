@@ -74,7 +74,7 @@ def get_param_space():
 
 k_count_max = 0  # TODO: Make sure this max counter works
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
-def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45'):
+def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45', write_to_params=True):
     global k_count_max
     # Determine the environment
     is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
@@ -158,10 +158,12 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     timestr = str(time_elapsed) + (' elapsed on %d cores' % num_cores if parallelize else '')
     
     # update parameters with performance statistics
-    params['time_elapsed'] = time_elapsed
-    params['num_cores'] = num_cores if parallelize else 1
-    params['parallel'] = parallelize
-    params['jupyter'] = jupyter
+    if write_to_params:
+        params['time_elapsed'] = time_elapsed
+        params['num_cores']    = num_cores if parallelize else 1
+        params['parallel']     = parallelize
+        params['jupyter']      = jupyter
+        params['mem_per_core'] = params['mem_per_core'] if parallelize and 'mem_per_core' in params and params['mem_per_core'] > 0 else None
 
     if verbosity >= 0:
         print(timestr)

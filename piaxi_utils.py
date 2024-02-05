@@ -197,6 +197,10 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     unitful_h = False if use_natural_units else h != 1
     unitful_G = False if use_natural_units else G != 1
 
+    # performance metrics
+    num_cores    = params_in['num_cores']    if 'num_cores'    in params_in else 1
+    mem_per_core = params_in['mem_per_core'] if 'mem_per_core' in params_in else None
+
     t_0 = 1./m_u if unitful_m else 1.
 
     # Turn off irrelevant constants
@@ -216,7 +220,8 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u, 't_u': t_0,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
               'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 'int_method': int_method,
-              'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p}
+              'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p,
+              'num_cores': num_cores, 'mem_per_core': mem_per_core}
     
     return params
 

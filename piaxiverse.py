@@ -97,6 +97,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     config_name       = args.config_name          # Descriptive name for the given parameter case. Output files will be saved in a directory with this name.
     seed              = args.seed                 # rng_seed, integer value (None for random)
     num_cores         = args.num_cores            # Number of parallel threads available
+    mem_per_core      = args.mem_per_core         # Number of parallel threads available
     data_path         = args.data_path            # Path to directory where output files will be saved
     skip_existing     = args.skip_existing
 
@@ -154,7 +155,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     qm = m_scale*np.array([1., 2., 40.]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
 
     # dSM quark scaling constants (up, down, strange, charm, bottom, top) sampled from uniform distribution [0.7, 1.3]
-    qc = np.array(args.dqm_c) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
+    #qc = np.array(args.dqm_c) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
+    #qc_arr_in = args.dqm_c.split('_')
+    #print(qc_arr_in)
+    #qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in qc_arr_in], dtype=float)
+    qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in args.dqm_c], dtype=float).reshape((6,))
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
     dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
@@ -173,8 +178,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     k_min = 0 if use_k_eq_0 else 1
     k_max = args.k if args.k > 0 else args.kN  # default to a k-mode granularity of 1
     k_span = [k_min, k_max]  # TODO: replace with the appropriate values
-    k_res = args.k/args.kN if args.k > 0 else 1.         # k-mode granularity
-    k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)    # Number of k-modes
+    #k_res = args.k/args.kN if args.k > 0 else 1.         # k-mode granularity
+    k_res = args.k_res                                    # k-mode granularity
+    k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)     # Number of k-modes
     #k_N = args.kN
 
     # Initial Conditions
@@ -325,23 +331,28 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
                 'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'int_method': int_method, 
                 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D, 'em_bg': em_bg}
 
+    # Create unique hash for input parameters (to compare identical runs)
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
+
+    # Save system performance related input parameters (not to be hashed because these don't affect the final state, only performance time)
+    parameters['num_cores']    = num_cores
+    parameters['mem_per_core'] = mem_per_core
 
     if skip_existing and if_output_exists(output_dir, phash):
         if verbosity >= 1:
-            print('SKIP: output file already exists for this configuration')
+            print('SKIP: output file already exists for this parameter configuration')
     else:
-
         # Solve the system, in parallel for each k-mode
         os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
         is_parallel = (num_cores > 1)
         show_progress = (verbosity >= 0)
 
+        # Initialize parameters
         params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
-        #params = set_param_space(init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N))
-
+        # Define system of equations to solve
         local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
 
+        # Solve the equations of motion
         solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress, method=int_method)
 
         # Generate plots and optionally show them
@@ -455,6 +466,9 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     m_c = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype=float)   # charged
     # Pi-axion Species Labels
     s_l = np.array([np.full_like(m_r, '', dtype=str), np.full_like(m_n, '', dtype=str), np.full_like(m_c, '', dtype=str)], dtype=object)
+    
+    # Millicharge upper bound (charged species do not survive past this)
+    eps_bound = 1e-10
 
     ## Real Neutral Masses
     # pi_3
@@ -495,31 +509,31 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
 
     ## Charged Masses
     # pi_1  +/- i*pi_2
-    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) < 0.1 else 0.
+    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*eps_c[0]*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) <= eps_bound else 0.
     s_l[2][0] = '$\pi_1 \pm i\pi_2$'
     # pi_4  +/- i*pi_5
-    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) < 0.1 else 0.
+    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*eps_c[1]*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) <= eps_bound else 0.
     s_l[2][1] = '$\pi_4 \pm i\pi_5$'
     # pi_15 +/- i*pi_16
-    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) < 0.1 else 0.
+    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*eps_c[2]*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][2] = '$\pi_{15} \pm i\pi_{16}$'
     # pi_11 +/- i*pi_12
-    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*F)**2) if 0. not in [qc[1], qc[3]] and abs(eps) < 0.1 else 0.
+    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*eps_c[3]*F)**2) if 0. not in [qc[1], qc[3]] and abs(eps) <= eps_bound else 0.
     s_l[2][3] = '$\pi_{11} \pm i\pi_{12}$'
     # pi_23 +/- i*pi_24
-    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*F)**2) if 0. not in [qc[1], qc[5]] and abs(eps) < 0.1 else 0.
+    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*eps_c[4]*F)**2) if 0. not in [qc[1], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][4] = '$\pi_{23} \pm i\pi_{24}$'
     # pi_13 +/- i*pi_14
-    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*F)**2) if 0. not in [qc[2], qc[3]] and abs(eps) < 0.1 else 0.
+    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*eps_c[5]*F)**2) if 0. not in [qc[2], qc[3]] and abs(eps) <= eps_bound else 0.
     s_l[2][5] = '$\pi_{13} \pm i\pi_{14}$'
     # pi_25 +/- i*pi_26
-    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*F)**2) if 0. not in [qc[2], qc[5]] and abs(eps) < 0.1 else 0.
+    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*eps_c[6]*F)**2) if 0. not in [qc[2], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][6] = '$\pi_{25} \pm i\pi_{26}$'
     # pi_27 +/- i*pi_28
-    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*F)**2) if 0. not in [qc[3], qc[4]] and abs(eps) < 0.1 else 0.
+    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*eps_c[7]*F)**2) if 0. not in [qc[3], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][7] = '$\pi_{27} \pm i\pi_{28}$'
     # pi_32 +/- i*pi_33
-    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*F)**2) if 0. not in [qc[4], qc[5]] and abs(eps) < 0.1 else 0.
+    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*eps_c[8]*F)**2) if 0. not in [qc[4], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][8] = '$\pi_{32} \pm i\pi_{33}$'
 
     # Mask zero-valued / disabled species in arrays
@@ -708,6 +722,7 @@ if __name__ == '__main__':
     parser.add_argument('--tN',         type=int, default=300,  help='Number of timesteps')
     parser.add_argument('--k' ,         type=int, default=-1,   help='Max k-mode to include in calculations (-1 to assume kN)')
     parser.add_argument('--kN',         type=int, default=200,  help='Number of k-modes')
+    parser.add_argument('--k_res',      type=float, default=1,  help='Stepsize of k-modes to sample')
     parser.add_argument('--seed',       type=int, default=None, help='RNG seed')
 
     parser.add_argument('--eps',        type=np.float64, default=1,     help='Millicharge value')
@@ -737,7 +752,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     parser.add_argument('--int_method',        type=str,  default='RK45',          help='Numerical integration method, to be used by scipy solve_ivp')
     parser.add_argument('--num_samples',       type=int,  default=1,               help='Number of times to rerun a parameter set, except randomly sampled variables')
-
+    parser.add_argument('--mem_per_core',      type=int,  default=0,               help='Amount of memory available to each parallelized node, in GB')
 
     parser.add_argument('--P', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the P(t) coefficient in the numerics')
     parser.add_argument('--B', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the B(t) coefficient in the numerics')
@@ -758,7 +773,7 @@ if __name__ == '__main__':
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
     parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
 
-    parser.add_argument('--dqm_c', type=float, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
+    parser.add_argument('--dqm_c', type=list, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
 
     args = parser.parse_args()
     main(args)
