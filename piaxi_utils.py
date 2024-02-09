@@ -865,9 +865,9 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
         k_s = int(k_sample)
         #print(results_in[k_s, 0])
         plt.plot(times, results_in[k_s][0], label='k='+str(k_values[k_s]))
-    plt.title('Evolution of the mode function $A_{'+signstr[0]+'}$(k)')
-    plt.xlabel('Time [%s]' % units_in['t'])
-    plt.ylabel('$A_{'+signstr[0]+'}$(k)')
+    plt.title(r'Evolution of the mode function $A_{%s}(k)$' % signstr[0])
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
+    plt.ylabel(r'$A_{%s}(k)$' % signstr[0])
     plt.yscale('log')
     plt.legend()
     plt.grid()
@@ -875,9 +875,9 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     #plt.subplot(2,1,2)
     plt.subplot2grid((ydim,xdim), (1,0), colspan=3)
     plt.plot(times, [sum([np.abs(results_in[i][0][t_i])**2 for i in range(len(k_values))]) for t_i in range(len(times))])
-    plt.title('Evolution of the (total) power for $A_{'+signstr[0]+'}$')
-    plt.xlabel('Time [%s]' % units_in['t'])
-    plt.ylabel('$|A_{'+signstr[0]+'}|^2$')
+    plt.title(r'Evolution of the (total) power for $A_{%s}$' % signstr[0])
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
+    plt.ylabel(r'$|A_{%s}|^2$' % signstr[0])
     plt.yscale('log')
     plt.grid()
 
@@ -888,9 +888,9 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
         plt.plot(times, [sum([results_in[i][1][t_i] for i in range(len(k_values))]) for t_i in range(len(times))], color='g', label='total')
         plt.plot(times, [results_in[list(k_values).index(k_mean)][1][t_i] for t_i in range(len(times))], color='y', label='k = %d (mean)' % k_mean)
         plt.plot(times, [results_in[list(k_values).index(k_peak)][1][t_i] for t_i in range(len(times))], color='orange', label='k = %d (peak)' % k_peak)
-        plt.title('Evolution of the (total) change in amplitude for A'+signstr[0])
-        plt.xlabel('Time [%s]' % units_in['t'])
-        plt.ylabel('$\dot{A}_{'+signstr[0]+'}$')
+        plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signstr[0])
+        plt.xlabel(r'Time $[%s]$' % units_in['t'])
+        plt.ylabel(r'$\dot{A}_{%s}$' % signstr[0])
         #plt.yscale('log')
         plt.legend()
         plt.grid()
@@ -960,10 +960,10 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
         k_s = int(k_sample)
         k_nums = n_p(k_s, params_in, results_in, k_values, times, n=numf)
         plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
-    plt.title('Occupation number per k mode', fontsize=16)
-    plt.xlabel('Time $[%s]$' % units_in['t'])
+    plt.title(r'Occupation number per k mode', fontsize=16)
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.2)
-    plt.ylabel('n[k]/$n_0$' if scale_n else 'n[k]')
+    plt.ylabel(r'$n[k]/n_0$' if scale_n else r'$n[k]$')
     plt.yscale('log'); #plt.ylim(bottom = 0.1)
     plt.legend()
     plt.grid()
@@ -990,10 +990,10 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
     plt.plot(np.ma.masked_greater_equal(times, t_res), n_tot, label='none', color='grey')
     plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='blue')
-    plt.title('Occupation Number (total)', fontsize=16)
-    plt.xlabel('Time $[%s]$' % units_in['t'])
+    plt.title(r'Occupation Number (total)', fontsize=16)
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.1)
-    plt.ylabel('n')
+    plt.ylabel(r'$n$')
     plt.yscale('log')
     plt.legend()
     plt.grid()
@@ -1050,7 +1050,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     for (c_t, c_label) in get_coefficient_values(params_in, P, B, C, D, times):
         plt.plot(times, c_t, label=c_label)
 
-    plt.xlabel('Time $[%s]$' % units_in['t'])
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
     plt.yscale('log')
     plt.title(r'$\left(1 + P(t)\right)\left(\ddot{A}_{k,\pm} + k^2 A_{k,\pm}\right) + B(t)\dot{A}_{k,\pm} + \left(C_{\pm}(t) k + D(t)\right) A_{k,\pm} = 0 $', fontsize=16)
     plt.grid()
@@ -1089,7 +1089,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
         plt.plot(times, beta_s, label=label_b)
 
         plt.grid()
-        plt.xlabel('Time $[%s]$' % units_in['t'])
+        plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.yscale('log')
         plt.title(r'$\ddot{A}_{k,\pm} + \beta(t)\dot{A}_{k,\pm} + \alpha_{k}(t)A_{k,\pm} = 0$', fontsize=16)
         plt.legend()
@@ -1122,11 +1122,11 @@ def get_coefficient_values(params_in, P, B, C, D, times_in=[]):
             c_t = c_func(times)
 
         if type(c_t) is np.float64:
-            label   = '[[$' + l_root + '$]]'
+            label   = r'[[$%s$]]' % l_root
             c_t     = np.ma.array(c_t + np.full(len(times), 0.0, dtype=float), mask=True)
             c_range = (np.nan, np.nan)
         else:
-            label   = '$' + l_root + '$'
+            label   = r'$%s$' % l_root
             c_range = (min(c_t), max(c_t))
 
         func_vals.append((c_t, label))
@@ -1149,7 +1149,7 @@ def get_coefficient_ranges(params_in, P, B, C, D, k_samples, times_in=None):
             c_t     = np.ma.array(c_t + np.full(len(t), 0.0, dtype=float), mask=True)
             c_range = (np.nan, np.nan)
         else:
-            label   = '$' + l_root + '$'
+            label   = r'$%s$' % l_root
             c_range = (min(c_t), max(c_t))
 
         c_ranges.append(l_root[0] + '(t) range: [%.1e, %.1e]' % c_range + (' for + case ' if sign > 0 else ' for - case ' if sign < 0 else ''))
@@ -1204,22 +1204,22 @@ def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     A_sens = params_in['A_sens']
     
     plt.figure(figsize = (20,6))
-    plt.suptitle('Resonance Classification')
+    plt.suptitle(r'Resonance Classification')
 
     ax = plt.subplot2grid((2,4), (0,0), colspan=2, rowspan=2)
     plt.scatter(k_values, k_ratio(np.mean, t_sens, A_sens), c=[class_colors[k_c] if k_c in class_colors else 'orange' for k_c in k_class(np.mean, t_sens, A_sens)])
-    plt.xlabel('$k$')
+    plt.xlabel(r'$k$')
     axT = ax.secondary_xaxis('top', functions=(fwd_fn, inv_fn))
-    axT.set_xlabel('$f_{\gamma}$ (Hz)')
-    plt.ylabel('Growth in $n_k$')
+    axT.set_xlabel(r'$f_{\gamma}\ [Hz]$')
+    plt.ylabel(r'Growth in $n_k$')
     plt.yscale('log')
     plt.grid()
 
     plt.subplot2grid((2,4), (0,2), colspan=2, rowspan=2)
     class_counts = [(np.array(k_class(np.mean, t_sens, A_sens)) == class_label).sum() for class_label in class_colors.keys()]
     plt.bar(class_colors.keys(),class_counts,color=class_colors.values())
-    plt.xlabel('Classification')
-    plt.ylabel('Count')
+    plt.xlabel(r'Classification')
+    plt.ylabel(r'Count')
     plt.grid()
 
     plt.tight_layout()
@@ -1242,10 +1242,10 @@ def plot_ALP_survey(params_in, verbosity=0):
         # Log-scaled axes
         ax = plt.gca()
         ax.minorticks_on()
-        ax.set_xlabel('$m_a\quad[eV]$',fontsize=30)
+        ax.set_xlabel(r'$m_a\quad[eV]$',fontsize=30)
         ax.set_xlim(xmin, xmax)
         ax.set_xscale('log')
-        ax.set_ylabel('$|g_{a\gamma}|\quad[GeV^{-1}]$',fontsize=30)
+        ax.set_ylabel(r'$|g_{a\gamma}|\quad[GeV^{-1}]$',fontsize=30)
         ax.set_ylim(ymin, ymax)
         ax.set_yscale('log')
         ax.tick_params(axis='both', which='major', labelsize=15)
@@ -1555,13 +1555,13 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
         return None, None, None
     elif len(start_indices) == 1:  # Only one resonance segment
         if start_indices[0] == 0 and end_indices[0] == len(k_class_arr) - 1:
-            classification = "broad-band"
+            classification = 'broad-band'
         elif (int(res_count) / int(len(k_class_arr))) >= float(class_sens):
-            classification = "broad-band"
+            classification = 'broad-band'
         else:
-            classification = "narrow-band"
+            classification = 'narrow-band'
     else:  # Multiple resonance segments
-        classification = "multi-band"
+        classification = 'multi-band'
 
     # Convert k-values to HZ and return results
     min_res_Hz = float(k_to_HZ(min(k_values_in[start_indices[0]:end_indices[-1] + 1])))
