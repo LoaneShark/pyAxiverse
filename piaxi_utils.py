@@ -20,6 +20,7 @@ import ast
 import glob
 
 signstr = {1: '+', -1: '-', 0: '±'}
+signtex = {1: '+', -1: '-', 0: '\pm'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
@@ -615,7 +616,7 @@ def load_all(input_str, output_root='~/scratch', version=version, load_images=Fa
     
     return load_multiple_results(output_dir, result_name, load_images, save_format)
 
-def load_single(input_str, label=None, phash=None, output_root='~/scratch', version='v2.8', save_format='pdf', load_plots=False, verbosity=0):
+def load_single(input_str, label=None, phash=None, output_root='~/scratch', version=version, save_format='pdf', load_plots=False, verbosity=0):
     """
     Load results of a single run given a full filepath to any of the files associated with a run, or just the label and unique parameter hash.
     
@@ -724,10 +725,10 @@ def if_output_exists(directory, phash):
     return False
 
 # Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False):
+def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False, tex_fmt=False, version=version):
 
     # Load results
-    params, results, _, coeffs = load_single(input_str, output_root=output_dir)
+    params, results, _, coeffs = load_single(input_str, output_root=output_dir, version=version)
 
     t_span = params['t_span']
     t_num  = params['t_num']
@@ -774,11 +775,11 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 
     # Plot results of numerical integration, as imported from file
     if plot_res:
-        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times)
+        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
-        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times)
+        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
@@ -786,12 +787,12 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         B = coeffs['B'] if coeffs is not None else B_off
         C = coeffs['C'] if coeffs is not None else C_off
         D = coeffs['D'] if coeffs is not None else D_off
-        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times)
+        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
     
     if plot_spectrum:
         k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw: k_to_Hz(ki, k0, h, c)
         Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
-        plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local)
+        plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
 
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
@@ -836,13 +837,15 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     return k_peak, k_mean
 
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True):
-    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, tex_fmt=False):
+    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, tex_fmt)
     plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in=None, plot_Adot=True):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in=None, plot_Adot=True, tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
+    signdict = signtex if tex_fmt else signstr
+    fontsize = 16 if tex_fmt else 14
     if len(k_samples) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
@@ -865,9 +868,9 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
         k_s = int(k_sample)
         #print(results_in[k_s, 0])
         plt.plot(times, results_in[k_s][0], label='k='+str(k_values[k_s]))
-    plt.title(r'Evolution of the mode function $A_{%s}(k)$' % signstr[0])
+    plt.title(r'Evolution of the mode function $A_{%s}(k)$' % signdict[0])
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
-    plt.ylabel(r'$A_{%s}(k)$' % signstr[0])
+    plt.ylabel(r'$A_{%s}(k)$' % signdict[0])
     plt.yscale('log')
     plt.legend()
     plt.grid()
@@ -875,9 +878,9 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     #plt.subplot(2,1,2)
     plt.subplot2grid((ydim,xdim), (1,0), colspan=3)
     plt.plot(times, [sum([np.abs(results_in[i][0][t_i])**2 for i in range(len(k_values))]) for t_i in range(len(times))])
-    plt.title(r'Evolution of the (total) power for $A_{%s}$' % signstr[0])
+    plt.title(r'Evolution of the (total) power for $A_{%s}$' % signdict[0])
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
-    plt.ylabel(r'$|A_{%s}|^2$' % signstr[0])
+    plt.ylabel(r'$|A_{%s}|^2$' % signdict[0])
     plt.yscale('log')
     plt.grid()
 
@@ -888,9 +891,9 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
         plt.plot(times, [sum([results_in[i][1][t_i] for i in range(len(k_values))]) for t_i in range(len(times))], color='g', label='total')
         plt.plot(times, [results_in[list(k_values).index(k_mean)][1][t_i] for t_i in range(len(times))], color='y', label='k = %d (mean)' % k_mean)
         plt.plot(times, [results_in[list(k_values).index(k_peak)][1][t_i] for t_i in range(len(times))], color='orange', label='k = %d (peak)' % k_peak)
-        plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signstr[0])
+        plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signdict[0])
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
-        plt.ylabel(r'$\dot{A}_{%s}$' % signstr[0])
+        plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
         #plt.yscale('log')
         plt.legend()
         plt.grid()
@@ -900,11 +903,11 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((ydim,xdim), (max(0,ydim-3),3), rowspan=(3 if plot_Adot else 2))
-    plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=14)
+    plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=fontsize)
     plt.axis('off')
 
     plt.subplot2grid((ydim,xdim), (max(0,ydim-3),4), rowspan=(3 if plot_Adot else 2))
-    plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=14)
+    plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=fontsize)
     plt.axis('off')
 
     plt.tight_layout()
@@ -935,16 +938,17 @@ w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
 
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False):
-    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, tex_fmt=False):
+    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, tex_fmt)
     plt.show()
 
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
 sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(i, p_in, sol_in, k_v, times, n=n_in) for i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False, tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
+    fontsize = 16 if tex_fmt else 14
     if len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [k_i for k_i, k_val in enumerate(k_values) if k_val in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
@@ -1001,11 +1005,11 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.05, textstr1, fontsize=14)
+    plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
     plt.axis('off')
 
     plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.05, textstr2, fontsize=14)
+    plt.text(0, 0.05, textstr2, fontsize=fontsize)
     plt.axis('off')
 
     plt.tight_layout()
@@ -1021,14 +1025,15 @@ Alpha = lambda t, k, k0, P, C, D, A_pm: ((C(t, A_pm)*(k*k0) + D(t)) / (1. + P(t)
 Beta  = lambda t, B, P: B(t) / (1. + P(t))
 
 # Plot time-dependent coefficient values of the model
-def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True):
-    plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all)
+def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True, tex_fmt=False):
+    plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all, tex_fmt)
     plt.show()
     
-def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True):
+def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True, tex_fmt=False):
     global k_0
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     #k_peak, k_mean = get_peak_k_modes(results_in, k_values)
+    fontsize = 16 if tex_fmt else 14
     P = P_in if P_in is not None else P_off
     B = B_in if B_in is not None else B_off
     D = D_in if D_in is not None else D_off
@@ -1098,11 +1103,11 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.05, textstr1, fontsize=14)
+    plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
     plt.axis('off')
 
     plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.05, textstr2, fontsize=14)
+    plt.text(0, 0.05, textstr2, fontsize=fontsize)
     plt.axis('off')
 
     plt.tight_layout()
@@ -1192,11 +1197,11 @@ k_to_Hz = lambda ki, k0, h, c: ki * ((k0*c) / (2*np.pi*h))
 #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
 Hz_to_k = lambda fi, k0, h, c: fi * ((h*2*np.pi) / (k0*c))
 
-def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
-    plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn)
+def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
+    plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt)
     plt.show()
 
-def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
+def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'semi': 'blue', 'res': 'red'}
 
@@ -1210,7 +1215,8 @@ def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     plt.scatter(k_values, k_ratio(np.mean, t_sens, A_sens), c=[class_colors[k_c] if k_c in class_colors else 'orange' for k_c in k_class(np.mean, t_sens, A_sens)])
     plt.xlabel(r'$k$')
     axT = ax.secondary_xaxis('top', functions=(fwd_fn, inv_fn))
-    axT.set_xlabel(r'$f_{\gamma}\ [Hz]$')
+    #axT.set_xlabel(r'$f_{\gamma}$ [Hz]')
+    axT.set_xlabel(r'$\nu$ [Hz]')
     plt.ylabel(r'Growth in $n_k$')
     plt.yscale('log')
     plt.grid()
@@ -1226,7 +1232,7 @@ def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
     
     return plt
 
-def plot_ALP_survey(params_in, verbosity=0):
+def plot_ALP_survey(params_in, verbosity=0, tex_fmt=False):
     plt.figure(figsize = (16,12))
     #plt.suptitle('ALP Survey Results')
 
@@ -1307,7 +1313,7 @@ def plot_ALP_survey(params_in, verbosity=0):
     return plt
 
 # TODO: Make this function, which plots the result of a number of runs over a series of preferred metrics, for a given mass and density
-def plot_parameter_space():
+def plot_parameter_space(tex_fmt=False):
     return None
 
 logfit = lambda x, a, b, c: a*np.log10(10*x+b)+c
