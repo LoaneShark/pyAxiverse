@@ -414,15 +414,15 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
     # Save parameters
     if save_params and params_in is not None:
         params_filename = os.path.join(output_dir, filename + '.json')
-        file_list.append(params_filename)
         with open(params_filename, 'w') as f:
             json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
+        file_list.append(params_filename)
     
     # Save results
     if save_results and results is not None:
         results_filename = os.path.join(output_dir, filename + '.npy')
-        file_list.append(results_filename)
         np.save(results_filename, results)
+        file_list.append(results_filename)
 
     # Save P(t), D(t), C(t), and B(t) definitions
     if save_coefficients:
@@ -434,10 +434,11 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
             'D': D
         }
         save_coefficient_functions(functions_in, coeffs_filename)
+        file_list.append(coeffs_filename)
     
     # Save plots
     doc_formats = ['pdf', 'document', 'doc', 'all']
-    tex_formats = ['tex', 'latex', 'all'] # TODO
+    tex_formats = ['tex', 'latex', 'svg', 'pgf', 'all'] # TODO
     img_formats = ['png', 'img', 'image', 'jpg', 'all']
     nbk_formats = ['notebook', 'nb', 'ipynb', 'jupyter', 'all']
     web_formats = ['html', 'web', 'all']
@@ -740,9 +741,12 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
                              t_max=t_span[1], t_min=t_span[0], t_N=t_num, 
                              k_max=k_span[1], k_min=k_span[0], k_N=k_num)
 
-    k_sens_arr = np.array(params.get('k_sens_arr', None), dtype=np.float64)
-    k_mean_arr = np.array(params.get('k_mean_arr', None), dtype=np.float64)
-    k_peak_arr = np.array(params.get('k_peak_arr', None), dtype=np.float64)
+    k_sens_in  = params.get('k_sens_arr', None)
+    k_sens_arr = np.array(k_sens_in.split() if type(k_sens_in) is str else k_sens_in, dtype=np.float64)
+    k_mean_in  = params.get('k_mean_arr', None)
+    k_mean_arr = np.array(k_mean_in.split() if type(k_mean_in) is str else k_mean_in, dtype=np.float64)
+    k_peak_in = params.get('k_peak_arr', None)
+    k_peak_arr = np.array(k_peak_in.split() if type(k_peak_in) is str else k_peak_in, dtype=np.float64)
 
     # Define which k values should be plotted
     k_peak = np.max(k_sens_arr) # peak (running avg) value per k-mode
@@ -798,7 +802,7 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
 
 # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
-k_class = lambda func, t_sens, A_sens: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
 get_times = lambda params_in, times_in: times_in if times_in is not None else t if t is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
 
@@ -826,7 +830,7 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
         params['k_peak_arr']  = k_func(max)
         params['k_mean_arr']  = k_func(np.mean)
         params['k_sens_arr']  = k_sens(np.mean, t_sens)
-        params['k_class_arr'] = k_class(np.mean, t_sens, A_sens)
+        params['k_class_arr'] = k_class(np.mean, t_sens, A_sens, res_con)
 
         #t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
         #t_res   = t[t_res_i]
@@ -1204,6 +1208,7 @@ def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
 def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'semi': 'blue', 'res': 'red'}
+    res_con_in = params_in['res_con']
 
     t_sens = params_in['t_sens']
     A_sens = params_in['A_sens']
@@ -1212,7 +1217,7 @@ def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
     plt.suptitle(r'Resonance Classification')
 
     ax = plt.subplot2grid((2,4), (0,0), colspan=2, rowspan=2)
-    plt.scatter(k_values, k_ratio(np.mean, t_sens, A_sens), c=[class_colors[k_c] if k_c in class_colors else 'orange' for k_c in k_class(np.mean, t_sens, A_sens)])
+    plt.scatter(k_values, k_ratio(np.mean, t_sens, A_sens), c=[class_colors[k_c] if k_c in class_colors else 'orange' for k_c in k_class(np.mean, t_sens, A_sens, res_con_in)])
     plt.xlabel(r'$k$')
     axT = ax.secondary_xaxis('top', functions=(fwd_fn, inv_fn))
     #axT.set_xlabel(r'$f_{\gamma}$ [Hz]')
@@ -1222,7 +1227,7 @@ def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
     plt.grid()
 
     plt.subplot2grid((2,4), (0,2), colspan=2, rowspan=2)
-    class_counts = [(np.array(k_class(np.mean, t_sens, A_sens)) == class_label).sum() for class_label in class_colors.keys()]
+    class_counts = [(np.array(k_class(np.mean, t_sens, A_sens, res_con_in)) == class_label).sum() for class_label in class_colors.keys()]
     plt.bar(class_colors.keys(),class_counts,color=class_colors.values())
     plt.xlabel(r'Classification')
     plt.ylabel(r'Count')

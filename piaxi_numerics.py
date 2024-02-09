@@ -163,7 +163,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
         params['num_cores']    = num_cores if parallelize else 1
         params['parallel']     = parallelize
         params['jupyter']      = jupyter
-        params['mem_per_core'] = params['mem_per_core'] if parallelize and 'mem_per_core' in params and params['mem_per_core'] > 0 else None
+        params['mem_per_core'] = params['mem_per_core'] if parallelize and 'mem_per_core' in params and params['mem_per_core'] is not None and params['mem_per_core'] > 0 else None
 
     if verbosity >= 0:
         print(timestr)
@@ -204,6 +204,7 @@ def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):
 
     return np.array([A_0, Adot_0], dtype=np.float64).T
 
+# TODO: Verify / implement this
 def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_modes=[]):
     """
     Calculate the Floquet exponents for a system with multiple k-modes.
@@ -249,18 +250,18 @@ def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_mode
     
     return floquet_exponents
 
-# Example usage
-'''
-p_func = lambda t: np.cos(t)
-q_func = lambda t, k: np.sin(t) + k
-T = 2 * np.pi
-y0 = [1, 1]
-yp0 = [0, 0]
-k_modes = [1, 2]
+    # Example usage
+    '''
+    p_func = lambda t: np.cos(t)
+    q_func = lambda t, k: np.sin(t) + k
+    T = 2 * np.pi
+    y0 = [1, 1]
+    yp0 = [0, 0]
+    k_modes = [1, 2]
 
-exponents = floquet_exponent(p_func, q_func, T, k_modes)
-print(exponents)
-'''
+    exponents = floquet_exponent(p_func, q_func, T, k_modes)
+    print(exponents)
+    '''
 
 # Helper function to print parameters of model (deprecated)
 def get_text_params_old(case='full', units_in={}):
