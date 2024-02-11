@@ -333,6 +333,8 @@ class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, int):
+            return '%s' % obj
         return super(NumpyEncoder, self).default(obj)
     
     def decode(dct):
@@ -362,7 +364,7 @@ def get_rng(seed=None, verbosity=0):
         rng_ss = np.random.SeedSequence(entropy=seed, pool_size=entropy_size)
     else:
         rng_ss = np.random.SeedSequence(pool_size=entropy_size)
-    rng_seed = rng_ss.entropy
+    rng_seed = str(rng_ss.entropy)
     rng = np.random.default_rng(rng_ss)
 
     if verbosity > 3 or (verbosity >= 0 and seed is not None):
