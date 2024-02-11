@@ -137,9 +137,10 @@ def AlternativeCouplingAxis(ax,scale=1,tickdir='out',labelsize=25,ylabel=r"$g_\g
     ax3.yaxis.set_minor_formatter(mpl.ticker.NullFormatter())
     plt.sca(ax)
 
-def FigSetup(xlab=r'$m_a$ [eV]',ylab='',\
+def FigSetup(xlab=r'$m_{\pi}$ [eV]',ylab='',\
                  g_min = 1.0e-21,g_max = 1.0e-6,\
-                 m_min = 1.0e-12,m_max = 1.0e7,\
+#                 m_min = 1.0e-12,m_max = 1.0e7,\
+                 m_min = 1.0e-12,m_max = 1.0e0,\
                  lw=2.5,lfs=45,tfs=25,tickdir='out',figsize=(16.5,11),\
                  Grid=False,Shape='Rectangular',\
                  mathpazo=False,TopAndRightTicks=False,majorticklength=13,minorticklength=10,\
@@ -295,38 +296,47 @@ class AxionPhoton():
                 if text_on:
                     plt.text(KSVZ_label_mass,0.75/3,r'{\bf KSVZ}',fontsize=fs,color='k',clip_on=True)
         return
-    
-    def piAxion(ax,epsilon,label_mass,C_logwidth=10,cmap='Blues',fs=18,rot = 10.0,
+
+    def piAxion(ax,epsilon,lambda1,theta,label_mass,C_logwidth=10,cmap='Blues',fs=18,rot = 10.0,
                 C_center=1,C_width=1.2,vmax=0.9):
-        
+
         ## QCD Axion band:
         g_min,g_max = ax.get_ylim()
         m_min,m_max = ax.get_xlim()
 
         # Mass-coupling relation
-        def g_x(eps,m_a):
-            return (4.38299e-20)*(eps**2)*(10)*(m_a**(1/9))/(0.1**2)
+        def g_x(lambda1,theta,epsilon,m_a):
+            #return (4.38299e-20)*(eps**2)*(10)*(m_a**(1/9))/(0.1**2)
+            alpha=1/137
+            H0 = 1e-33
+            Mpl = 2.435e18
+            h2Omega_r = 2.47e-5
+            h2Omega_pi = 0.12
+            #F_pi = ((6*(h2Omega_pi)/(5*(9*h2Omega_r)**(3/4)))*((H0/100)**(-1/2))*(H0**(1/2))*(Mpl**2)*(theta**(-2))*(m_a**(-1/4)))**(4/9)
 
-            
+            #return (alpha)*(F_pi**(-1))*(epsilon**2)*(lambda1)
+            return (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_a**(1/4))
+
+
         # Plot Band
         n = 200
         g = logspace(log10(g_min),log10(g_max),n)
         m = logspace(log10(m_min),log10(m_max),n)
         piAx = zeros(shape=(n,n))
         for i in range(0,n):
-            piAx[:,i] = norm.pdf(log10(g)-log10(g_x(epsilon,m[i])),0.0,C_width)
+            piAx[:,i] = norm.pdf(log10(g)-log10(g_x(lambda1,theta,epsilon,m[i])),0.0,C_width)
         cols = cm.get_cmap(cmap)
 
         cols.set_under('w') # Set lowest color to white
         vmin = amax(piAx)/(C_logwidth/4.6)
-        plt.contourf(m, g, piAx, 50,cmap=cols,vmin=vmin,vmax=vmax,zorder=0)
+        #plt.contourf(m, g, piAx, 50,cmap=cols,vmin=vmin,vmax=vmax,zorder=0)
 
-        #trans_angle = plt.gca().transData.transform_angles(array((rot,)),array([[0, 0]]))[0]
+        trans_angle = plt.gca().transData.transform_angles(array((rot,)),array([[0, 0]]))[0]
 
         label_text = r'$\varepsilon=$' + str(epsilon)
-        plt.plot(m,g_x(epsilon,m),'-',linewidth=2,color=cols(1.0),zorder=0)
-        plt.text(label_mass,g_x(epsilon,label_mass)*1.05,label_text,fontsize=fs,rotation=rot,color=cols(1.0),
-                         ha='left',va='bottom',rotation_mode='anchor',clip_on=True)
+        plt.plot(m,g_x(lambda1,theta,epsilon,m),'-',linewidth=2,color=cols(1.0),zorder=0)
+        plt.text(label_mass,g_x(lambda1,theta,epsilon,label_mass)*1.05,label_text,fontsize=fs,rotation=rot,color=cols(1.0),
+                        ha='left',va='bottom',rotation_mode='anchor',clip_on=True)
         return
 
     def ADMX(ax,col=[0.8, 0.0, 0.0],projection=False,fs=15,RescaleByMass=False,text_on=True,text_shift=[1,1],zorder=0.1):
@@ -1176,7 +1186,7 @@ class AxionPhoton():
         # Fermi
         dat = loadtxt("limit_data/AxionPhoton/Mrk421.txt")
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
-        
+
         # MAGIC
         dat = loadtxt("limit_data/AxionPhoton/Mrk421-MAGIC.txt")
         FilledLimit(ax,dat,None,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
@@ -1321,7 +1331,7 @@ class AxionPhoton():
     def INTEGRAL(ax,text_label=r'{\bf INTEGRAL}',text_pos=[1.7e4,2.7e-19],col='#3b4ba1',edgecolor='k',text_col='#3b4ba1',fs=17,zorder=0.00001,text_on=True,lw=1.5,facealpha=1):
         dat = loadtxt("limit_data/AxionPhoton/INTEGRAL.txt")
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,edgecolor=edgecolor,edgealpha=1,fs=fs,zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha)
-        if text_on: 
+        if text_on:
             plt.plot([2e4,8e4],[1.9e-19,2.3e-19],'-',lw=2,color=col,path_effects=line_background(3,'k'))
         return
 
@@ -1505,7 +1515,7 @@ class AxionPhoton():
         dat = loadtxt("limit_data/AxionPhoton/ATLAS_PbPb.txt")
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
-        
+
         if text_on:
             plt.text(text_shift[0]*1.3e10,text_shift[1]*4e-5,r'{\bf ATLAS}',fontsize=fs,color=text_col,rotation=rotation,ha='center',va='top',clip_on=True,path_effects=path_effects)
         return
@@ -1717,7 +1727,7 @@ class AxionPhoton():
         else:
             AxionPhoton.INTEGRAL(ax,text_on=text_on)
         return
-        
+
     # ULTRALIGHT AXIONS:
     def SuperMAG(ax,text_shift=[1,1],col='red',text_col='w',fs=18,zorder=3,text_on=True,lw=1.5,rotation=-48,ha='center',edgealpha=1,path_effects=line_background(2,'k')):
         dat = loadtxt("limit_data/AxionPhoton/SuperMAG.txt")
@@ -1736,7 +1746,7 @@ class AxionPhoton():
         if text_on:
             plt.text(text_shift[0]*2e-23,text_shift[1]*2e-11,r'{\bf BICEP/KECK}',fontsize=fs,color='w',rotation=rotation,ha='center',va='top',clip_on=True,path_effects=path_effects)
         return
-    
+
     def POLARBEAR(ax,text_shift=[1,1],col='dodgerblue',text_col='w',fs=12,zorder=1.2,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
         dat = loadtxt("limit_data/AxionPhoton/POLARBEAR.txt")
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
@@ -1792,7 +1802,7 @@ class AxionPhoton():
         if text_on:
             plt.text(text_shift[0]*4e-20,text_shift[1]*0.7e-15,r'{\bf Twisted Anyon Cavity}',fontsize=fs,color=text_col,rotation=rotation,ha='center',va='top',clip_on=True,path_effects=path_effects)
         return
-    
+
 #==============================================================================#
 
 
@@ -3164,7 +3174,7 @@ class DarkPhoton():
         if text_on:
             plt.text(3.5e-5,0.13e-12,r'{\bf QUALIPHIDE}',fontsize=fs,color=col,rotation=-90,rotation_mode='anchor',ha='center',va='center',clip_on=True)
         return
-        
+
     def SHUKET(ax,col='maroon',fs=13,text_on=False,edge_on=False,lw=0.8):
         y2 = ax.get_ylim()[1]
         dat = loadtxt("limit_data/DarkPhoton/SHUKET.txt")
@@ -3293,7 +3303,7 @@ class DarkPhoton():
 
             plt.gcf().text(0.485,0.43,r'{\bf DPDM}',rotation=21.5,fontsize=18,color='w',va='center',ha='center',path_effects=line_background(1.5,'k'),rotation_mode='anchor',clip_on=True)
             plt.gcf().text(0.49,0.41,r'(Arias et al.)',rotation=21.5,fontsize=16,color='w',va='center',ha='center',path_effects=line_background(1,'k'),rotation_mode='anchor',clip_on=True)
-    
+
         return
 
     def COBEFIRAS(ax,col=[0.1,0.2,0.5],text_on=True,lw=1.5):
@@ -3337,7 +3347,7 @@ class DarkPhoton():
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.5, 0.2, 0.2],zorder=1.06)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.06,lw=lw)
 
-   
+
 
         if text_on:
             plt.text(0.4e-6,0.15e-3,r'{\bf LSW-ADMX}',fontsize=17,color='w',rotation=-58,rotation_mode='anchor',ha='center',va='center',path_effects=line_background(1.5,'k'),clip_on=True)
@@ -3469,7 +3479,7 @@ class DarkPhoton():
 
 
 #==============================================================================#
-def MySaveFig(fig,pltname,pngsave=True):
+def MySaveFig(fig,pltname,pngsave=False):
     fig.savefig(pltdir+pltname+'.pdf',bbox_inches='tight')
     if pngsave:
         fig.set_facecolor('w') # <- not sure what matplotlib fucked up in the new version but it seems impossible to set png files to be not transparent now
