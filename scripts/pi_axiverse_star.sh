@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH -n 100
 #SBATCH --time 48:00:00
-#SBATCH --mem 5G
+#SBATCH --mem 10G
 #SBATCH --job-name pi_axiverse_star
 #SBATCH --output pi_axiverse_log-%J.txt
 #SBATCH -p batch
 
 ## set NUMEXPR_MAX_THREADS
-#export NUMEXPR_MAX_THREADS=208
+#export NUMEXPR_MAX_THREADS=416
 
-module load anaconda/latest
+module load anaconda
 source /gpfs/runtime/opt/anaconda/latest/etc/profile.d/conda.sh
 conda activate piaxiverse
 if [[ $PIAXI_VERBOSITY > 3 ]]
