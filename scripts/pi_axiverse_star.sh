@@ -10,6 +10,7 @@
 #export NUMEXPR_MAX_THREADS=416
 
 module load anaconda
+module load texlive
 source /gpfs/runtime/opt/anaconda/latest/etc/profile.d/conda.sh
 conda activate piaxiverse
 if [[ $PIAXI_VERBOSITY > 3 ]]

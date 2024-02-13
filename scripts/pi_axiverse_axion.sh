@@ -10,6 +10,7 @@
 #export NUMEXPR_MAX_THREADS=416
 
 module load anaconda
+module load texlive
 source /gpfs/runtime/opt/anaconda/latest/etc/profile.d/conda.sh
 conda activate piaxiverse
 
@@ -38,4 +39,4 @@ PIAXI_F="2e10"
 # m_I [eV] ~ (m_a)^2 / F_pi
 PIAXI_MASS="5e-32"
 
-python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --tN $PIAXI_N_TIMES --verbosity $PIAXI_VERBOSITY --kN $PIAXI_N_KMODE --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c 0.5 0.5 0 0 0 0 --no-fit_F --F $PIAXI_F --save_output_files --make_plots
+python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --tN $PIAXI_N_TIMES --verbosity $PIAXI_VERBOSITY --kN $PIAXI_N_KMODE --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c "0.5 0.5 0 0 0 0" --no-fit_F --F $PIAXI_F --save_output_files --make_plots
