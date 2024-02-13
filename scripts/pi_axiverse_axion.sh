@@ -16,7 +16,7 @@ conda activate piaxiverse
 
 PIAXI_VERBOSITY=8
 
-if [ $PIAXI_VERBOSITY > 3 ]
+if [[ $PIAXI_VERBOSITY > 3 ]]
 then
     conda info
 fi
@@ -24,19 +24,25 @@ fi
 PIAXI_SYS_NAME=$SLURM_JOB_NAME
 PIAXI_N_CORES=$SLURM_JOB_NUM_NODES
 PIAXI_COREMEM=$SLURM_MEM_PER_NODE
+
 PIAXI_N_TIMES=300
-PIAXI_N_KMODE=400
+PIAXI_MAX_TIME=30
+PIAXI_MAX_KMODE=200
+PIAXI_KMODE_RES=0.1
 
 # Expect resonance for cases where [sqrt(2*Rho)/m_a] >= [F_pi]
 # let m_a = 1e-6 eV
-# let g_a = 1e-10 GeV^-1
+# let g_a = 1e-15 GeV^-1
 # Expect critical threshold between rho ~ 1e17 GeV and 1e18 GeV
+
+# g_a ~ l4 / (L4^2 * 2)
+PIAXI_L4="2e7"
 
 # Density [GeV] ~ (amp_a)^2*m_a / 2
 PIAXI_DENSITY="1e22"
 # F_pi [GeV] ~ 2/g_a
-PIAXI_F="2e10"
+PIAXI_F="2e15"
 # m_I [eV] ~ (m_a)^2 / F_pi
-PIAXI_MASS="5e-32"
+PIAXI_MASS="5e-37"
 
-python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --tN $PIAXI_N_TIMES --verbosity $PIAXI_VERBOSITY --kN $PIAXI_N_KMODE --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c "0.5 0.5 0 0 0 0" --no-fit_F --F $PIAXI_F --save_output_files --make_plots
+python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --num_samples 1 --t $PIAXI_MAX_TIME --tN $PIAXI_N_TIMES --use_mass_units $PIAXI_MASS_UNIT --verbosity $PIAXI_VERBOSITY --k $PIAXI_MAX_KMODE --k_res $PIAXI_KMODE_RES --mass $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --eps=1 --dqm_c "0.5 0.5 0 0 0 0" --no-fit_F --F $PIAXI_F --L4 $PIAXI_L4 --save_output_files --make_plots
