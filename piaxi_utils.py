@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 import matplotlib.image as image
+import matplotlib.colors as colors
 import matplotlib.cm as cm
 from matplotlib.figure import Figure
 from matplotlib.pyplot import subplot2grid
@@ -728,7 +729,7 @@ def if_output_exists(directory, phash):
     return False
 
 # Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False, tex_fmt=False, version=version):
+def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False, tex_fmt=False, add_colorbars=False, version=version):
 
     # Load results
     params, results, _, coeffs = load_single(input_str, output_root=output_dir, version=version)
@@ -781,11 +782,11 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 
     # Plot results of numerical integration, as imported from file
     if plot_res:
-        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
+        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
-        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
+        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
@@ -842,19 +843,62 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     
     return k_peak, k_mean
 
+## Helper function for colorbar plotting
+def get_colorbar_params(k_values_in):
+    k_values = k_values_in
+    cm_vals = np.linspace(0,1,len(k_values))
+
+    # helper to normalize data into the [0.0, 1.0] interval.
+    cm_norm_pri = colors.Normalize(vmin=np.min(cm_vals), vmax=np.max(cm_vals))
+    # alternative to normalize data into the [-1.0, 1.0] interval.
+    cm_norm_alt = colors.Normalize(vmin=-np.max(cm_vals), vmax=np.max(cm_vals))
+
+    # choose a colormap
+    #c_m = cm.viridis
+    #c_m = cm.cividis_r
+    #c_m = cm.cool
+    c_m = cm.winter
+    #c_m = cm.PuBuGn
+    #c_m = cm.plasma
+    #c_m = cm.hsv
+    #c_m = cm.twilight
+    #c_m = cm.CMRmap
+
+    # create a ScalarMappable and initialize a data structure
+    s_m_pri = cm.ScalarMappable(cmap=c_m, norm=cm_norm_pri)
+    s_m_alt = cm.ScalarMappable(cmap=c_m, norm=cm_norm_alt)
+
+    # in case we need to have different colobar normalization schema for the data vs the plotting function
+    s_m_plt = s_m_pri
+    cm_norm_plt = cm_norm_pri
+    s_m_cbar = s_m_pri
+    cm_norm_cbar = cm_norm_pri
+
+    # Format text labels and tickmark locations for colorbar legend
+    cbar_ticks = np.linspace(0, 1, 2)
+    cbar_labels = [r'$%s$' % k_values[int(tick_val-1)] for tick_val in np.linspace(k_values[0], k_values[-1], len(cbar_ticks))]
+
+    return c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar
+
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, tex_fmt=False):
-    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, tex_fmt)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, tex_fmt=False, add_colorbars=False):
+    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, tex_fmt, add_colorbars)
     plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in=None, plot_Adot=True, tex_fmt=False):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, tex_fmt=False, add_colorbars=False, abs_amps=None):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
-    signdict = signtex if tex_fmt else signstr
-    fontsize = 16 if tex_fmt else 14
-    if len(k_samples) <= 0:
+    plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
+    if plot_all_k:
+        k_samples = [i for i, k_i in enumerate(k_values)]
+    elif len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
+    else:
+        k_samples = k_samples_in
+    
+    signdict = signtex if tex_fmt else signstr
+    fontsize = 16 if tex_fmt else 14
     times = get_times(params_in, times_in)
 
     xdim = 5
@@ -865,26 +909,49 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
 
     #fig = Figure(figsize=(4*xdim, 4*ydim))
     #plt.subplot2grid((ydim,xdim), (0,0), fig=fig, colspan=3)
-    plt.figure(figsize=(4*xdim, 4*ydim))
-    plt.subplot2grid((ydim,xdim), (0,0), colspan=3)
+    fig = plt.figure(figsize=(4*xdim, 4*ydim))
+    ax1 = plt.subplot2grid((ydim,xdim), (0,0), colspan=3, fig=fig)
 
-    #plot_colors = cm.get_cmap('plasma').jet(np.linspace(0,1,len(k_samples)))
+    if add_colorbars:
+        c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar = get_colorbar_params(k_values)
 
     for k_idx, k_sample in enumerate(k_samples):
-        k_s = int(k_sample)
+        k_s = int(k_sample-1)
         #print(results_in[k_s, 0])
-        plt.plot(times, results_in[k_s][0], label='k='+str(k_values[k_s]))
-    plt.title(r'Evolution of the mode function $A_{%s}(k)$' % signdict[0])
+
+        if abs_amps is None:
+            abs_amps = True if add_colorbars else False
+        if abs_amps or add_colorbars:
+            y = np.abs(results_in[k_s][0])
+        else:
+            y = results_in[k_s][0]
+
+        if add_colorbars:
+            plt.plot(times, y, label='k='+str(k_values[k_s]), linewidth=1, color=c_m(cm_norm_plt(cm_vals[k_idx])))
+        else:
+            plt.plot(times, y, label='k='+str(k_values[k_s]))
+
+    if add_colorbars:
+        cbar1 = plt.colorbar(s_m_cbar, label=r'$k$', cmap=c_m, norm=cm_norm_cbar, drawedges=False, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1))
+        cbar1.set_ticks(cbar_ticks)
+        cbar1.set_ticklabels(cbar_labels)
+    else:
+        plt.legend()
+    absbuff = '|' if abs_amps else ''
+    plt.title(r'Evolution of the mode function $%sA_{%s}(k)%s$' % (absbuff, signdict[0], absbuff))
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
-    plt.ylabel(r'$A_{%s}(k)$' % signdict[0])
+    plt.ylabel(r'$%sA_{%s}(k)%s$' % (absbuff, signdict[0], absbuff))
     plt.yscale('log')
-    plt.legend()
     plt.grid()
 
     #plt.subplot(2,1,2)
     plt.subplot2grid((ydim,xdim), (1,0), colspan=3)
     plt.plot(times, [sum([np.abs(results_in[i][0][t_i])**2 for i in range(len(k_values))]) for t_i in range(len(times))])
-    plt.title(r'Evolution of the (total) power for $A_{%s}$' % signdict[0])
+    if add_colorbars:
+        # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
+        cbar2 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
+        cbar2.remove()
+    plt.title(r'Evolution of the (total) power $|A_{%s}|^2$' % signdict[0])
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
     plt.ylabel(r'$|A_{%s}|^2$' % signdict[0])
     plt.yscale('log')
@@ -901,6 +968,10 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
         #plt.yscale('log')
+        if add_colorbars:
+            # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
+            cbar3 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
+            cbar3.remove()
         plt.legend()
         plt.grid()
 
@@ -944,38 +1015,57 @@ w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
 
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, tex_fmt=False):
-    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, tex_fmt)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, tex_fmt=False, add_colorbars=False):
+    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, tex_fmt, add_colorbars)
     plt.show()
 
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
 sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(i, p_in, sol_in, k_v, times, n=n_in) for i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False, tex_fmt=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, tex_fmt=False, add_colorbars=False, write_to_params=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     fontsize = 16 if tex_fmt else 14
-    if len(k_samples_in) <= 0:
+
+    plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
+    if plot_all_k:
+        k_samples = [k_i for k_i, k_val in enumerate(k_values)]
+    elif len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [k_i for k_i, k_val in enumerate(k_values) if k_val in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
+
     times = get_times(params_in, times_in)
     numf = numf_in if numf_in is not None else n_k
     
     plt.figure(figsize=(20, 9))
 
     plt.subplot2grid((2,5), (0,0), colspan=3)
-    for k_sample in k_samples:
+
+    if add_colorbars:
+        c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar = get_colorbar_params(k_values)
+
+    for k_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
         k_nums = n_p(k_s, params_in, results_in, k_values, times, n=numf)
-        plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
+
+        if add_colorbars:
+            plt.plot(times, k_nums, label='k='+str(k_values[k_s]), linewidth=1, color=c_m(cm_norm_plt(cm_vals[k_idx])))
+        else:
+            plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
+    
     plt.title(r'Occupation number per k mode', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.2)
     plt.ylabel(r'$n[k]/n_0$' if scale_n else r'$n[k]$')
     plt.yscale('log'); #plt.ylim(bottom = 0.1)
-    plt.legend()
+    if add_colorbars:
+        cbar1 = plt.colorbar(s_m_cbar, label=r'$k$', cmap=c_m, norm=cm_norm_cbar, drawedges=False, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1))
+        cbar1.set_ticks(cbar_ticks)
+        cbar1.set_ticklabels(cbar_labels)
+    else:
+        plt.legend()
     plt.grid()
 
     n_tot = sum_n_p(numf, params_in, results_in, k_values, times)
@@ -1005,6 +1095,10 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     #plt.xlim(0,0.1)
     plt.ylabel(r'$n$')
     plt.yscale('log')
+    if add_colorbars:
+        # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
+        cbar2 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
+        cbar2.remove()
     plt.legend()
     plt.grid()
 
