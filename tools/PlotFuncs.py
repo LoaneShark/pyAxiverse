@@ -21,7 +21,9 @@ import matplotlib.cm as cm
 from scipy.stats import norm
 import matplotlib.patheffects as pe
 
-pltdir = 'plots/'
+rootdir = 'tools/AxionLimits/'
+pltdir  = rootdir+'plots/'
+lmtdir  = rootdir+'limit_data/'
 pltdir_png = pltdir+'plots_png/'
 
 #==============================================================================#
@@ -65,7 +67,7 @@ def BlackHoleSpins(ax,C,label_position,whichfile='Mehta',fs=20,col='k',alpha=0.4
     y2 = ax.get_ylim()[-1]
 
     # arxiv: 2009.07206
-    # BH = loadtxt("limit_data/BlackHoleSpins.txt")
+    # BH = loadtxt(lmtdir+'BlackHoleSpins.txt')
     # if PlotLine:
     #     plt.plot(BH[:,0],BH[:,1],color=col,lw=3,alpha=min(alpha*2,1),zorder=0)
     # plt.fill_between(BH[:,0],BH[:,1],y2=0,edgecolor=None,facecolor=col,zorder=0,alpha=alpha)
@@ -74,7 +76,7 @@ def BlackHoleSpins(ax,C,label_position,whichfile='Mehta',fs=20,col='k',alpha=0.4
     #          rotation=rotation,ha='center',rotation_mode='anchor')
 
     # arxiv: 2011.11646
-    dat = loadtxt('limit_data/fa/BlackHoleSpins_'+whichfile+'.txt')
+    dat = loadtxt(lmtdir+'fa/BlackHoleSpins_'+whichfile+'.txt')
     dat[:,1] = dat[:,1]*C
     plt.fill_between(dat[:,0],dat[:,1],y2=0,lw=3,alpha=alpha,color=facecolor,zorder=zorder)
     if PlotLine:
@@ -85,7 +87,7 @@ def BlackHoleSpins(ax,C,label_position,whichfile='Mehta',fs=20,col='k',alpha=0.4
 
     return
 
-def UpperFrequencyAxis(ax,N_Hz=1,tickdir='out',xtick_rotation=0,labelsize=25,xlabel=r"$\nu_a$ [Hz]",lfs=40,tick_pad=8,tfs=25,xlabel_pad=10):
+def UpperFrequencyAxis(ax,N_Hz=1,tickdir='out',xtick_rotation=0,labelsize=25,xlabel=r'$\nu_a$ [Hz]',lfs=40,tick_pad=8,tfs=25,xlabel_pad=10):
     m_min,m_max = ax.get_xlim()
     ax2 = ax.twiny()
     ax2.set_xlabel(xlabel,fontsize=lfs,labelpad=xlabel_pad)
@@ -121,7 +123,7 @@ def UpperFrequencyAxis_Simple(ax,tickdir='out',xtick_rotation=0,labelsize=25,xla
     plt.sca(ax)
     return
 
-def AlternativeCouplingAxis(ax,scale=1,tickdir='out',labelsize=25,ylabel=r"$g_\gamma$ [GeV$^{-1}$]",lfs=40,tick_pad=8,tfs=25,ylabel_pad=60):
+def AlternativeCouplingAxis(ax,scale=1,tickdir='out',labelsize=25,ylabel=r'$g_\gamma$ [GeV$^{-1}$]',lfs=40,tick_pad=8,tfs=25,ylabel_pad=60):
     g_min,g_max = ax.get_ylim()
     ax3 = ax.twinx()
     ax3.set_ylim([g_min*scale,g_max*scale])
@@ -145,7 +147,7 @@ def FigSetup(xlab=r'$m_{\pi}$ [eV]',ylab='',\
                  Grid=False,Shape='Rectangular',\
                  mathpazo=False,TopAndRightTicks=False,majorticklength=13,minorticklength=10,\
                 xtick_rotation=20.0,tick_pad=8,x_labelpad=10,y_labelpad=10,\
-             FrequencyAxis=False,N_Hz=1,upper_xlabel=r"$\nu_a$ [Hz]",**freq_kwargs):
+             FrequencyAxis=False,N_Hz=1,upper_xlabel=r'$\nu_a$ [Hz]',**freq_kwargs):
 
     plt.rcParams['axes.linewidth'] = lw
     plt.rc('text', usetex=True)
@@ -153,9 +155,9 @@ def FigSetup(xlab=r'$m_{\pi}$ [eV]',ylab='',\
 
     if mathpazo:
             plt.rcParams.update({
-        "text.usetex": True,
-        "font.family": "serif",
-        "font.serif": ["Palatino"],
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': ['Palatino'],
             })
 
     if Shape=='Wide':
@@ -297,7 +299,7 @@ class AxionPhoton():
                     plt.text(KSVZ_label_mass,0.75/3,r'{\bf KSVZ}',fontsize=fs,color='k',clip_on=True)
         return
 
-    def piAxion(ax,epsilon,lambda1,theta,label_mass,C_logwidth=10,cmap='Blues',fs=18,rot = 10.0,
+    def piAxion(ax,epsilon,lambda1,theta,label_mass,C_logwidth=10,cmap='Blues',fs=18, rot=10.0,
                 C_center=1,C_width=1.2,vmax=0.9):
 
         ## QCD Axion band:
@@ -349,23 +351,23 @@ class AxionPhoton():
         # 2018: arXiv[1804.05750]
         # 2019: arXiv[1910.08638]
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/ADMX.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
-        dat = loadtxt("limit_data/AxionPhoton/ADMX2018.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX2018.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
-        dat = loadtxt("limit_data/AxionPhoton/ADMX2019_1.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX2019_1.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
-        dat = loadtxt("limit_data/AxionPhoton/ADMX2019_2.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX2019_2.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
-        dat = loadtxt("limit_data/AxionPhoton/ADMX2021.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX2021.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
-        dat = loadtxt("limit_data/AxionPhoton/ADMX_Sidecar.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX_Sidecar.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
 
 
         if projection:
             # ADMX arXiv[1804.05750]
-            dat = loadtxt("limit_data/AxionPhoton/Projections/ADMX_Projected.txt")
+            dat = loadtxt(lmtdir+'AxionPhoton/Projections/ADMX_Projected.txt')
             plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
             plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.1)
             if text_on:
@@ -392,7 +394,7 @@ class AxionPhoton():
             rs1 = 0.0
             rs2 = 1.0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/RBF_UF_Haloscopes.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/RBF_UF_Haloscopes.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=zorder)
 
         if text_on:
@@ -415,9 +417,9 @@ class AxionPhoton():
             rs2 = 1.0
             zo = 0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/HAYSTAC.txt")
-        dat2 = loadtxt("limit_data/AxionPhoton/HAYSTAC_2020.txt")
-        dat3 = loadtxt("limit_data/AxionPhoton/HAYSTAC_2022.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/HAYSTAC.txt')
+        dat2 = loadtxt(lmtdir+'AxionPhoton/HAYSTAC_2020.txt')
+        dat3 = loadtxt(lmtdir+'AxionPhoton/HAYSTAC_2022.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,zorder=zo,lw=2)
@@ -448,7 +450,7 @@ class AxionPhoton():
             rs2 = 1.0
             zo = 0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/TASEH.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/TASEH.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,zorder=zo,lw=2)
@@ -464,7 +466,7 @@ class AxionPhoton():
             rs2 = 1.0
             zo = 0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/CAST-CAPP.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/CAST-CAPP.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,zorder=zo,lw=2)
@@ -480,12 +482,12 @@ class AxionPhoton():
             rs1 = 0.0
             rs2 = 1.0
             zo = 0
-        dat = loadtxt("limit_data/AxionPhoton/CAPP-1.txt")
-        dat2 = loadtxt("limit_data/AxionPhoton/CAPP-2.txt")
-        dat3 = loadtxt("limit_data/AxionPhoton/CAPP-3.txt")
-        dat4 = loadtxt("limit_data/AxionPhoton/CAPP-4.txt")
-        dat5 = loadtxt("limit_data/AxionPhoton/CAPP-5.txt")
-        dat6 = loadtxt("limit_data/AxionPhoton/CAPP-6.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/CAPP-1.txt')
+        dat2 = loadtxt(lmtdir+'AxionPhoton/CAPP-2.txt')
+        dat3 = loadtxt(lmtdir+'AxionPhoton/CAPP-3.txt')
+        dat4 = loadtxt(lmtdir+'AxionPhoton/CAPP-4.txt')
+        dat5 = loadtxt(lmtdir+'AxionPhoton/CAPP-5.txt')
+        dat6 = loadtxt(lmtdir+'AxionPhoton/CAPP-6.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,zorder=zo,lw=3)
@@ -526,9 +528,9 @@ class AxionPhoton():
             rs2 = 1.0
             zo = 0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/QUAX.txt")
-        dat2 = loadtxt("limit_data/AxionPhoton/QUAX2.txt")
-        dat3 = loadtxt("limit_data/AxionPhoton/QUAX3.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/QUAX.txt')
+        dat2 = loadtxt(lmtdir+'AxionPhoton/QUAX2.txt')
+        dat3 = loadtxt(lmtdir+'AxionPhoton/QUAX3.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,lw=2,zorder=zo)
@@ -549,7 +551,7 @@ class AxionPhoton():
             plt.plot(dat2[0,0],dat2[0,1]/(rs1*2e-10*dat2[0,0]+rs2),'.',markersize=15,color=col,markeredgecolor='k',zorder=zo)
 
         if projection==True:
-            dat = loadtxt("limit_data/AxionPhoton/Projections/QUAX2005.txt")
+            dat = loadtxt(lmtdir+'AxionPhoton/Projections/QUAX2005.txt')
             plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
             plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.2)
             if rs1==1.0:
@@ -566,7 +568,7 @@ class AxionPhoton():
             rs1 = 0.0
             rs2 = 1.0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/ABRACADABRA.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ABRACADABRA.txt')
         n = shape(dat)[0]
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=2)
         x = dat[arange(0,n,20),0]
@@ -575,7 +577,7 @@ class AxionPhoton():
         plt.plot(x,y/(rs1*2e-10*x+rs2),'k-',lw=lw,zorder=2.01,alpha=edgealpha)
 
 
-        dat = loadtxt("limit_data/AxionPhoton/ABRACADABRA_run2.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ABRACADABRA_run2.txt')
         n = shape(dat)[0]
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=2.02)
         x = dat[arange(0,n,1),0]
@@ -590,7 +592,7 @@ class AxionPhoton():
                 plt.text(text_shift[0]*1.5e-9,text_shift[1]*1e-8,r'10 cm',fontsize=fs,color='w',rotation=0,ha='center',va='top',zorder=10,clip_on=True,path_effects=line_background(1.5,'k'))
 
         if projection:
-            dat = loadtxt("limit_data/AxionPhoton/Projections/ABRACADABRA.txt")
+            dat = loadtxt(lmtdir+'AxionPhoton/Projections/ABRACADABRA.txt')
             plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
             plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.1)
             if text_on:
@@ -609,7 +611,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt('limit_data/AxionPhoton/Projections/DMRadio.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/DMRadio.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),linestyle=linestyle,linewidth=2,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -628,7 +630,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt('limit_data/AxionPhoton/Projections/SRF.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/SRF.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),linestyle=linestyle,linewidth=2,color=col,zorder=0.0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0.0,alpha=0.1)
         if text_on:
@@ -646,7 +648,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt('limit_data/AxionPhoton/Projections/WISPLC.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/WISPLC.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),linestyle=linestyle,linewidth=2,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -667,14 +669,14 @@ class AxionPhoton():
             rs1 = 0.0
             rs2 = 1.0
             zo = 0
-        dat = loadtxt("limit_data/AxionPhoton/ORGAN.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ORGAN.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=col,facecolor=col,zorder=0.1,lw=1)
 
-        dat2 = loadtxt("limit_data/AxionPhoton/ORGAN-1a.txt")
+        dat2 = loadtxt(lmtdir+'AxionPhoton/ORGAN-1a.txt')
         plt.fill_between(dat2[:,0],dat2[:,1]/(rs1*2e-10*dat2[:,0]+rs2),y2=y2,edgecolor='k',facecolor=col,zorder=0.1,lw=lw)
 
         if projection:
-            dat = loadtxt("limit_data/AxionPhoton/Projections/ORGAN_Projected.txt")
+            dat = loadtxt(lmtdir+'AxionPhoton/Projections/ORGAN_Projected.txt')
             plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
             plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.2)
             if text_on:
@@ -709,7 +711,7 @@ class AxionPhoton():
             rs2 = 1.0
             zo = 0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/RADES.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/RADES.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,lw=2,zorder=zo)
@@ -733,7 +735,7 @@ class AxionPhoton():
             rs2 = 1.0
             zo = 0
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/GrAHal.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/GrAHal.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,lw=2,zorder=zo)
@@ -755,7 +757,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/MADMAX.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/MADMAX.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.2)
         if text_on:
@@ -775,7 +777,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/DALI.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/DALI.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=2,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.2)
         if text_on:
@@ -796,7 +798,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/ALPHA.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/ALPHA.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=2,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.2)
         if text_on:
@@ -817,7 +819,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/FLASH.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/FLASH.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,facecolor=col,zorder=0,alpha=0.3)
         if text_on:
@@ -836,7 +838,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/CADEx.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/CADEx.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -857,7 +859,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/BRASS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/BRASS.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -877,7 +879,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/BREAD.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/BREAD.txt')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -898,7 +900,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/TOORAD.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/TOORAD.txt')
         dat[:,0] *= 1e-3
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,facecolor=col,zorder=0,alpha=0.1)
@@ -920,7 +922,7 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/Projections/LAMPOST.txt",delimiter=',')
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/LAMPOST.txt',delimiter=',')
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -935,7 +937,7 @@ class AxionPhoton():
     def DANCE(ax,col=[0.8, 0.1, 0.2],fs=14,text_on=True,text_pos=[1.5e-12,1.7e-13],linestyle='-',rotation=50):
         # DANCE arXiv[1911.05196]
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/Projections/DANCE.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/DANCE.txt')
         plt.plot(dat[:,0],dat[:,1],linestyle=linestyle,linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -945,7 +947,7 @@ class AxionPhoton():
     def aLIGO(ax,col=[0.8, 0.1, 0.2],fs=15,text_on=True,text_pos=[0.2e-9,0.35e-13],linestyle='-',rotation=0):
         # aLIGO arXiv[1903.02017]
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/Projections/aLIGO.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/aLIGO.txt')
         plt.plot(dat[:,0],dat[:,1],linestyle=linestyle,linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -955,7 +957,7 @@ class AxionPhoton():
     def ADBC(ax,col=[0.8, 0.1, 0.2],fs=14,text_on=True,text_pos=[1.66e-11,0.6e-12],rotation=26):
         # ADBC arXiv[1809.01656]
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/Projections/ADBC.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/ADBC.txt')
         plt.plot(dat[:,0],dat[:,1],'-',linewidth=1.5,color=col,zorder=0)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0,alpha=0.1)
         if text_on:
@@ -965,7 +967,7 @@ class AxionPhoton():
     def SHAFT(ax,col='red',fs=16,text_on=True,lw=1,text_pos=[0.8e-10,3e-10],rotation=0,zorder=1.8,edgealpha=1):
         # SHAFT arXiv:[2003.03348]
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/SHAFT.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SHAFT.txt')
         n = shape(dat)[0]
         x = dat[arange(0,n,2),0]
         y = dat[arange(0,n,2),1]
@@ -979,7 +981,7 @@ class AxionPhoton():
     def UPLOAD(ax,col='tomato',fs=16,text_on=False):
         # UPLOAD arXiv:[1912.07751]
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/UPLOAD.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/UPLOAD.txt')
         n = shape(dat)[0]
         x = dat[arange(0,n,2),0]
         y = dat[arange(0,n,2),1]
@@ -1003,7 +1005,7 @@ class AxionPhoton():
             rs2 = 1.0
             zo = zorder
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/BASE.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BASE.txt')
 
         if arrow_on:
             fig = plt.gcf()
@@ -1036,7 +1038,7 @@ class AxionPhoton():
             rs2 = 1.0
             zo = zorder
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/ADMX_SLIC.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ADMX_SLIC.txt')
         x = mean(dat[:,0])
         y = amin(dat[:,1])
         if rs1==0:
@@ -1062,14 +1064,14 @@ class AxionPhoton():
             rs2 = 1.0
 
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionPhoton/ALPS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ALPS.txt')
 
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=1.53,lw=0.01)
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'k-',lw=lw,zorder=1.53,alpha=1)
         if rs1==0:
             if text_on: plt.text(1e-5*text_shift_x,8e-8*text_shift_y,r'{\bf ALPS-I}',fontsize=20,color='w',clip_on=True,path_effects=line_background(1.5,'k'))
         if projection:
-            dat = loadtxt("limit_data/AxionPhoton/Projections/ALPS-II.txt")
+            dat = loadtxt(lmtdir+'AxionPhoton/Projections/ALPS-II.txt')
             if block:
                 mask = dat[:,0]<0.85e-6
                 dat[mask,0] = nan
@@ -1082,26 +1084,26 @@ class AxionPhoton():
 
     def SAPPHIRES(ax,text_label=r'{\bf SAPPHIRES}',rotation=-57,text_pos=[1.4e-2,1e-1],col=[0.8, 0.2, 0.25],text_col='w',fs=20,zorder=1.91,text_on=True,edgealpha=1,lw=1.5):
         # SAPPHIRES arXiv:[2105.01224]
-        dat = loadtxt("limit_data/AxionPhoton/SAPPHIRES.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SAPPHIRES.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,rotation=rotation,path_effects=line_background(1.5,'k'))
         return
 
 
     def OSQAR(ax,text_label=r'{\bf OSQAR}',text_pos=[1e-5,3e-8],col=[0.6, 0.2, 0.25],text_col='w',fs=17,zorder=1.52,text_on=True,edgealpha=1,lw=1.5):
         # OSQAR arXiv:[]
-        dat = loadtxt("limit_data/AxionPhoton/OSQAR.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/OSQAR.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
         return
 
     def PVLAS(ax,text_label=r'{\bf PVLAS}',text_pos=[2e-3,9e-8],col=[0.4, 0.2, 0.2],text_col='w',fs=17,zorder=1.51,text_on=True,edgealpha=1,rotation=45,lw=1.5):
         # PVLAS arXiv:[]
-        dat = loadtxt("limit_data/AxionPhoton/PVLAS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/PVLAS.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,rotation=rotation,lw=lw,path_effects=line_background(1.5,'k'))
         return
 
     def CROWS(ax,text_label=r'{\bf CROWS}',text_pos=[1e-7,2.5e-7],col=[0.7, 0.2, 0.2],text_col='w',fs=17,zorder=1.54,text_on=True,edgealpha=1,lw=1.5):
         # CROWS arXiv:[1310.8098]
-        dat = loadtxt("limit_data/AxionPhoton/CROWS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/CROWS.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
         return
 
@@ -1114,13 +1116,13 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        dat = loadtxt("limit_data/AxionPhoton/CAST_highm.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/CAST_highm.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor='k',facecolor=col,zorder=1.49,lw=0.1)
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'k-',lw=1.5,zorder=1.49,alpha=1)
 
         mf = dat[-3,0]
         gf = dat[-3,1]
-        dat = loadtxt("limit_data/AxionPhoton/CAST.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/CAST.txt')
         plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor='none',facecolor=col,zorder=1.5,lw=0.1)
         plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'k-',lw=1.5,zorder=1.5,alpha=1)
 
@@ -1135,7 +1137,7 @@ class AxionPhoton():
         if projection:
             # IAXO arXiv[1212.4633]
             IAXO_col = 'purple'
-            IAXO = loadtxt("limit_data/AxionPhoton/Projections/IAXO.txt")
+            IAXO = loadtxt(lmtdir+'AxionPhoton/Projections/IAXO.txt')
             plt.plot(IAXO[:,0],IAXO[:,1]/(rs1*2e-10*IAXO[:,0]+rs2),'--',linewidth=2.5,color=IAXO_col,zorder=0.001)
             plt.fill_between(IAXO[:,0],IAXO[:,1]/(rs1*2e-10*IAXO[:,0]+rs2),y2=y2,edgecolor=None,facecolor=IAXO_col,zorder=0,alpha=0.3)
             if text_on==True:
@@ -1148,68 +1150,68 @@ class AxionPhoton():
 
     def FermiSNe(ax,text_label=r'{\bf Fermi-SNe}',text_pos=[1.2e-12,0.45e-10],col='ForestGreen',text_col='w',fs=12,zorder=0.265,text_on=True,edgealpha=1,lw=1.5):
         # Fermi extragalactic SN gamma rays arXiv:[2006.06722]
-        dat = loadtxt("limit_data/AxionPhoton/SNe-gamma.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SNe-gamma.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
         return
 
     def DSNALP(ax,text_label=r'{\bf DSNALP}',text_pos=[1.2e-12,1.2e-10],col=[0.0, 0.62, 0.3],text_col='w',fs=12,zorder=0.27,text_on=True,edgealpha=1,lw=1.5):
         # Diffuse SN ALP background arXiv:[2008.11741]
-        dat = loadtxt("limit_data/AxionPhoton/DSNALP.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/DSNALP.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
         return
 
     def SN1987A_gamma(ax,text_label=r'{\bf SN1987A}',text_pos=[6e-11,0.4e-11],col='#067034',text_col='#067034',fs=15,zorder=0.21,text_on=True,edgealpha=1,lw=1.5):
         # SN1987 gamma rays arXiv:[1410.3747]
-        dat = loadtxt("limit_data/AxionPhoton/SN1987A_gamma.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SN1987A_gamma.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw)
         return
 
     def Hydra(ax,text_label=r'{\bf Hydra}',text_pos=[1.2e-12,2e-11],col=[0.24, 0.71, 0.54],text_col='w',fs=13,zorder=0.23,text_on=True,edgealpha=1,lw=1.5):
         # HYDRA-A arXiv:[1304.0989]
-        dat = loadtxt("limit_data/AxionPhoton/Chandra_HYDRA_A.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Chandra_HYDRA_A.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
         return
 
     def M87(ax,text_label=r'\quad {\bf M87}',text_pos=[1.4e-12,4e-12],col='seagreen',text_col='w',fs=15,zorder=0.219,text_on=True,edgealpha=1,lw=1.5):
         # M87 Limits from arXiv:[1703.07354]
-        dat = loadtxt("limit_data/AxionPhoton/Chandra_M87.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Chandra_M87.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
         return
 
     def HESS(ax,text_label=r'{\bf HESS}',text_pos=[1.4e-8,1.6e-11],col='#2a5736',text_col='#2a5736',fs=14,zorder=0.255,text_on=True,edgealpha=1,lw=1.5):
         # HESS arXiv:[1304.0700]
-        dat = loadtxt("limit_data/AxionPhoton/HESS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/HESS.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw)
         return
 
     def Mrk421(ax,text_label=r'{\bf Mrk 421}',text_pos=[4e-9,6e-11],col=[0.4, 0.6, 0.1],text_col='w',fs=12,zorder=0.26,text_on=True,edgealpha=1,lw=1.5):
         # Fermi
-        dat = loadtxt("limit_data/AxionPhoton/Mrk421.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Mrk421.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
 
         # MAGIC
-        dat = loadtxt("limit_data/AxionPhoton/Mrk421-MAGIC.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Mrk421-MAGIC.txt')
         FilledLimit(ax,dat,None,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
         return
 
     def NGC1275(ax,text_label=r'{\bf Chandra}',text_pos=[1.1e-12,1.5e-12],col='#195e3a',text_col='w',fs=11,zorder=0.1,text_on=True,edgealpha=1,lw=1.5):
-        dat = loadtxt("limit_data/AxionPhoton/Chandra_NGC1275.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Chandra_NGC1275.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1,'k'))
         return
 
     def H1821643(ax,text_label=r'{\bf Chandra}',text_pos=[1e-11,1.5e-12],col=[0.0, 0.3, 0.24],text_col=[0.0, 0.3, 0.24],fs=15,zorder=0.1,text_on=True,edgealpha=1,lw=1.5):
-        dat = loadtxt("limit_data/AxionPhoton/Chandra_H1821643.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Chandra_H1821643.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw)
         return
 
     def Fermi(ax,text_label=r'{\bf Fermi}',text_pos=[4.02e-10,1.2e-11],col=[0.0, 0.42, 0.24],text_col='w',fs=15,zorder=0.24,text_on=True,edgealpha=1,lw=1.5):
         # Fermi NGC1275 arXiv:[1603.06978]
-        Fermi1 = loadtxt("limit_data/AxionPhoton/Fermi1.txt")
-        Fermi2 = loadtxt("limit_data/AxionPhoton/Fermi2.txt")
+        Fermi1 = loadtxt(lmtdir+'AxionPhoton/Fermi1.txt')
+        Fermi2 = loadtxt(lmtdir+'AxionPhoton/Fermi2.txt')
         plt.fill_between(Fermi1[:,0],Fermi1[:,1],y2=1e0,edgecolor=col,facecolor=col,zorder=zorder,lw=0.001)
         plt.fill(Fermi2[:,0],1.01*Fermi2[:,1],edgecolor=col,facecolor=col,lw=0.001,zorder=zorder)
-        Fermi1 = loadtxt("limit_data/AxionPhoton/Fermi_bound.txt")
-        Fermi2 = loadtxt("limit_data/AxionPhoton/Fermi_hole.txt")
+        Fermi1 = loadtxt(lmtdir+'AxionPhoton/Fermi_bound.txt')
+        Fermi2 = loadtxt(lmtdir+'AxionPhoton/Fermi_hole.txt')
         plt.plot(Fermi1[:,0],Fermi1[:,1],'k-',alpha=edgealpha,lw=lw,zorder=zorder)
         plt.plot(Fermi2[:,0],Fermi2[:,1],'k-',alpha=edgealpha,lw=lw,zorder=zorder)
         if text_on:
@@ -1217,14 +1219,14 @@ class AxionPhoton():
         return
 
     def FermiQuasars(ax,text_label=r'{\bf Quasars}',text_pos=[1.15e-8,0.8e-11],col='ForestGreen',text_col='w',fs=12,zorder=0.1,text_on=True,edgealpha=1,lw=1.5):
-        dat = loadtxt("limit_data/AxionPhoton/FermiQuasars.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/FermiQuasars.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,rotation=30,path_effects=line_background(1,'k'))
         return
 
 
     def MWDPolarisation(ax,text_shift=[1,0.35],col='#32a852',text_col='#32a852',fs=14,zorder=0.01,projection=False,text_on=True,edgealpha=1,lw=1.5):
         # Upper limit on the axion-photon coupling from magnetic white dwarf polarization arXiv:[2203.04319]s
-        dat = loadtxt("limit_data/AxionPhoton/MWDPolarisation.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/MWDPolarisation.txt')
         FilledLimit(ax,dat,col=col,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw)
 
         if text_on:
@@ -1237,27 +1239,27 @@ class AxionPhoton():
         return
 
     def PulsarPolarCap(ax,text_label=r'{\bf Pulsars}',text_pos=[1.9e-7,4e-12],col='#039614',text_col='w',fs=13,zorder=0.005,text_on=True,lw=1.5,rotation=-11,edgealpha=1):
-        dat = loadtxt("limit_data/AxionPhoton/PulsarPolarCap.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/PulsarPolarCap.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,lw=lw,va='center',rotation=rotation,edgealpha=edgealpha,path_effects=line_background(1,'k'))
         return
 
     def HAWC(ax,text_label=r'{\bf HAWC}',text_pos=[0.9e-7,2.5e-11],col='#2b5e4e',text_col='#2b5e4e',fs=14,zorder=0.25,text_on=True,Projection=False,edgealpha=1,lw=1.5):
         # HAWC TeV Blazars arXiv:[2203.04332]
-        dat = loadtxt("limit_data/AxionPhoton/HAWC.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/HAWC.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,text_col=text_col,col=col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw)
         return
 
 
     def MWDXrays(ax,text_label=r'{\bf MWD X-rays}',text_pos=[1.5e-7,1.3e-10],col='#59c275',text_col='#59c275',fs=14,zorder=0.1,text_on=True,Projection=False,edgealpha=1,lw=1.5):
         # Magnetic white dwarf chandra x-rays arXiv:[2104.12772]
-        dat = loadtxt("limit_data/AxionPhoton/MWDXrays.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/MWDXrays.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,text_col=text_col,col=col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw)
         return
 
 
     def StarClusters(ax,text_pos=[2.2e-11,2.7e-11],col= [0.2, 0.54, 0.01],text_col='w',fs=13,zorder=0.22,rotation=45,text_on=True,edgealpha=1,lw=1.5):
         # Xray super star clusters arXiv:[2008.03305]
-        dat = loadtxt("limit_data/AxionPhoton/Xray-SuperStarClusters.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Xray-SuperStarClusters.txt')
         FilledLimit(ax,dat,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=False,edgealpha=edgealpha,lw=lw)
         if text_on:
             plt.text(text_pos[0],text_pos[1],r'{\bf Star}',fontsize=fs,color=text_col,ha='left',va='top',rotation=rotation,clip_on=True,path_effects=line_background(1,'k'))
@@ -1266,49 +1268,49 @@ class AxionPhoton():
 
     def Fermi_GalacticSN(ax,text_label=r'{\bf Fermi SN}',text_pos=[1e-9,5e-13],col=[0.0, 0.42, 0.24],text_col=[0.0, 0.42, 0.24],fs=15,zorder=0.0,text_on=True,rotation=43,lw=1.5,facealpha=0.05,edgealpha=0.6):
         # Fermi nearby SN prospects arXiv:[1609.02350]
-        dat = loadtxt("limit_data/AxionPhoton/Projections/FermiSN.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/FermiSN.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,lw=lw,rotation=rotation,facealpha=facealpha,edgealpha=edgealpha)
         return
 
     def MUSE(ax,text_label=r'{\bf MUSE}',text_pos=[1.5,0.7e-12],col='royalblue',text_col='royalblue',fs=15,zorder=0.01,text_on=True,lw=0):
         # Telescopes (MUSE) [2009.01310]
-        dat = loadtxt("limit_data/AxionPhoton/Telescopes_MUSE.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Telescopes_MUSE.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,edgecolor=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=90,lw=lw,edgealpha=0)
         return
 
     def VIMOS(ax,text_label=r'{\bf VIMOS}',text_pos=[10,0.22e-11],col='#2b2259',text_col='#2b2259',fs=15,zorder=0.01,text_on=True,lw=0):
         # Telescopes (VIMOS) [astro-ph/0611502]
-        dat = loadtxt("limit_data/AxionPhoton/Telescopes_VIMOS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Telescopes_VIMOS.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,edgecolor=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=-90,lw=lw,edgealpha=0)
         return
 
     def HST(ax,text_label=r'{\bf HST}',text_pos=[7,3.4e-11],col='darkblue',text_col='w',fs=11,zorder=1e-5,text_on=True,lw=1.5,edgealpha=1,edgecolor='k',rotation=0):
         # Telescopes (HST)
-        dat = loadtxt("limit_data/AxionPhoton/HST.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/HST.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,edgecolor=edgecolor,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=rotation,lw=lw,edgealpha=edgealpha,path_effects=line_background(1,'k'))
         return
 
     def GammaRayAttenuation(ax,text_label=r'{\bf $\gamma$}',text_pos=[12,1.1e-11],col=[0.0, 0.2, 0.6],text_col=[0.0, 0.2, 0.6],fs=13,zorder=1e-6,text_on=True,lw=1.5,edgealpha=1,edgecolor='k',rotation=0):
         # Gamma ray attentuation on EBL, ALP dark atter bound
-        dat = loadtxt("limit_data/AxionPhoton/GammaRayAttenuation.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/GammaRayAttenuation.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,edgecolor=edgecolor,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=rotation,lw=lw,edgealpha=edgealpha)
         return
 
     def SolarBasin(ax,text_label=r'{\bf Solar basin}',rotation=98,text_pos=[0.45e4,0.18e-11],col=[0.03, 0.42, 0.29],text_col='w',fs=13,zorder=0.01,text_on=True,lw=1.5,edgecolor='k'):
-        dat = loadtxt("limit_data/AxionPhoton/SolarBasin.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SolarBasin.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,edgecolor=edgecolor,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=rotation,lw=lw,edgealpha=1)
         return
 
     def LeoT(ax,text_label=r'{\bf Leo T}',text_pos=[2.3e2,0.25e-13],col='midnightblue',text_col='w',fs=16,zorder=0.00003,text_on=True,rotation=-46,edgealpha=1,lw=1.5):
         # anomalous gas heating in Leo T dwarf
-        dat = loadtxt("limit_data/AxionPhoton/LeoT.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/LeoT.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=rotation,edgealpha=edgealpha,lw=lw)
         return
 
 
     def THESEUS(ax,text_label=r'{\bf THESEUS}',text_pos=[8e2,0.8e-17],col=[0.03, 0.57, 0.82],edgecolor=[0.03, 0.57, 0.82],text_col=[0.03, 0.57, 0.82],fs=17,zorder=0.00001,text_on=True,lw=1.5,facealpha=0.1):
         # THESEUS 2008.08306
-        dat = loadtxt("limit_data/AxionPhoton/Projections/THESEUS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/THESEUS.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,edgecolor=edgecolor,edgealpha=1,fs=fs,zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha)
         plt.plot([8e2,1.4e3],[0.8e-17,1.3e-17],'k-',lw=2.5)
         plt.plot([8e2,1.4e3],[0.8e-17,1.3e-17],'-',lw=2,color=col)
@@ -1316,20 +1318,20 @@ class AxionPhoton():
 
     def eROSITA(ax,text_label=r'{\bf eROSITA}',text_pos=[2e3,0.3e-18],col=[0.03, 0.57, 0.82],edgecolor=[0.03, 0.57, 0.82],text_col=[0.03, 0.57, 0.82],fs=17,zorder=0.00001,text_on=True,lw=1.5,facealpha=0.1):
         # eROSITA 2103.13241
-        dat = loadtxt("limit_data/AxionPhoton/Projections/eROSITA.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/eROSITA.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,edgecolor=edgecolor,edgealpha=1,fs=fs,zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha)
         plt.plot([2.1e3,3.5e3],[0.3e-18,0.4e-18],'-',lw=2.5,color=col)
         plt.plot([2.1e3,3.5e3],[0.3e-18,0.4e-18],'-',lw=2,color=col)
         return
 
     def XMMNewton(ax,text_label=r'{\bf XMM-Newton}',text_pos=[1e3,1.8e-18],col='#3b4ba1',edgecolor='k',text_col='#3b4ba1',fs=17,zorder=0.00001,text_on=True,lw=0.5,facealpha=1):
-        dat = loadtxt("limit_data/AxionPhoton/XMM-Newton.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/XMM-Newton.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,edgecolor=edgecolor,edgealpha=1,fs=fs,zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha)
         plt.plot([1.2e3,6e3],[1.3e-18,2e-18],'-',lw=2,color=col,path_effects=line_background(3,'k'))
         return
 
     def INTEGRAL(ax,text_label=r'{\bf INTEGRAL}',text_pos=[1.7e4,2.7e-19],col='#3b4ba1',edgecolor='k',text_col='#3b4ba1',fs=17,zorder=0.00001,text_on=True,lw=1.5,facealpha=1):
-        dat = loadtxt("limit_data/AxionPhoton/INTEGRAL.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/INTEGRAL.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,edgecolor=edgecolor,edgealpha=1,fs=fs,zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha)
         if text_on:
             plt.plot([2e4,8e4],[1.9e-19,2.3e-19],'-',lw=2,color=col,path_effects=line_background(3,'k'))
@@ -1337,12 +1339,12 @@ class AxionPhoton():
 
     def COBEFIRAS(ax,text_label=r'{\bf COBE/FIRAS}',text_pos=[0.45e2,4e-13],col='#234f8c',text_col='w',fs=13,zorder=0.0001,text_on=True,rotation=-46,lw=1.5,edgealpha=1):
         # anomalous gas heating in Leo T dwarf
-        dat = loadtxt("limit_data/AxionPhoton/COBE-FIRAS.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/COBE-FIRAS.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,rotation=rotation,edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
         return
 
     def IrreducibleFreezeIn(ax,text_label=r'{\bf Freeze-in}',text_pos=[0.7e6,7e-14],col='#376631',edgecolor='k',text_col='w',fs=24,zorder=0.009,text_on=True,lw=1.5,facealpha=1,rotation=-55,edgealpha=1):
-        dat = loadtxt("limit_data/AxionPhoton/IrreducibleFreezeIn.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/IrreducibleFreezeIn.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,
                     rotation=rotation,edgecolor=edgecolor,fs=fs,
                     zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha,edgealpha=edgealpha,path_effects=line_background(1.5,'k'))
@@ -1351,24 +1353,24 @@ class AxionPhoton():
     def Cosmology(ax,fs=30,text_on=True,edgealpha=1,lw=1.5):
         ## Cosmology constraints see arXiv:[1210.3196] for summary
         # Xray Background
-        dat = loadtxt("limit_data/AxionPhoton/XRAY.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/XRAY.txt')
         FilledLimit(ax,dat,r'{\bf X-rays}',y2=1e-10,text_pos=[1e4,0.8e-16],col=[0.03, 0.57, 0.82],text_col='w',fs=fs,zorder=0.00002,text_on=text_on,rotation=-50,ha='left',va='top',edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
 
         # Ionisation fraction
-        dat = loadtxt("limit_data/AxionPhoton/x_ion.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/x_ion.txt')
         FilledLimit(ax,dat,'',col=[0.27, 0.51, 0.71],text_col='k',fs=fs,zorder=0.001,text_on=False,edgealpha=edgealpha,lw=lw)
         if text_on:
             plt.text(100.5744*0.93,2e-11,r'{\bf Ionisation}',fontsize=fs-12,color='w',rotation=-90,ha='left',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
             plt.text(40*0.93,2e-11,r'{\bf fraction}',fontsize=fs-12,color='w',rotation=-90,ha='left',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
 
         # BBN+N_eff arXiv:[2002.08370]
-        dat = loadtxt("limit_data/AxionPhoton/BBN_Neff.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BBN_Neff.txt')
         FilledLimit(ax,dat,r'{\bf BBN}+$N_{\rm eff}$',text_pos=[2.5e5,3e-11],col='#17570a',
         text_col='w',fs=fs,zorder=0.001,text_on=text_on,rotation=-55,ha='left',va='top',edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
 
         # Extragalactic background light
-        EBL = loadtxt("limit_data/AxionPhoton/EBL.txt")
-        #EBL2 = loadtxt("limit_data/AxionPhoton/EBL2.txt")
+        EBL = loadtxt(lmtdir+'AxionPhoton/EBL.txt')
+        #EBL2 = loadtxt(lmtdir+'AxionPhoton/EBL2.txt')
         FilledLimit(ax,EBL,r'{\bf EBL}',text_pos=[9e4,2.5e-16],col=[0.0, 0.2, 0.6],text_col='w',fs=fs+5,zorder=0.001,text_on=text_on,rotation=-55,ha='left',va='top',edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
         #FilledLimit(ax,EBL2,'',col=[0.0, 0.2, 0.6],text_on=False,zorder=0.001,edgealpha=edgealpha,lw=lw)
 
@@ -1382,30 +1384,30 @@ class AxionPhoton():
 
     def GlobularClusters(ax,text_label=r'{\bf Globular clusters}',text_pos=[1e0,1.1e-10],col=[0.0, 0.66, 0.42],text_col='w',fs=25,zorder=0.05,text_on=True,lw=1.5,edgealpha=1):
         # Globular clusters arXiv:[1406.6053]
-        dat = loadtxt("limit_data/AxionPhoton/GlobularClusters.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/GlobularClusters.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,lw=lw,va='center',edgealpha=edgealpha,path_effects=line_background(1.5,'k'))
         return
 
     def GlobularClusters_R2(ax,text_label=r'{\bf Globular clusters ($R_2$)}',text_pos=[1e-3,5e-11],col=[0.0, 0.66, 0.42],text_col='w',fs=23,zorder=0.01,text_on=True,lw=1.5,edgealpha=1):
         # R2 parameter https://arxiv.org/pdf/2207.03102.pdf
-        dat = loadtxt("limit_data/AxionPhoton/GlobularClusters-R2.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/GlobularClusters-R2.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,lw=lw,va='center',edgealpha=edgealpha,path_effects=line_background(1.5,'k'))
         return
 
     def WhiteDwarfs(ax,text_label=r'\noindent {\bf White}\newline  {\bf dwarfs}',text_pos=[1.1e6,4e-8],col='#2ec763',text_col='w',fs=18,zorder=0.04,text_on=True,lw=1.5,rotation=87,edgealpha=1):
-        dat = loadtxt("limit_data/AxionPhoton/WhiteDwarfs.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/WhiteDwarfs.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,lw=lw,va='center',rotation=rotation,edgealpha=edgealpha,path_effects=line_background(1.5,'k'))
         return
 
     def SolarNu(ax,text_label=r'{\bf Solar} $\nu$',text_pos=[1e1,2e-9],col='seagreen',text_col='w',fs=33,zorder=1,text_on=True,lw=1.5,edgealpha=1):
         # Solar neutrino B8 bound arXiv:[1501.01639]
-        dat = loadtxt("limit_data/AxionPhoton/SolarNu.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SolarNu.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,fs=fs,zorder=zorder,text_on=text_on,lw=lw,va='center',edgealpha=edgealpha,path_effects=line_background(1.5,'k'))
         return
 
     def DiffuseGammaRays(ax,text_label=r'{\bf Diffuse}-$\gamma$',text_pos=[3e5,4e-10],col='#318c49',text_col='w',fs=21,zorder=0.0299,text_on=True,lw=1.5,rotation=0):
         # https://arxiv.org/pdf/2109.03244.pdf
-        dat = loadtxt("limit_data/AxionPhoton/DiffuseGammaRays.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/DiffuseGammaRays.txt')
         plt.fill(dat[:,0],dat[:,1],edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=1,zorder=zorder)
         if text_on:
@@ -1413,7 +1415,7 @@ class AxionPhoton():
         return
 
     def SNe_decay(ax,text_shift=[1,1],col='#15732e',text_col='w',fs=23,zorder=0.03,text_on=True,lw=1.5,rotation=-30,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/SNe-decay.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SNe-decay.txt')
         plt.fill(dat[:,0],dat[:,1],edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1423,7 +1425,7 @@ class AxionPhoton():
 
     def SN1987A_HeavyALP_gamma(ax,text_label=r'{\bf SN1987A} ($\gamma$)',text_pos=[0.8e5,2.0e-10],col='#067034',text_col='w',fs=18,zorder=0.029,text_on=True,lw=1.5,rotation=-25.5,edgealpha=1):
         # https://arxiv.org/pdf/2109.03244.pdf + Jaeckel et al. for high mass part
-        dat = loadtxt('limit_data/AxionPhoton/SN1987A_decay.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/SN1987A_decay.txt')
         plt.fill(dat[:,0],dat[:,1],edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1433,7 +1435,7 @@ class AxionPhoton():
 
     def SN1987A_HeavyALP_nu(ax,text_shift=[1,1],col='darkgreen',text_col='w',fs=17,zorder=0.03,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1):
         # https://arxiv.org/pdf/2109.03244.pdf
-        dat = loadtxt("limit_data/AxionPhoton/SN1987A_HeavyALP_nu.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SN1987A_HeavyALP_nu.txt')
         plt.fill(dat[:,0],dat[:,1],edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1454,19 +1456,19 @@ class AxionPhoton():
         else:
             rs1 = 0.0
             rs2 = 1.0
-        # dat = loadtxt('limit_data/AxionPhoton/NeutronStars_GreenBank.txt')
+        # dat = loadtxt(lmtdir+'AxionPhoton/NeutronStars_GreenBank.txt')
         # plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0.1)
         # plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'k-',alpha=0.5,lw=0.5,zorder=0)
         #
-        # dat = loadtxt('limit_data/AxionPhoton/NeutronStars_VLA.txt')
+        # dat = loadtxt(lmtdir+'AxionPhoton/NeutronStars_VLA.txt')
         # plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0.1)
         # plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'k-',alpha=0.5,lw=0.5,zorder=0)
         #
-        # dat = loadtxt('limit_data/AxionPhoton/NeutronStars_Battye.txt')
+        # dat = loadtxt(lmtdir+'AxionPhoton/NeutronStars_Battye.txt')
         # plt.fill_between(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0.1)
         # plt.plot(dat[:,0],dat[:,1]/(rs1*2e-10*dat[:,0]+rs2),'k-',alpha=0.5,lw=0.5,zorder=0)
 
-        dat = loadtxt('limit_data/AxionPhoton/NeutronStars_BreakthroughListen.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/NeutronStars_BreakthroughListen.txt')
         plt.fill_between(dat[0::xskip,0],dat[0::xskip,1]/(rs1*2e-10*dat[0::xskip,0]+rs2),y2=y2,edgecolor=None,facecolor=col,zorder=0.1)
         plt.plot(dat[0::xskip,0],dat[0::xskip,1]/(rs1*2e-10*dat[0::xskip,0]+rs2),'k-',alpha=edgealpha,lw=lw,zorder=0.1)
 
@@ -1481,10 +1483,10 @@ class AxionPhoton():
 
     def AxionStarExplosions(ax,text_label=r'{\bf Axion star explosions}',text_pos=[4e-11,1.8e-12],col='#124f5e',rotation=27,text_col='w',fs=12,zorder=0.001,text_on=True,edgealpha=1,lw=1.5):
         # Axion star explosions - assumes 100% dark matter and a certain core-soliton mass relation
-        dat = loadtxt('limit_data/AxionPhoton/AxionStarExplosions-1.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/AxionStarExplosions-1.txt')
         plt.fill(dat[:,0],dat[:,1],color=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',lw=lw,zorder=zorder,alpha=edgealpha)
-        dat = loadtxt('limit_data/AxionPhoton/AxionStarExplosions-2.txt')
+        dat = loadtxt(lmtdir+'AxionPhoton/AxionStarExplosions-2.txt')
         plt.fill(dat[:,0],dat[:,1],color=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',lw=lw,zorder=zorder,alpha=edgealpha)
         if text_on:
@@ -1493,7 +1495,7 @@ class AxionPhoton():
         return
 
     def BeamDump(ax,text_shift=[1,1],col='purple',text_col='w',fs=21,zorder=1.1,text_on=True,lw=1.5,rotation=-30,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/BeamDump.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BeamDump.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1503,7 +1505,7 @@ class AxionPhoton():
 
 
     def CMS_PbPb(ax,text_shift=[1,1],col='#851077',text_col='w',fs=17,zorder=0.2,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/CMS_PbPb.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/CMS_PbPb.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1512,7 +1514,7 @@ class AxionPhoton():
         return
 
     def ATLAS_PbPb(ax,text_shift=[1,1],col='#9732a8',text_col='#9732a8',fs=17,zorder=0.1,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/ATLAS_PbPb.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/ATLAS_PbPb.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1521,7 +1523,7 @@ class AxionPhoton():
         return
 
     def LHC_pp(ax,text_shift=[1,1],col='#a11366',text_col='#a11366',fs=17,zorder=0.1,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/LHC_pp.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/LHC_pp.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1530,7 +1532,7 @@ class AxionPhoton():
         return
 
     def NOMAD(ax,text_shift=[1,1],col='#96062a',text_col='w',fs=20,zorder=1.9,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/NOMAD.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/NOMAD.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1539,7 +1541,7 @@ class AxionPhoton():
         return
 
     def BaBar(ax,text_shift=[1,1],col='#7a113d',text_col='w',fs=25,zorder=1.65,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/BaBar.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BaBar.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1548,7 +1550,7 @@ class AxionPhoton():
         return
 
     def LEP(ax,text_shift=[1,1],col='#824271',text_col='w',fs=25,zorder=0.9,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/LEP.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/LEP.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1557,7 +1559,7 @@ class AxionPhoton():
         return
 
     def PrimEx(ax,text_shift=[1,1],col='#582078',text_col='#582078',fs=15,zorder=0.1,text_on=True,lw=1.5,rotation=-70,ha='center',edgealpha=1,path_effects=line_background(3,'w')):
-        dat = loadtxt("limit_data/AxionPhoton/PrimEx.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/PrimEx.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1566,7 +1568,7 @@ class AxionPhoton():
         return
 
     def BelleII(ax,text_shift=[1,1],col='#7a4282',text_col='w',fs=13.5,zorder=0.1,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/BelleII.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BelleII.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1575,7 +1577,7 @@ class AxionPhoton():
         return
 
     def BESIII(ax,text_shift=[1,1],col='#7a2282',text_col='#7a2282',fs=15.5,zorder=0.0,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/BESIII.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BESIII.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1584,7 +1586,7 @@ class AxionPhoton():
         return
 
     def OPAL(ax,text_shift=[1,1],col='#6a113d',text_col='#6a113d',fs=11.5,zorder=0.0,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/OPAL.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/OPAL.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1730,7 +1732,7 @@ class AxionPhoton():
 
     # ULTRALIGHT AXIONS:
     def SuperMAG(ax,text_shift=[1,1],col='red',text_col='w',fs=18,zorder=3,text_on=True,lw=1.5,rotation=-48,ha='center',edgealpha=1,path_effects=line_background(2,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/SuperMAG.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SuperMAG.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1739,7 +1741,7 @@ class AxionPhoton():
         return
 
     def BICEPKECK(ax,text_shift=[1,1],col='#49548a',text_col='w',fs=20,zorder=1.2,text_on=True,lw=1.5,rotation=90,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/BICEP-KECK.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/BICEP-KECK.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1748,7 +1750,7 @@ class AxionPhoton():
         return
 
     def POLARBEAR(ax,text_shift=[1,1],col='dodgerblue',text_col='w',fs=12,zorder=1.2,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/POLARBEAR.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/POLARBEAR.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1758,7 +1760,7 @@ class AxionPhoton():
 
 
     def MOJAVE(ax,text_shift=[1,1],col='royalblue',text_col='w',fs=20,zorder=1.2,text_on=True,lw=1.5,rotation=32,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/MOJAVE.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/MOJAVE.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1767,7 +1769,7 @@ class AxionPhoton():
         return
 
     def SPT(ax,text_shift=[1,1],col='#403c75',text_col='w',fs=18,zorder=1.01,text_on=True,lw=1.5,rotation=39,ha='center',edgealpha=1,path_effects=line_background(1.5,'k')):
-        dat = loadtxt("limit_data/AxionPhoton/SPT.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/SPT.txt')
         dat[:,1] /= 1.1
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
@@ -1777,7 +1779,7 @@ class AxionPhoton():
         return
 
     def PPA(ax,text_shift=[1,1],col='#403c75',text_col='#403c75',fs=18,zorder=0.1,text_on=True,lw=1.5,rotation=42,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/Projections/PPA.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/PPA.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder,alpha=0.1)
         plt.plot(dat[:,0],dat[:,1],'--',lw=lw,color=col,alpha=edgealpha,zorder=zorder)
 
@@ -1786,7 +1788,7 @@ class AxionPhoton():
         return
 
     def PPTA_QUIJOTE(ax,text_shift=[1,1],col='darkblue',text_col='darkblue',fs=15,zorder=1.2,text_on=True,lw=1.5,rotation=39,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/PPTA-QUIJOTE.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/PPTA-QUIJOTE.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color='k',alpha=edgealpha,zorder=zorder)
 
@@ -1795,7 +1797,7 @@ class AxionPhoton():
         return
 
     def TwistedAnyonCavity(ax,text_shift=[1,1],col='crimson',text_col='crimson',fs=22,zorder=0.1,text_on=True,lw=1.5,rotation=0,ha='center',edgealpha=1,path_effects=[]):
-        dat = loadtxt("limit_data/AxionPhoton/Projections/TwistedAnyonCavity.txt")
+        dat = loadtxt(lmtdir+'AxionPhoton/Projections/TwistedAnyonCavity.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1,edgecolor=None,facecolor=col,zorder=zorder,alpha=0.2)
         plt.plot(dat[:,0],dat[:,1],'--',lw=lw,color=col,alpha=edgealpha,zorder=zorder)
 
@@ -1855,17 +1857,17 @@ class AxionElectron():
 
     def XENON1T(ax,col='darkred',fs=19,text_on=True,zorder=0.51,lw=2,text_shift=[1,1],**kwargs):
         # XENON1T S2 analysis arXiv:[1907.11485]
-        dat = loadtxt("limit_data/AxionElectron/XENON1T_DM_S2.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/XENON1T_DM_S2.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
         # XENON1T S1+S2 analysis arXiv:[2006.09721]
-        dat = loadtxt("limit_data/AxionElectron/XENON1T_DM_S1S2.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/XENON1T_DM_S1S2.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
         # XENON1T Single electron analysis arXiv:[2112.12116]
-        dat = loadtxt("limit_data/AxionElectron/XENON1T_DM_SE.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/XENON1T_DM_SE.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
@@ -1876,7 +1878,7 @@ class AxionElectron():
 
     def XENONnT(ax,col='darkred',fs=19,text_on=True,zorder=0.51,lw=2,text_shift=[1,1],**kwargs):
         # XENONnT ALP DM
-        dat = loadtxt("limit_data/AxionElectron/XENONnT.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/XENONnT.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
@@ -1885,7 +1887,7 @@ class AxionElectron():
 
     def XENONnT_Solar(ax,col='darkred',fs=30,text_on=True,zorder=0.52,lw=2,text_shift=[1,1],**kwargs):
         # Solar axions
-        dat = loadtxt("limit_data/AxionElectron/XENONnT_Solar.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/XENONnT_Solar.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
         if text_on:
@@ -1894,7 +1896,7 @@ class AxionElectron():
 
     def SolarBasin(ax,col='#7d203c',fs=20,text_on=True,lw=2,text_shift=[0.8,1],zorder=0.6,**kwargs):
         # Solar axion basin arXiv:[2006.12431]
-        dat = loadtxt("limit_data/AxionElectron/XENON1T_S2_SolarAxionBasin.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/XENON1T_S2_SolarAxionBasin.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
         if text_on:
@@ -1905,7 +1907,7 @@ class AxionElectron():
 
     def LUX(ax,col='indianred',fs=30,text_on=True,lw=2,text_pos=[0.2e-8,7e-12],zorder=0.52,**kwargs):
         # LUX arXiv:[1704.02297]
-        dat = loadtxt("limit_data/AxionElectron/LUX.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/LUX.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
@@ -1914,7 +1916,7 @@ class AxionElectron():
         return
 
     def PandaX(ax,col='firebrick',fs=20,text_on=True,lw=2,text_pos=[1.2e3,4.5e-13],zorder=0.53,rotation=20,**kwargs):
-        dat = loadtxt("limit_data/AxionElectron/PandaX.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/PandaX.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
@@ -1923,7 +1925,7 @@ class AxionElectron():
         return
 
     def GERDA(ax,col='#d13617',fs=22,text_on=True,text_pos=[1.6e5,1.9e-11],zorder=0.52,lw=2,text_col='w',**kwargs):
-        dat = loadtxt("limit_data/AxionElectron/GERDA.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/GERDA.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
@@ -1933,12 +1935,12 @@ class AxionElectron():
 
     def EDELWEISS(ax,col='#8f2a1f',projection=False,fs=10,text_col='w',text_on=True,text_pos=[1.25e4,1.4e-12],zorder=0.57,lw=2,rotation=60,**kwargs):
         # EDELWEISS arXiv:[1808.02340]
-        dat = loadtxt("limit_data/AxionElectron/EDELWEISS.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/EDELWEISS.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'k-',alpha=1,zorder=zorder,lw=lw)
 
         if projection:
-            dat = loadtxt("limit_data/AxionElectron/Projections/EDELWEISS.txt")
+            dat = loadtxt(lmtdir+'AxionElectron/Projections/EDELWEISS.txt')
             plt.plot(dat[:,0],dat[:,1],'--',color=col,zorder=zorder,lw=lw)
         if text_on:
             plt.text(text_pos[0],text_pos[1],r'{\bf EDELWEISS',fontsize=fs,rotation=rotation,color=text_col,path_effects=line_background(1.5,'k'),clip_on=True)
@@ -1947,7 +1949,7 @@ class AxionElectron():
 
     def SuperCDMS(ax,col='#800f24',fs=20,text_on=True,text_pos=[5e1,2.7e-11],text_col='w',zorder=0.58,rotation=-84,lw=2,**kwargs):
         # SuperCDMS arXiv:[1911.11905]
-        dat = loadtxt("limit_data/AxionElectron/SuperCDMS.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/SuperCDMS.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zorder,lw=lw)
         if text_on:
@@ -1956,7 +1958,7 @@ class AxionElectron():
 
     def DARWIN(ax,col='brown',fs=20,text_on=True,text_pos=[0.3e3,2e-14],zorder=0.1,lw=3,**kwargs):
         # DARWIN arXiv:[1606.07001]
-        dat = loadtxt("limit_data/AxionElectron/Projections/DARWIN.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Projections/DARWIN.txt')
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zorder,lw=lw)
         if text_on:
             plt.text(text_pos[0],text_pos[1],r'{\bf DARWIN}',fontsize=fs,color=col,ha='left',va='top',clip_on=True,**kwargs)
@@ -1964,7 +1966,7 @@ class AxionElectron():
 
     def LZ(ax,col='crimson',fs=20,text_on=True,text_pos=[2.3e3,0.8e-14],lw=3,zorder=0.1,**kwargs):
         # DARWIN arXiv:[2102.11740]
-        dat = loadtxt("limit_data/AxionElectron/Projections/LZ.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Projections/LZ.txt')
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zorder,lw=lw)
         if text_on:
             plt.text(text_pos[0],text_pos[1],r'{\bf LZ}',fontsize=fs,color=col,ha='left',va='top',clip_on=True,**kwargs)
@@ -1972,7 +1974,7 @@ class AxionElectron():
 
     def Semiconductors(ax,col='darkred',fs=15,text_on=True,text_pos=[0.9e0,1.7e-12],lw=2,rotation=-80,zorder=0.51,**kwargs):
         # ALP Absorption with semiconductors arXiv:[1608.02123]
-        dat = loadtxt("limit_data/AxionElectron/Projections/SemiconductorAbsorption.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Projections/SemiconductorAbsorption.txt')
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zorder,lw=lw)
         if text_on:
             plt.text(text_pos[0],text_pos[1],r'{\bf Semiconductors}',fontsize=fs,color=col,ha='left',va='top',rotation=rotation,clip_on=True,**kwargs)
@@ -1980,7 +1982,7 @@ class AxionElectron():
 
     def NVCenters(ax,col='red',fs=20,text_on=True,text_shift=[1,1],lw=2,zorder=-0.5,rotation=65,**kwargs):
         # NV center dc magnetometery
-        dat = loadtxt("limit_data/AxionElectron/Projections/NVCenters.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Projections/NVCenters.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.2,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=0.7,zorder=zorder,lw=lw)
         if text_on:
@@ -1989,7 +1991,7 @@ class AxionElectron():
 
     def Magnon(ax,col='crimson',fs=18,text_on=True,text_pos=[1.2e-6,1e-14],lw=2,zorder=0.51,**kwargs):
         # Axion-magnon conversion arXiv:[2005.10256]
-        dat = loadtxt("limit_data/AxionElectron/Projections/Magnon.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Projections/Magnon.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.2,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=0.7,zorder=zorder,lw=lw)
         if text_on:
@@ -1998,7 +2000,7 @@ class AxionElectron():
 
     def MagnonScan(ax,col='darkred',fs=18,text_on=True,text_shift=[1,1],lw=2,zorder=0.5,**kwargs):
         # Axion-magnon conversion arXiv:[2005.10256 and 2001.10666]
-        dat = loadtxt("limit_data/AxionElectron/Projections/MagnonScan.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Projections/MagnonScan.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.2,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=0.7,zorder=zorder,lw=lw)
         if text_on:
@@ -2008,7 +2010,7 @@ class AxionElectron():
 
     def QUAX(ax,col='crimson',fs=17,text_on=True,text_pos=[50e-6,0.9e-10],lw=1,zorder=10.0,text_rot=-90,**kwargs):
         # QUAX https://inspirehep.net/literature/1777123
-        dat = loadtxt("limit_data/AxionElectron/QUAX.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/QUAX.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.4,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'-',color=col,alpha=1.0,zorder=zorder,lw=lw,path_effects=line_background(lw+2,'k'))
         if text_on:
@@ -2017,14 +2019,14 @@ class AxionElectron():
 
     def RedGiants(ax,col=[0.0, 0.66, 0.42],text_pos=[0.2e-8,2e-13],text_on=True,zorder=0.5,fs=30,lw=2,**kwargs):
         # Red Giants arXiv:[2007.03694]
-        dat = loadtxt("limit_data/AxionElectron/RedGiants_HighMass.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/RedGiants_HighMass.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=zorder,lw=lw)
         if text_on: plt.text(text_pos[0],text_pos[1],r'{\bf Red giants (}$\omega${\bf Cen)}',fontsize=fs,color='w',clip_on=True,path_effects=line_background(1.5,'k'),**kwargs)
         return
 
     def Xrays(ax,col='green',text_shift=[1,1],text_on=True,zorder=0.5,fs=17,rotation=-80,alpha=0.3,**kwargs):
-        dat = loadtxt("limit_data/AxionElectron/Xray_1loop.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/Xray_1loop.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder,alpha=alpha)
         plt.plot(dat[:,0],dat[:,1],':',color='k',zorder=zorder,lw=2,alpha=1)
 
@@ -2036,7 +2038,7 @@ class AxionElectron():
 
     def SolarNu(ax,col='seagreen',text_pos=[0.2e-8,3.8e-11],text_on=True,zorder=0.7,fs=30,lw=2,**kwargs):
         # Solar neutrinos arXiv:[0807.2926]
-        dat = loadtxt("limit_data/AxionElectron/SolarNu.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/SolarNu.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor=None,facecolor=col,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=zorder,lw=lw)
         if text_on: plt.text(text_pos[0],text_pos[1],r'{\bf Solar} $\nu$',fontsize=fs,color='w',clip_on=True,path_effects=line_background(1.5,'k'),**kwargs)
@@ -2044,7 +2046,7 @@ class AxionElectron():
 
     def WhiteDwarfHint(ax,col='k',text_pos=[1e-7,1e-13],facealpha=0.3,zorder=1.0,text_on=True,fs=20,**kwargs):
         # White dwarf hint arXiv:[1708.02111]
-        dat = loadtxt("limit_data/AxionElectron/WDhint.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/WDhint.txt')
         plt.fill_between(dat[:,0],dat[:,1],color=col,edgecolor=None,lw=0.001,zorder=zorder,alpha=facealpha)
         if text_on: plt.text(text_pos[0],text_pos[1],r'{\bf White dwarf hint}',fontsize=fs,clip_on=True,**kwargs)
         return
@@ -2058,7 +2060,7 @@ class AxionElectron():
 
     def IrreducibleFreezeIn(ax,text_label=r'{\bf Freeze-in}',text_pos=[1.9e5,0.7e-14],col='#376631',
                         edgecolor='k',text_col='w',fs=24,zorder=0.009,text_on=True,lw=1,facealpha=1,rotation=-85,edgealpha=1):
-        dat = loadtxt("limit_data/AxionElectron/IrreducibleFreezeIn.txt")
+        dat = loadtxt(lmtdir+'AxionElectron/IrreducibleFreezeIn.txt')
         FilledLimit(ax,dat,text_label,text_pos=text_pos,col=col,text_col=text_col,
                     rotation=rotation,edgecolor=edgecolor,fs=fs,
                     zorder=zorder,text_on=text_on,lw=lw,ha='right',facealpha=facealpha,edgealpha=edgealpha,path_effects=line_background(1.5,'k'))
@@ -2137,13 +2139,13 @@ class AxionNeutron():
         # Old comagnetometer data arXiv:[1907.03767]
         y2 = ax.get_ylim()[1]
         zo = 0.3
-        dat = loadtxt("limit_data/AxionNeutron/OldComagnetometers.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/OldComagnetometers.txt')
         dat[:,1] *= 2*AxionNeutron.m_n
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=2.5)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=1.0)
         plt.text(2e-20,3e-5,r'{\bf Old comagnetometers}',fontsize=fs,color='w',ha='center',va='top',rotation=-10,clip_on=True,path_effects=line_background(1.5,'k'))
         if projection:
-            dat = loadtxt("limit_data/AxionNeutron/Projections/FutureComagnetometers.txt")
+            dat = loadtxt(lmtdir+'AxionNeutron/Projections/FutureComagnetometers.txt')
             dat[:,1] *= 2*AxionNeutron.m_n
             plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=1,lw=3)
             plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0,alpha=0.5)
@@ -2154,7 +2156,7 @@ class AxionNeutron():
         # arXiv:[1902.04644]
         y2 = ax.get_ylim()[1]
         zo = 1
-        dat = loadtxt("limit_data/AxionNeutron/nEDM.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/nEDM.txt')
         dat[:,1] *= 2*AxionNeutron.m_n
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
@@ -2165,10 +2167,10 @@ class AxionNeutron():
     def NASDUCK(ax,col=[0.77, 0.1, 0.13],fs=24,projection=True):
         y2 = ax.get_ylim()[1]
         zo = 1
-        dat = loadtxt("limit_data/AxionNeutron/NASDUCK.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/NASDUCK.txt')
         dat[:,1] *= 2*AxionNeutron.m_n
 
-        dat2 = loadtxt("limit_data/AxionNeutron/NASDUCK-SERF.txt")
+        dat2 = loadtxt(lmtdir+'AxionNeutron/NASDUCK-SERF.txt')
         dat2[:,1] *= 2*AxionNeutron.m_n
 
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
@@ -2181,7 +2183,7 @@ class AxionNeutron():
         return
 
     def JEDI(ax,text_pos=[3.85e-10,1.1e-6],col='#a3435e',text_col='w',text_rot=90,fs=20,zorder=0.499):
-        dat = loadtxt('limit_data/AxionNeutron/JEDI.txt')
+        dat = loadtxt(lmtdir+'AxionNeutron/JEDI.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=1,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf JEDI}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2190,7 +2192,7 @@ class AxionNeutron():
     def PSI_HgM(ax,col='#a82920',fs=21,rotation=40):
         y2 = ax.get_ylim()[1]
         zo = 1.001
-        dat = loadtxt("limit_data/AxionNeutron/PSI_HgM.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/PSI_HgM.txt')
         dat[:,1] *= 2*AxionNeutron.m_n
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
@@ -2199,7 +2201,7 @@ class AxionNeutron():
 
     def SuperfluidHe3(ax,col='darkred',zo=-10):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/AxionNeutron/Projections/SuperfluidHe3.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/Projections/SuperfluidHe3.txt')
         dat[:,1] *= 2*AxionNeutron.m_n
         plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zo,lw=1.5)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=0.2)
@@ -2212,13 +2214,13 @@ class AxionNeutron():
             # arXiv:[1902.04644]
             y2 = ax.get_ylim()[1]
             zo = 2
-            dat = loadtxt("limit_data/AxionNeutron/CASPEr_ZULF.txt")
+            dat = loadtxt(lmtdir+'AxionNeutron/CASPEr_ZULF.txt')
             dat[:,1] *= 2*AxionNeutron.m_n
             plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=1.0)
             plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1.0,zorder=zo,lw=1.5)
             plt.text(3.5e-16,7e-4,r'{\bf CASPEr-ZULF}',fontsize=fs-3,color='w',ha='left',va='top',rotation=40.5,rotation_mode='anchor',clip_on=True,path_effects=line_background(1.5,'k'))
             if projection:
-                dat = loadtxt("limit_data/AxionNeutron/Projections/CASPEr_ZULF.txt")
+                dat = loadtxt(lmtdir+'AxionNeutron/Projections/CASPEr_ZULF.txt')
                 dat[:,1] *= 2*AxionNeutron.m_n
                 plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.0,alpha=0.3)
                 plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=0.1,lw=3)
@@ -2229,7 +2231,7 @@ class AxionNeutron():
             # arXiv:[1901.10843]
             y2 = ax.get_ylim()[1]
             zo = 1.5
-            dat = loadtxt("limit_data/AxionNeutron/CASPEr_Comagnetometer.txt")
+            dat = loadtxt(lmtdir+'AxionNeutron/CASPEr_Comagnetometer.txt')
             dat[:,1] *= 2*AxionNeutron.m_n
             plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=1.0)
             plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=0.8,zorder=zo,lw=1.5)
@@ -2240,7 +2242,7 @@ class AxionNeutron():
             # arXiv:[1711.08999]
             y2 = ax.get_ylim()[1]
             zo = -1
-            dat = loadtxt("limit_data/AxionNeutron/Projections/CASPEr_wind.txt")
+            dat = loadtxt(lmtdir+'AxionNeutron/Projections/CASPEr_wind.txt')
             dat[:,1] *= 2*AxionNeutron.m_n
             plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=0.3)
             plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zo,lw=3)
@@ -2250,7 +2252,7 @@ class AxionNeutron():
     def K3He_Comagnetometer_DarkMatter(ax,col='#8a1d34',fs=23,projection=True):
         y2 = ax.get_ylim()[1]
         zo = 0.5
-        dat = loadtxt("limit_data/AxionNeutron/K-3He_Comagnetometer_DarkMatter.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/K-3He_Comagnetometer_DarkMatter.txt')
         dat[:,1] *= 2*AxionNeutron.m_n
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=1)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=1.5)
@@ -2263,7 +2265,7 @@ class AxionNeutron():
         # Long range spin dependent forces K-3He arXiv:[0809.4700]
         zo = 0.2
         col = 'dimgray'
-        dat = loadtxt("limit_data/AxionNeutron/K-3He_Comagnetometer.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/K-3He_Comagnetometer.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
         plt.text(2.0e-8,3e-4,r'{\bf K-}$^3${\bf He}',fontsize=fs,color='w',ha='left',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2273,7 +2275,7 @@ class AxionNeutron():
         zo = 0.21
         col = [0.2, 0.25, 0.25]
         #scale = 1.5/4.9 # to convert from pseudoscalar constraint to derivative constraint
-        dat = loadtxt("limit_data/AxionNeutron/TorsionBalance.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/TorsionBalance.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
         plt.text(1e-8,2.5e-3,r'{\bf Torsion balance}',fontsize=fs*1.1,color='w',ha='left',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2281,7 +2283,7 @@ class AxionNeutron():
         # Casimir effect
         zo = 0.21
         col = [0.2, 0.15, 0.15]
-        dat = loadtxt("limit_data/AxionNeutron/Casimir.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/Casimir.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
         plt.text(1e-5,3e-2,r'{\bf Casimir}',fontsize=fs*1.1,color='w',ha='left',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2290,7 +2292,7 @@ class AxionNeutron():
         # SNO, axion-induced dissociation of deuterons  arXiv:[2004.02733]
         zo = 0.03
         col = 'darkred'
-        dat = loadtxt("limit_data/AxionNeutron/SNO.txt")
+        dat = loadtxt(lmtdir+'AxionNeutron/SNO.txt')
         dat[:,1] *= AxionNeutron.m_n # Note that their notation defines their g_an as my g_an/m_n not g_an/2m_n as other use.
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
@@ -2300,7 +2302,7 @@ class AxionNeutron():
             # Proton storage ring arXiv:[2005.11867]
             zo = -1
             col = 'crimson'
-            dat = loadtxt("limit_data/AxionNeutron/Projections/StorageRing.txt")
+            dat = loadtxt(lmtdir+'AxionNeutron/Projections/StorageRing.txt')
             dat[:,1] *= 2*AxionNeutron.m_n
             plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=0.2)
             plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zo,lw=3)
@@ -2328,13 +2330,13 @@ class AxionNeutron():
         zo = 0.029
         # Stellar physics constraints
         # SN1987A cooling nucleon-nucleon Bremsstrahlung arXiv:[1906.11844]
-        # SN = loadtxt("limit_data/AxionNeutron/SN1987A.txt")
+        # SN = loadtxt(lmtdir+'AxionNeutron/SN1987A.txt')
         # plt.fill_between(SN[:,0],SN[:,1],y2=y2,edgecolor=None,facecolor='#067034',zorder=zo)
         # plt.plot(SN[:,0],SN[:,1],'k-',alpha=1,lw=2.5,zorder=zo)
         # plt.text(0.8e-2,2.4e-9,r'{\bf SN1987A}',fontsize=fs-7,color='w',ha='right',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
 
         # https://arxiv.org/pdf/2111.09892.pdf
-        SN = loadtxt("limit_data/AxionNeutron/NeutronStars.txt")
+        SN = loadtxt(lmtdir+'AxionNeutron/NeutronStars.txt')
         plt.fill_between(SN[:,0],SN[:,1],y2=y2,edgecolor=None,facecolor='DarkGreen',zorder=zo)
         plt.plot(SN[:,0],SN[:,1],'k-',alpha=1,lw=2.5,zorder=zo)
         plt.text(0.8e-2,0.8e-8,r'{\bf Neutron star cooling}',fontsize=fs,color='w',ha='right',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2383,12 +2385,12 @@ class AxionProton():
     def NASDUCK(ax,col=[0.77, 0.1, 0.13],fs=17,projection=True):
         y2 = ax.get_ylim()[1]
         zo = 1
-        #dat = loadtxt("limit_data/AxionProton/NASDUCK.txt") # this limit seems to have been retracted so is commented out
+        #dat = loadtxt(lmtdir+'AxionProton/NASDUCK.txt') # this limit seems to have been retracted so is commented out
         #dat[:,1] *= 2*AxionProton.m_p
         #plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         #plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=1.5)
 
-        dat1 = loadtxt("limit_data/AxionProton/NASDUCK-SERF.txt")
+        dat1 = loadtxt(lmtdir+'AxionProton/NASDUCK-SERF.txt')
         dat1[:,1] *= 2*AxionProton.m_p
         plt.fill_between(dat1[:,0],dat1[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat1[:,0],dat1[:,1],'-',color='k',alpha=1,zorder=zo,lw=1.5)
@@ -2402,7 +2404,7 @@ class AxionProton():
         # reinterpreted in: hep-ph/0611223
         zo = 0.21
         col = [0.2, 0.25, 0.25]
-        dat = loadtxt("limit_data/AxionProton/TorsionBalance.txt")
+        dat = loadtxt(lmtdir+'AxionProton/TorsionBalance.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=1.5)
         plt.text(1e-8,2e-3,r'{\bf Torsion balance}',fontsize=fs*1.1,color='w',ha='left',va='top',path_effects=line_background(1.5,'k'),clip_on=True)
@@ -2410,7 +2412,7 @@ class AxionProton():
         # Casimir effect
         zo = 0.21
         col = [0.2, 0.15, 0.15]
-        dat = loadtxt("limit_data/AxionProton/Casimir.txt")
+        dat = loadtxt(lmtdir+'AxionProton/Casimir.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
         plt.text(1e-5,3e-2,r'{\bf Casimir}',fontsize=fs*1.1,color='w',ha='left',va='top',clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2419,7 +2421,7 @@ class AxionProton():
         # SNO, axion-induced dissociation of deuterons  arXiv:[2004.02733]
         zo = 0.03
         col = 'darkred'
-        dat = loadtxt("limit_data/AxionProton/SNO.txt")
+        dat = loadtxt(lmtdir+'AxionProton/SNO.txt')
         dat[:,1] *= AxionProton.m_p # Note that their notation defines their g_an as my g_an/m_n not g_an/2m_n as other use.
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo)
         plt.plot(dat[:,0],dat[:,1],'-',color='k',alpha=1,zorder=zo,lw=3)
@@ -2429,7 +2431,7 @@ class AxionProton():
             # Proton storage ring arXiv:[2005.11867]
             zo = -1
             col = 'crimson'
-            dat = loadtxt("limit_data/AxionNeutron/Projections/StorageRing.txt")
+            dat = loadtxt(lmtdir+'AxionNeutron/Projections/StorageRing.txt')
             dat[:,1] *= 2*AxionProton.m_p
             plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=zo,alpha=0.2)
             plt.plot(dat[:,0],dat[:,1],'--',color=col,alpha=1.0,zorder=zo,lw=3)
@@ -2448,13 +2450,13 @@ class AxionProton():
 
         # Stellar physics constraints
         # SN1987A cooling nucleon-nucleon Bremsstrahlung arXiv:[1906.11844]
-        # SN = loadtxt("limit_data/AxionProton/SN1987A.txt")
+        # SN = loadtxt(lmtdir+'AxionProton/SN1987A.txt')
         # plt.fill_between(SN[:,0],SN[:,1],y2=y2,edgecolor=None,facecolor='#067034',zorder=0.01)
         # plt.plot(SN[:,0],SN[:,1],'k-',alpha=1,lw=2.5,zorder=0.01)
         # plt.text(0.8e-2,1.3e-5,r'{\bf SN1987A}',fontsize=fs,color='w',ha='right',va='top',path_effects=line_background(1.5,'k'),clip_on=True)
 
         # NS cooling Buschmann et al.
-        SN = loadtxt("limit_data/AxionProton/NeutronStars.txt")
+        SN = loadtxt(lmtdir+'AxionProton/NeutronStars.txt')
         plt.fill_between(SN[:,0],SN[:,1],y2=y2,edgecolor=None,facecolor='DarkGreen',zorder=0.02)
         plt.plot(SN[:,0],SN[:,1],'k-',alpha=1,lw=2.5,zorder=0.02)
         plt.text(0.8e-2,0.8e-8,r'{\bf Neutron star cooling}',fontsize=fs-6,color='w',ha='right',va='top',path_effects=line_background(1.5,'k'),clip_on=True)
@@ -2503,33 +2505,33 @@ class AxionEDM():
         return
 
     def nEDM(ax,text_pos=[3e-20,5e-18],col='darkred',text_col='w',text_rot=0,fs=30,zorder=-1,lw=1.5):
-        dat = loadtxt('limit_data/AxionEDM/nEDM.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/nEDM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf nEDM}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def BeamEDM(ax,text_pos=[6e-18,2e-15],col='#822f2b',text_col='w',text_rot=32,fs=22,zorder=-1,lw=1.5):
-        dat = loadtxt('limit_data/AxionEDM/BeamEDM.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/BeamEDM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Beam EDM}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def HfF(ax,text_pos=[0.7e-19,1.5e-14],col='#a3435e',text_col='w',text_rot=33,fs=22,zorder=-1,lw=1.5):
-        dat = loadtxt('limit_data/AxionEDM/HfF.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/HfF.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf HfF}$^+$',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def RbQuartz(ax,text_label=r'{\bf Rb/Quartz}',text_pos=[0.15e-16,2e-12],text_rot=28,col='#c11a4e',text_col='w',fs=20,zorder=0.10999,text_on=True,Projection=False,edgealpha=1,lw=1.5):
-        dat = loadtxt("limit_data/AxionEDM/RbQuartz.txt")
+        dat = loadtxt(lmtdir+'AxionEDM/RbQuartz.txt')
         FilledLimit(ax,dat,text_label,y2=1e20,rotation=text_rot,text_pos=text_pos,text_col=text_col,col=col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
         return
 
     def SN1987A(ax,text_pos=[2e-10,1.2e-8],col='#067034',text_col='w',text_rot=0,fs=33,zorder=1,lw=1.5):
-        dat = loadtxt('limit_data/AxionEDM/SN1987A.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/SN1987A.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf SN1987A}',color=text_col,rotation=text_rot,fontsize=fs,ha='right',clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2537,14 +2539,14 @@ class AxionEDM():
 
 
     def PlanckBAO(ax,text_pos=[3e-10,0.5e-9],col='#136919',text_col='w',text_rot=0,fs=26,zorder=0.8,lw=1.5):
-        dat = loadtxt('limit_data/AxionEDM/PlanckBAO.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/PlanckBAO.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Planck+BAO}',color=text_col,rotation=text_rot,fontsize=fs,ha='right',clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def BBN(ax,text_pos=[3e-16,4e-18],col='#1f4969',text_col='w',text_rot=33.5,fs=23,zorder=-6,lw=1.5):
-        dat = loadtxt('limit_data/AxionEDM/BBN.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/BBN.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf BBN (dark matter)}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2552,21 +2554,21 @@ class AxionEDM():
 
 
     def CASPEr(ax,text_pos=[0.5e-5,0.25e-3],col='crimson',text_col='w',fs=20,zorder=30,projection=False,text_on=True,lw=4):
-        dat = loadtxt('limit_data/AxionEDM/CASPEr-electric.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/CASPEr-electric.txt')
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw+2,alpha=1,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],color=col,lw=lw,alpha=1,zorder=zorder)
         if text_on:
             plt.text(text_pos[0],text_pos[1],r'{\bf CASPEr-electric}',color=text_col,fontsize=fs,ha='right',zorder=zorder,path_effects=line_background(1.5,'k'))
         if projection:
-            # dat = loadtxt('limit_data/AxionEDM/Projections/CASPEr-electric-PhaseI.txt')
+            # dat = loadtxt(lmtdir+'AxionEDM/Projections/CASPEr-electric-PhaseI.txt')
             # plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,lw=lw-1,alpha=0.05,zorder=-10)
             # plt.plot(dat[:,0],dat[:,1],'--',color=col,zorder=-10,lw=lw-1)
 
-            dat = loadtxt('limit_data/AxionEDM/Projections/CASPEr-electric-PhaseII.txt')
+            dat = loadtxt(lmtdir+'AxionEDM/Projections/CASPEr-electric-PhaseII.txt')
             plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,lw=4,alpha=0.05,zorder=-10)
             plt.plot(dat[:,0],dat[:,1],'--',color=col,zorder=-10,lw=lw-1)
 
-            dat = loadtxt('limit_data/AxionEDM/Projections/CASPEr-electric-PhaseIII.txt')
+            dat = loadtxt(lmtdir+'AxionEDM/Projections/CASPEr-electric-PhaseIII.txt')
             plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,lw=lw-1,alpha=0.05,zorder=-10)
             plt.plot(dat[:,0],dat[:,1],'--',color=col,zorder=-10,lw=lw-1)
 
@@ -2578,7 +2580,7 @@ class AxionEDM():
         return
 
     def JEDI(ax,text_pos=[1.4e-10,1.5e-5],col='#a3435e',text_col='w',text_rot=90,fs=22,zorder=10,lw=1):
-        dat = loadtxt('limit_data/AxionEDM/JEDI.txt')
+        dat = loadtxt(lmtdir+'AxionEDM/JEDI.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf JEDI}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
@@ -2611,47 +2613,47 @@ class Axion_fa():
 
     def nEDM(ax,text_pos=[20e-20,0.3e-14],col='darkred',text_col='w',text_rot=40,fs=23,zorder=-1.1):
         # Already accounts for stochastic correction
-        dat = loadtxt('limit_data/fa/nEDM.txt')
+        dat = loadtxt(lmtdir+'fa/nEDM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=3,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf nEDM}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def BeamEDM(ax,text_pos=[6e-18,6e-13],col='#822f2b',text_col='w',text_rot=40,fs=22,zorder=-1):
-        dat = loadtxt('limit_data/fa/BeamEDM.txt')
+        dat = loadtxt(lmtdir+'fa/BeamEDM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=1.5,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Beam EDM}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def HfF(ax,text_pos=[0.7e-19,4e-12],col='#a3435e',text_col='w',text_rot=40,fs=22,zorder=-1):
-        dat = loadtxt('limit_data/fa/HfF.txt')
+        dat = loadtxt(lmtdir+'fa/HfF.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=1.5,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf HfF}$^+$',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def RbQuartz(ax,text_label=r'{\bf Rb/Quartz}',text_pos=[0.15e-16,0.5e-9],text_rot=35,col='#c11a4e',text_col='w',fs=20,zorder=0.10999,text_on=True,Projection=False,edgealpha=1,lw=1.5):
-        dat = loadtxt("limit_data/fa/RbQuartz.txt")
+        dat = loadtxt(lmtdir+'fa/RbQuartz.txt')
         FilledLimit(ax,dat,text_label,y2=1e20,rotation=text_rot,text_pos=text_pos,text_col=text_col,col=col,fs=fs,zorder=zorder,text_on=text_on,edgealpha=edgealpha,lw=lw,path_effects=line_background(1.5,'k'))
         return
 
     def SolarCore(ax,text_pos=[0.08e-10,0.12e-10],col='#50946e',text_col='w',text_rot=41,fs=30,zorder=-5,lw=2):
-        dat = loadtxt('limit_data/fa/SolarCore.txt')
+        dat = loadtxt(lmtdir+'fa/SolarCore.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Solar core}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def WhiteDwarfs(ax,text_pos=[0.9e-10,0.03e-11],col='#599967',text_col='w',text_rot=41,fs=28,zorder=-10,lw=2):
-        dat = loadtxt('limit_data/fa/WhiteDwarfs.txt')
+        dat = loadtxt(lmtdir+'fa/WhiteDwarfs.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf White dwarfs}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def GW170817(ax,text_pos=[7e-16,2e-17],zo=-7,linespacing_y=0.65,col='#95bd93',text_col='k',text_rot=0,fs=23):
-        dat = loadtxt('limit_data/fa/GW170817.txt')
+        dat = loadtxt(lmtdir+'fa/GW170817.txt')
         plt.fill_between(dat[:,0],dat[:,1],color=col,zorder=zo,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=3,alpha=1,zorder=zo)
         plt.text(text_pos[0],text_pos[1],r'{\bf GW170817}',color=text_col,rotation=text_rot,fontsize=fs,ha='center',clip_on=True)
@@ -2659,53 +2661,53 @@ class Axion_fa():
 
 
     def Pulsars(ax,text_pos=[3e-15,0.11e-16],linespacing_y=0.65,col='#30693d',text_col='#30693d',text_rot=0,fs=21,zo=-6.9):
-        dat = loadtxt('limit_data/fa/Pulsar.txt')
+        dat = loadtxt(lmtdir+'fa/Pulsar.txt')
         plt.fill_between(dat[:,0],dat[:,1],color=col,zorder=zo,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=3,alpha=1,zorder=zo)
         plt.text(text_pos[0],text_pos[1]*(1-linespacing_y),r'{\bf Pulsars}',color=text_col,rotation=text_rot,fontsize=fs,ha='center',clip_on=True)
         return
 
     def PlanckBAO(ax,text_pos=[8e-3,1.5e-7],col='#136919',text_col='w',text_rot=0,fs=27,zorder=0.8,lw=1.5):
-        dat = loadtxt('limit_data/fa/PlanckBAO.txt')
+        dat = loadtxt(lmtdir+'fa/PlanckBAO.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Planck+BAO}',color=text_col,rotation=text_rot,fontsize=fs,ha='right',clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def BBN(ax,text_pos=[1.9e-17,0.95e-16],col='#1f4969',text_col='w',text_rot=15,fs=14,zorder=-6):
-        dat = loadtxt('limit_data/fa/BBN.txt')
+        dat = loadtxt(lmtdir+'fa/BBN.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=3,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf BBN}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def SN1987A(ax,text_pos=[7e-3,0.4e-5],col='#067034',text_col='w',text_rot=0,fs=33,zorder=1,lw=2):
-        dat = loadtxt('limit_data/fa/SN1987A.txt')
+        dat = loadtxt(lmtdir+'fa/SN1987A.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=lw,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf SN1987A}',color=text_col,rotation=text_rot,fontsize=fs,ha='right',clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def NeutronStars(ax,text_pos=[0.5e-3,0.4e-12],col='#599967',text_col='#599967',text_rot=41,fs=29,zorder=-10):
-        dat = loadtxt('limit_data/fa/Projections/NeutronStars.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/NeutronStars.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=0.1)
         plt.plot(dat[:,0],dat[:,1],'--',color=col,lw=3,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Neutron stars}',color=text_col,rotation=text_rot,fontsize=fs,ha='right',clip_on=True)
         return
 
     def Axinovae(ax,text_pos=[1.7e-20,0.02e-13],col='navy',text_col='w',text_rot=44,fs=20,zorder=-1.01):
-        dat = loadtxt('limit_data/fa/Axinovae.txt')
+        dat = loadtxt(lmtdir+'fa/Axinovae.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,zorder=zorder,alpha=1)
         plt.plot(dat[:,0],dat[:,1],color='k',lw=3,alpha=1,zorder=zorder)
         plt.text(text_pos[0],text_pos[1],r'{\bf Axinovae}',color=text_col,rotation=text_rot,fontsize=fs,clip_on=True,path_effects=line_background(1.5,'k'))
         return
 
     def Inspirals(ax,text_pos=[1e-16,2e-14],col='darkgreen',text_col='darkgreen',text_rot=0,fs=23,zorder=-10):
-        dat = loadtxt('limit_data/fa/Projections/NSBH-Inspiral.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/NSBH-Inspiral.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e-99,color=col,zorder=zorder,alpha=0.2)
         plt.plot(dat[:,0],dat[:,1],'--',color=col,lw=3,alpha=1,zorder=zorder)
 
-        dat = loadtxt('limit_data/fa/Projections/NSNS-Inspiral.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/NSNS-Inspiral.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e-99,color=col,zorder=zorder,alpha=0.2)
         plt.plot(dat[:,0],dat[:,1],'--',color=col,lw=3,alpha=1,zorder=zorder)
 
@@ -2713,24 +2715,24 @@ class Axion_fa():
         return
 
     def StorageRingEDM(ax,text_pos=[1e-11,1.5e-13],col='crimson',alpha=0.4,zorder=-10,text_rot=41,fs=20):
-        dat = loadtxt('limit_data/fa/Projections/StorageRingEDM.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/StorageRingEDM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.1,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',lw=3,color=col,zorder=zorder,alpha=0.4)
         plt.text(text_pos[0],text_pos[1],r'{\bf Storage ring}',color=col,alpha=0.4,fontsize=fs,rotation=text_rot,clip_on=True)
         return
 
     def CASPEr(ax,text_pos=[5e-11,1e-19],col='crimson',alpha=0.1,zorder=-10,text_rot=57,fs=23):
-        dat = loadtxt('limit_data/fa/Projections/CASPEr-electric-PhaseIII.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/CASPEr-electric-PhaseIII.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=alpha,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',lw=3,color=col,zorder=-1,alpha=1)
         plt.text(text_pos[0],text_pos[1],r'{\bf CASPEr-electric}',color=col,alpha=1,fontsize=fs,rotation=text_rot,clip_on=True)
         return
 
     def PiezoaxionicEffect(ax,text_pos=[7.6e-10,0.15e-14],col='darkred',alpha=0.4,zorder=-20,text_rot=90,fs=19):
-        dat = loadtxt('limit_data/fa/Projections/PiezoaxionicEffect1.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/PiezoaxionicEffect1.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.1,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',lw=1.5,color=col,zorder=zorder,alpha=0.4)
-        dat = loadtxt('limit_data/fa/Projections/PiezoaxionicEffect64.txt')
+        dat = loadtxt(lmtdir+'fa/Projections/PiezoaxionicEffect64.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,color=col,alpha=0.1,zorder=zorder)
         plt.plot(dat[:,0],dat[:,1],'--',lw=1.5,color=col,zorder=zorder,alpha=0.4)
         plt.text(text_pos[0],text_pos[1],r'{\bf Piezoaxionic}',color=col,alpha=0.6,fontsize=fs,rotation=text_rot,clip_on=True)
@@ -2752,7 +2754,7 @@ class DarkPhoton():
         plt.rc('font', family='serif',size=tfs)
 
         if mathpazo:
-            plt.rcParams.update({"text.usetex": True,"font.family": "serif","font.serif": ["Palatino"],})
+            plt.rcParams.update({'text.usetex': True,'font.family': 'serif','font.serif': ['Palatino'],})
 
 
         if Shape=='Wide':
@@ -2822,58 +2824,58 @@ class DarkPhoton():
         zo = 0.3
 
         # ADMX
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ADMX.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ADMX.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1,lw=3)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ADMX2018.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ADMX2018.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ADMX2019_1.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ADMX2019_1.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ADMX2019_2.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ADMX2019_2.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ADMX2021.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ADMX2021.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ADMX_Sidecar.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ADMX_Sidecar.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
 
         # HAYSTAC
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/HAYSTAC.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/HAYSTAC.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/HAYSTAC_2020.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/HAYSTAC_2020.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/HAYSTAC_2022.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/HAYSTAC_2022.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
 
         # CAPP
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAPP-1.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAPP-1.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAPP-2.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAPP-2.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAPP-3.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAPP-3.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAPP-4.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAPP-4.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAPP-5.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAPP-5.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAPP-6.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAPP-6.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/CAST-CAPP.txt")
-        plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
-
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/TASEH.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/CAST-CAPP.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
 
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/ORGAN-1a.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/TASEH.txt')
+        plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.1)
+
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/ORGAN-1a.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,facecolor=col,zorder=0.21)
 
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/QUAX.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/QUAX.txt')
         dat[0,1] = 1e0
         plt.plot(dat[:,0],dat[:,1],zorder=0.2,color=col,lw=2)
 
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/QUAX2.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/QUAX2.txt')
         dat[0,1] = 1e0
         plt.plot(dat[:,0],dat[:,1],zorder=0.2,color=col,lw=2)
 
-        dat = loadtxt("limit_data/DarkPhoton/Rescaled/QUAX3.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Rescaled/QUAX3.txt')
         dat[0,1] = 1e0
         plt.plot(dat[:,0],dat[:,1],zorder=0.2,color=col,lw=2)
 
@@ -2892,23 +2894,23 @@ class DarkPhoton():
 
         # Globular clusters
         HB_col = [0.01, 0.75, 0.24]
-        HB = loadtxt("limit_data/DarkPhoton/RG.txt")
+        HB = loadtxt(lmtdir+'DarkPhoton/RG.txt')
         plt.fill_between(HB[:,0],HB[:,1],y2=y2,edgecolor=None,facecolor=HB_col,zorder=0.9)
         plt.plot(HB[:,0],HB[:,1],color='k',alpha=1,zorder=0.9,lw=lw)
 
         # Globular clusters
         HB_col = 'DarkGreen'
-        HB = loadtxt("limit_data/DarkPhoton/HB.txt")
+        HB = loadtxt(lmtdir+'DarkPhoton/HB.txt')
         plt.fill_between(HB[:,0],HB[:,1],y2=y2,edgecolor=None,facecolor=HB_col,zorder=0.95)
         plt.plot(HB[:,0],HB[:,1],color='k',alpha=1,zorder=0.95,lw=lw)
 
         # Solar bound
         Solar_col = 'ForestGreen'
-        Solar = loadtxt("limit_data/DarkPhoton/Solar.txt")
+        Solar = loadtxt(lmtdir+'DarkPhoton/Solar.txt')
         plt.fill_between(Solar[:,0],Solar[:,1],y2=y2,edgecolor=None,facecolor=Solar_col,zorder=1.02)
         plt.plot(Solar[:,0],Solar[:,1],color='k',alpha=1,zorder=1.02,lw=lw)
 
-        Solar = loadtxt("limit_data/DarkPhoton/Solar-Global.txt")
+        Solar = loadtxt(lmtdir+'DarkPhoton/Solar-Global.txt')
         plt.fill_between(Solar[:,0],Solar[:,1]/Solar[:,0],y2=y2,edgecolor=None,facecolor=Solar_col,zorder=1.021)
         plt.plot(Solar[:,0],Solar[:,1]/Solar[:,0],color='k',alpha=1,zorder=1.021,lw=lw)
 
@@ -2921,31 +2923,31 @@ class DarkPhoton():
 
     def Xenon(ax,col='crimson',fs=23,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/Xenon1T.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Xenon1T.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
 
         plt.fill_between(1e3*dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.5)
         plt.plot(1e3*dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.5,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/Xenon1T_S1S2.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Xenon1T_S1S2.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
 
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.5)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.5,lw=lw)
 
 
-        dat = loadtxt("limit_data/DarkPhoton/XENON1T_SE.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/XENON1T_SE.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.5)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.5,lw=lw)
 
 
-        dat = loadtxt("limit_data/DarkPhoton/XENON1T_Solar_SE.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/XENON1T_Solar_SE.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.0,lw=lw)
 
 
-        dat = loadtxt("limit_data/DarkPhoton/XENONnT.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/XENONnT.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.5)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.5,lw=lw)
 
@@ -2961,8 +2963,8 @@ class DarkPhoton():
 
 
     def DAMIC(ax,col='salmon',fs=21,text_on=True,lw=1.5):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/DAMIC.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/DAMIC.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
 
         y2 = interp(dat[:,0],m1,y1)
@@ -2977,8 +2979,8 @@ class DarkPhoton():
         return
 
     def MuDHI(ax,col='#400927',fs=15,text_on=True,lw=1.5):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/MuDHI.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/MuDHI.txt')
 
         y2 = interp(dat[:,0],m1,y1)
         dat[dat[:,1]>y2,1] = y2[dat[:,1]>y2]
@@ -2992,8 +2994,8 @@ class DarkPhoton():
 
 
     def FUNK(ax,col='red',fs=21,text_on=True,lw=1.5):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/FUNK.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/FUNK.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)*sqrt(2/3/0.27)
 
         y2 = interp(dat[:,0],m1,y1)
@@ -3009,7 +3011,7 @@ class DarkPhoton():
 
     def SENSEI(ax,col='firebrick',fs=21,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SENSEI.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SENSEI.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
 
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1)
@@ -3022,7 +3024,7 @@ class DarkPhoton():
 
     def SuperCDMS(ax,col=[0.4,0,0],fs=18,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SuperCDMS.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SuperCDMS.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.6)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=0.5,zorder=0.6,lw=lw)
@@ -3033,8 +3035,8 @@ class DarkPhoton():
         return
 
     def Nanowire(ax,col='pink',fs=22,text_on=True,lw=1.5):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/WSi_Nanowire.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/WSi_Nanowire.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
         y2 = interp(dat[:,0],m1,y1)
         dat[0,1] = y2[0]/1.1
@@ -3050,7 +3052,7 @@ class DarkPhoton():
 
     def SQMS(ax,col='#02734b',fs=17,text_on=True,lw=0.5,ms=10):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SQMS.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SQMS.txt')
         dat[:,1] = dat[:,1]*sqrt(1/3/0.019)
         plt.plot(dat[:,0],dat[:,1],lw=lw,color=col,alpha=1,zorder=0.0)
         if text_on:
@@ -3058,8 +3060,8 @@ class DarkPhoton():
         return
 
     def LAMPOST(ax,col='#471710',fs=15,text_on=True,lw=1.5):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/LAMPOST.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/LAMPOST.txt')
         dat[:,1] = dat[:,1]*sqrt(0.4/0.45)*sqrt(2/3/0.27)
 
         y2 = interp(dat[:,0],m1,y1)
@@ -3074,8 +3076,8 @@ class DarkPhoton():
         return
 
     def Tokyo(ax,col='darkred',fs=15,text_on=True,lw=1.5):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/Tokyo-Dish.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/Tokyo-Dish.txt')
         dat[:,1] = dat[:,1]*sqrt(2/3/0.6)
         y2 = interp(dat[:,0],m1,y1)
         dat[0,1] = y2[0]
@@ -3084,11 +3086,11 @@ class DarkPhoton():
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.4,lw=lw)
 
 
-        dat = loadtxt("limit_data/DarkPhoton/Tokyo-Knirck.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Tokyo-Knirck.txt')
         dat[:,1] = dat[:,1]*sqrt(1/3/0.175)
         plt.fill_between(dat[:,0],dat[:,1],y2=1e0,edgecolor='k',facecolor=col,zorder=1.09)
 
-        dat = loadtxt("limit_data/DarkPhoton/Tokyo-Tomita.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Tokyo-Tomita.txt')
         plt.plot([dat[1,0],dat[1,0]],[dat[1,1],1e0],'-',color=col,lw=3,zorder=0.2)
         if text_on:
             #plt.text(2e-4,1e-10,r'{\bf Tokyo-3}',fontsize=fs,color=col,rotation=-90,rotation_mode='anchor',ha='center',va='center')
@@ -3098,8 +3100,8 @@ class DarkPhoton():
         return
 
     def FAST(ax,col='tomato',fs=10,text_on=True,lw=1.5,edge_on=False,zorder=0.11):
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/FAST.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/FAST.txt')
         dat[:,1] = dat[:,1]*sqrt(2/3/0.6)
         y2 = interp(dat[:,0],m1,y1)
         dat[0,1] = y2[0]/1.1
@@ -3114,8 +3116,8 @@ class DarkPhoton():
 
     def LOFAR(ax,col='red',fs=10,text_on=True,lw=1.5,edge_on=False,zorder=0.11):
         # Solar corona bound
-        m1,y1 = loadtxt("limit_data/DarkPhoton/DM_combined.txt",unpack=True)
-        dat = loadtxt("limit_data/DarkPhoton/LOFAR.txt")
+        m1,y1 = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt',unpack=True)
+        dat = loadtxt(lmtdir+'DarkPhoton/LOFAR.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
         y2 = interp(dat[:,0],m1,y1)
         dat[0,1] = y2[0]/1.1
@@ -3130,7 +3132,7 @@ class DarkPhoton():
 
     def Jupiter(ax,col='Green',fs=15,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/Jupiter.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Jupiter.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=2)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=2,lw=lw)
         if text_on:
@@ -3139,7 +3141,7 @@ class DarkPhoton():
 
     def Earth(ax,col='DarkGreen',fs=17,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/Earth.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Earth.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.9)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.9,lw=lw)
         if text_on:
@@ -3149,11 +3151,11 @@ class DarkPhoton():
 
     def Crab(ax,col=[0.1,0.4,0.1],fs=17,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/Crab.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Crab.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=2)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=2,lw=lw)
 
-    #     dat = loadtxt("limit_data/DarkPhoton/Crab_2.txt")
+    #     dat = loadtxt(lmtdir+'DarkPhoton/Crab_2.txt')
     #     plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.9,lw=lw)
     #     plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.9)
         if text_on:
@@ -3166,7 +3168,7 @@ class DarkPhoton():
     def QUALIPHIDE(ax,col='r',fs=9,text_on=True,edge_on=False,lw=0.8,zorder=0):
         # data file is for randomly polarised case and 0.3 GeV/cm^3
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/QUALIPHIDE.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/QUALIPHIDE.txt')
         dat[:,1] = dat[:,1]*sqrt(1/3/0.13)*sqrt(0.3/0.45)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor='k',facecolor=col,zorder=zorder,lw=0)
         if edge_on:
@@ -3177,7 +3179,7 @@ class DarkPhoton():
 
     def SHUKET(ax,col='maroon',fs=13,text_on=False,edge_on=False,lw=0.8):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SHUKET.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SHUKET.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)*sqrt(1/3/0.038)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.2)
         if edge_on:
@@ -3188,7 +3190,7 @@ class DarkPhoton():
 
     def DarkEfield(ax,col='darkred',fs=17,text_on=True,edge_on=False,lw=0.8):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/DarkEfield.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/DarkEfield.txt')
         dat[:,1] = dat[:,1]*sqrt(1.64/5) # convert from 5 sigma CL to 95%
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)*sqrt(1/3/0.129)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.2)
@@ -3202,7 +3204,7 @@ class DarkPhoton():
     def ORPHEUS(ax,col='darkred',fs=10,text_on=True,edge_on=False,lw=0.8):
         # data file is for randomly polarised case
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/ORPHEUS.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/ORPHEUS.txt')
         dat[:,1] = dat[:,1]*sqrt(1/3/0.01944939)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor='k',facecolor=col,zorder=0.1,lw=0)
         if edge_on:
@@ -3213,7 +3215,7 @@ class DarkPhoton():
 
     def WISPDMX(ax,col='crimson',fs=12,text_on=True,edge_on=False,lw=0.8):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/WISPDMX.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/WISPDMX.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)*sqrt(1/3/0.23)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.201)
         if edge_on:
@@ -3227,7 +3229,7 @@ class DarkPhoton():
 
     def DOSUE(ax,col='red',fs=9,text_on=True,edge_on=False,lw=0.8):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/DOSUE-RR.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/DOSUE-RR.txt')
         dat[:,1] = dat[:,1]*sqrt(2/3/0.29377804)*sqrt(0.39/0.45)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.201)
         if edge_on:
@@ -3240,7 +3242,7 @@ class DarkPhoton():
 
     def SQuAD(ax,col=[0.7,0,0],fs=12,text_on=True,lw=0.5,point_on=False,ms=10):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SQuAD.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SQuAD.txt')
         dat[:,1] = dat[:,1]*sqrt(0.4/0.45)*sqrt(1/3/0.019)
         plt.plot([dat[0,0],dat[0,0]],[y2,dat[0,1]],lw=lw,color=col,alpha=1,zorder=0.2)
         if point_on:
@@ -3252,7 +3254,7 @@ class DarkPhoton():
 
     def DMPathfinder(ax,col='pink',fs=13,text_on=True):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/DM-Pathfinder.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/DM-Pathfinder.txt')
         dat[:,1] = dat[:,1]*sqrt(1/0.075)
         plt.plot([dat[0,0],dat[0,0]],[y2,dat[0,1]],lw=2,color=col,alpha=1,zorder=0.6)
         if text_on:
@@ -3264,7 +3266,7 @@ class DarkPhoton():
 
     def QuantumCyclotron(ax,col='orangered',fs=13,text_on=True):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/QuantumCyclotron.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/QuantumCyclotron.txt')
         dat[:,1] = dat[:,1]*sqrt(0.3/0.45)
         plt.plot([dat[0,0],dat[0,0]],[y2,dat[0,1]],lw=2,color=col,alpha=1,zorder=0.6,path_effects=line_background(2.5,'k'))
         if text_on:
@@ -3277,7 +3279,7 @@ class DarkPhoton():
         pek=[pe.Stroke(linewidth=7, foreground='k'), pe.Normal()]
 
         # Combined limits
-        dat = loadtxt("limit_data/DarkPhoton/DM_combined.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/DM_combined.txt')
         plt.plot(dat[:,0],dat[:,1],'-',color='w',alpha=1,zorder=zo+0.1,lw=2.5,path_effects=pek)
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor='lightgray',zorder=zo,alpha=1.0)
         plt.plot([1e-16,dat[0,0]],[dat[0,1],dat[0,1]],'--',color='w',alpha=1,zorder=zo+0.1,lw=2.5,path_effects=pek)
@@ -3285,9 +3287,9 @@ class DarkPhoton():
         plt.plot(dat[40:,0],dat[40:,1],'--',color='w',alpha=1,lw=2.5,zorder=1000,solid_capstyle='round')
 
         # Individual limits
-        dat2 = loadtxt("limit_data/DarkPhoton/Cosmology_Witte_inhomogeneous.txt")
-        dat4 = loadtxt("limit_data/DarkPhoton/Cosmology_Caputo_HeII.txt",delimiter=',')
-        dat5 = loadtxt("limit_data/DarkPhoton/Cosmology_Arias.txt")
+        dat2 = loadtxt(lmtdir+'DarkPhoton/Cosmology_Witte_inhomogeneous.txt')
+        dat4 = loadtxt(lmtdir+'DarkPhoton/Cosmology_Caputo_HeII.txt',delimiter=',')
+        dat5 = loadtxt(lmtdir+'DarkPhoton/Cosmology_Arias.txt')
 
         plt.fill_between(dat2[:,0],dat2[:,1],y2=y2,edgecolor='k',facecolor=Witte_col,zorder=0.305,alpha=0.8)
         plt.fill_between(dat4[:,0],dat4[:,1],y2=y2,edgecolor='k',facecolor=Caputo_col,zorder=0.305,alpha=0.8)
@@ -3308,7 +3310,7 @@ class DarkPhoton():
 
     def COBEFIRAS(ax,col=[0.1,0.2,0.5],text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat3 = loadtxt("limit_data/DarkPhoton/COBEFIRAS.txt",delimiter=',')
+        dat3 = loadtxt(lmtdir+'DarkPhoton/COBEFIRAS.txt',delimiter=',')
         plt.fill_between(dat3[:,0],dat3[:,1],y2=y2,edgecolor='k',facecolor=col,zorder=0.5,alpha=1)
         plt.plot(dat3[:,0],dat3[:,1],'k-',lw=lw,zorder=0.5)
         if text_on:
@@ -3319,31 +3321,31 @@ class DarkPhoton():
 
     def LSW(ax,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SPring-8.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SPring-8.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.45, 0.05, 0.1],zorder=1.101)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.101,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/ALPS.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/ALPS.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.55, 0.0, 0.16],zorder=1.091)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.091,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/LSW_UWA.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/LSW_UWA.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.6, 0.0, 0.2],zorder=1.09)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.09,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/LSW_ADMX.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/LSW_ADMX.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.65, 0.1, 0.24],zorder=1.089)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.089,lw=lw)
 
-    #     dat = loadtxt("limit_data/DarkPhoton/LSW_CERN.txt")
+    #     dat = loadtxt(lmtdir+'DarkPhoton/LSW_CERN.txt')
     #     plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.089,lw=2)
     #     plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.65, 0.15, 0.2],zorder=1.089)
 
-        dat = loadtxt("limit_data/DarkPhoton/CROWS.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/CROWS.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.7, 0.2, 0.2],zorder=1.08)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.08,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/DarkSRF.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/DarkSRF.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.5, 0.2, 0.2],zorder=1.06)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.06,lw=lw)
 
@@ -3361,19 +3363,19 @@ class DarkPhoton():
 
     def Coulomb(ax,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/Cavendish.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Cavendish.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.7,0,0],zorder=1.07)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.07,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/PlimptonLawton.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/PlimptonLawton.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor='crimson',zorder=1.071)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.071,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/Spectroscopy.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/Spectroscopy.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.4, 0.0, 0.13],zorder=1.11)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.11,lw=lw)
 
-        dat = loadtxt("limit_data/DarkPhoton/AFM.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/AFM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=[0.4, 0.2, 0.2],zorder=1.5)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.5,lw=lw)
         if text_on:
@@ -3386,7 +3388,7 @@ class DarkPhoton():
 
     def NeutronStarCooling(ax,col='#004d00',fs=18,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/NeutronStarCooling.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/NeutronStarCooling.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.1001)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.1001,lw=lw)
         if text_on:
@@ -3395,7 +3397,7 @@ class DarkPhoton():
 
     def CAST(ax,col='maroon',fs=19,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/CAST.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/CAST.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.1)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.1,lw=lw)
         if text_on:
@@ -3404,7 +3406,7 @@ class DarkPhoton():
 
     def HINODE(ax,col='#700606',fs=16,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/HINODE.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/HINODE.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.1001)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.1001,lw=lw)
         if text_on:
@@ -3413,7 +3415,7 @@ class DarkPhoton():
 
     def SHIPS(ax,col='indianred',fs=20,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SHIPS.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SHIPS.txt')
         dat[:,1] = dat[:,1]/dat[:,0]
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.09)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.09,lw=lw)
@@ -3424,7 +3426,7 @@ class DarkPhoton():
 
     def TEXONO(ax,col=[0.5, 0.0, 0.13],fs=15,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/TEXONO.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/TEXONO.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1.101)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1.101,lw=lw)
         if text_on:
@@ -3433,7 +3435,7 @@ class DarkPhoton():
 
     def IGM(ax,col='seagreen',fs=18,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/IGM.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/IGM.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.49)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.49,lw=lw)
 
@@ -3445,7 +3447,7 @@ class DarkPhoton():
 
     def LeoT(ax,col='mediumseagreen',fs=18,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/LeoT.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/LeoT.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.3061)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.3062,lw=lw)
 
@@ -3455,7 +3457,7 @@ class DarkPhoton():
 
     def GasClouds(ax,col='#00cc66',fs=18,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/GasClouds.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/GasClouds.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=0.306)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=0.307,lw=lw)
 
@@ -3465,7 +3467,7 @@ class DarkPhoton():
 
     def SuperMAG(ax,col='#b5403e',fs=18,text_on=True,lw=1.5):
         y2 = ax.get_ylim()[1]
-        dat = loadtxt("limit_data/DarkPhoton/SuperMAG.txt")
+        dat = loadtxt(lmtdir+'DarkPhoton/SuperMAG.txt')
         plt.fill_between(dat[:,0],dat[:,1],y2=y2,edgecolor=None,facecolor=col,zorder=1)
         plt.plot(dat[:,0],dat[:,1],color='k',alpha=1,zorder=1,lw=lw)
 
@@ -3486,15 +3488,15 @@ def MySaveFig(fig,pltname,pngsave=False):
         fig.savefig(pltdir_png+pltname+'.png',bbox_inches='tight',transparent=False)
 
 def cbar(mappable,extend='neither',minorticklength=8,majorticklength=10,\
-            minortickwidth=2,majortickwidth=2.5,pad=0.2,side="right",orientation="vertical"):
+            minortickwidth=2,majortickwidth=2.5,pad=0.2,side='right',orientation='vertical'):
     ax = mappable.axes
     fig = ax.figure
     divider = make_axes_locatable(ax)
-    cax = divider.append_axes(side, size="5%", pad=pad)
+    cax = divider.append_axes(side, size='5%', pad=pad)
     cbar = fig.colorbar(mappable, cax=cax,extend=extend,orientation=orientation)
     cbar.ax.tick_params(which='minor',length=minorticklength,width=minortickwidth)
     cbar.ax.tick_params(which='major',length=majorticklength,width=majortickwidth)
-    cbar.solids.set_edgecolor("face")
+    cbar.solids.set_edgecolor('face')
 
     return cbar
 
@@ -3503,7 +3505,7 @@ def MySquarePlot(xlab='',ylab='',\
     plt.rcParams['axes.linewidth'] = lw
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif',size=tfs)
-    plt.rcParams.update({"text.usetex": True,"font.family": "serif","font.serif": ["Palatino"],})
+    plt.rcParams.update({'text.usetex': True,'font.family': 'serif','font.serif': ['Palatino'],})
     fig = plt.figure(figsize=(size_x,size_y))
     ax = fig.add_subplot(111)
 
@@ -3521,7 +3523,7 @@ def MyDoublePlot(xlab1='',ylab1='',xlab2='',ylab2='',\
     plt.rcParams['axes.linewidth'] = lw
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif',size=tfs)
-    plt.rcParams.update({"text.usetex": True,"font.family": "serif","font.serif": ["Palatino"],})
+    plt.rcParams.update({'text.usetex': True,'font.family': 'serif','font.serif': ['Palatino'],})
     fig, axarr = plt.subplots(1, 2,figsize=(size_x,size_y))
     gs = gridspec.GridSpec(1, 2)
     gs.update(wspace=wspace)
@@ -3549,7 +3551,7 @@ def MyDoublePlot_Vertical(xlab1='',ylab1='',xlab2='',ylab2='',\
     plt.rcParams['axes.linewidth'] = lw
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif',size=tfs)
-    plt.rcParams.update({"text.usetex": True,"font.family": "serif","font.serif": ["Palatino"],})
+    plt.rcParams.update({'text.usetex': True,'font.family': 'serif','font.serif': ['Palatino'],})
 
 
     fig, axarr = plt.subplots(2,1,figsize=(size_x,size_y))
@@ -3583,7 +3585,7 @@ def MyTriplePlot(xlab1='',ylab1='',xlab2='',ylab2='',xlab3='',ylab3='',\
     plt.rcParams['axes.linewidth'] = lw
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif',size=tfs)
-    plt.rcParams.update({"text.usetex": True,"font.family": "serif","font.serif": ["Palatino"],})
+    plt.rcParams.update({'text.usetex': True,'font.family': 'serif','font.serif': ['Palatino'],})
     fig, axarr = plt.subplots(1, 3,figsize=(size_x,size_y))
     gs = gridspec.GridSpec(1, 3)
     gs.update(wspace=wspace)
@@ -3644,9 +3646,9 @@ import numpy as np
 import math
 
 class CurvedText(mtext.Text):
-    """
+    '''
     A text object that follows an arbitrary curve.
-    """
+    '''
     def __init__(self, x, y, text, axes, **kwargs):
         super(CurvedText, self).__init__(x[0],y[0],' ', **kwargs)
 
@@ -3685,17 +3687,17 @@ class CurvedText(mtext.Text):
             t.set_zorder(self.__zorder+1)
 
     def draw(self, renderer, *args, **kwargs):
-        """
+        '''
         Overload of the Text.draw() function. Do not do
         do any drawing, but update the positions and rotation
         angles of self.__Characters.
-        """
+        '''
         self.update_positions(renderer)
 
     def update_positions(self,renderer):
-        """
+        '''
         Update positions and rotations of the individual text elements.
-        """
+        '''
 
         #preparations
 
