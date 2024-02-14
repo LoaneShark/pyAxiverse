@@ -418,7 +418,8 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
     if save_params and params_in is not None:
         params_filename = os.path.join(output_dir, filename + '.json')
         with open(params_filename, 'w') as f:
-            json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
+            with np.printoptions(threshold=np.inf):
+                json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
         file_list.append(params_filename)
     
     # Save results
