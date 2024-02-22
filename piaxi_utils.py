@@ -417,6 +417,8 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
     # Save parameters
     if save_params and params_in is not None:
         params_filename = os.path.join(output_dir, filename + '.json')
+        params_in['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
+        params_in['units'] = get_units_from_params(params_in)
         with open(params_filename, 'w') as f:
             with np.printoptions(threshold=np.inf):
                 json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
@@ -500,7 +502,7 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                 fname = file.split('/')[-1]
                 print(f'  {fname:{flen}}  | {sizeof_fmt(fsize)}')
 
-def load_multiple_results(output_dir, label, load_images=False, save_format='pdf'):
+def load_multiple_results(output_dir, label, load_images=False, save_format='pdf', nested=False, include_debug=True):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -514,33 +516,44 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     - all_plots (list of lists or None): A list of lists containing matplotlib figures or images for each simulation.
     """
     
-    file_dir  = os.path.join(os.path.expanduser(output_dir), label) if '~' in output_dir else os.path.join(output_dir, label)
-    all_files = os.listdir(file_dir)
+    output_path = os.path.expanduser(output_dir) if '~' in output_dir else output_dir
+    if nested:
+        file_dirs  = [os.path.join(os.path.expanduser(output_path), sub_dir) for sub_dir in os.listdir(output_path) if not('debug' in sub_dir) or include_debug]
+        all_files  = [os.path.join(sub_dir, nested_file) for sub_dir in file_dirs for nested_file in os.listdir(sub_dir)]
+    else:
+        file_dir   = os.path.join(os.path.expanduser(output_path), label)
+        all_files  = [os.path.join(file_dir, file_name) for file_name in os.listdir(file_dir) if not('debug' in file_name) or include_debug]
     
-    relevant_files = [f for f in all_files if f.startswith(label) and f.endswith('.json')] # Assume input params are being saved for now, at least
+    # List of tuples (filename, absolute path)
+    relevant_files = [os.path.split(f) for f in all_files if (os.path.basename(f).startswith(label) or label == 'all') and os.path.basename(f).endswith('.json')] # Assume input params are being saved for now, at least
     
     all_params = []
     all_results = []
     all_plots = []
     all_coeffs = []
     
-    for filename in relevant_files:
+    for filepath, filename in relevant_files:
         # Extract base name without extension
         base_name = filename.rsplit('.', 1)[0]
         
         # Load parameters
-        params_filename = os.path.join(file_dir, base_name + '.json')
+        params_filename = os.path.join(filepath, base_name + '.json')
         with open(params_filename, 'r') as f:
             params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
+        # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
+        if 'config_name' not in params:
+            params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
+        if 'units' not in params:
+            params['units'] = get_units_from_params(params)
         all_params.append(params)
         
         # Load results
-        results_filename = os.path.join(file_dir, base_name + '.npy')
+        results_filename = os.path.join(filepath, base_name + '.npy')
         results = np.array(np.load(results_filename), dtype=object)
         all_results.append(results)
 
         # Load coefficient functions
-        coeffs_filename = os.path.join(file_dir, base_name, '_funcs.pkl')
+        coeffs_filename = os.path.join(filepath, base_name, '_funcs.pkl')
         if os.path.exists(coeffs_filename):
             all_coeffs.append(load_coefficient_functions(coeffs_filename))
         else:
@@ -550,8 +563,8 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         plots = []
         if load_images and save_format == 'png':
             i = 0
-            while os.path.exists(os.path.join(file_dir, base_name + f'_plot_{i}.png')):
-                plots.append(plt.imread(os.path.join(file_dir, base_name + f'_plot_{i}.png')))
+            while os.path.exists(os.path.join(filepath, base_name + f'_plot_{i}.png')):
+                plots.append(plt.imread(os.path.join(filepath, base_name + f'_plot_{i}.png')))
                 i += 1
         all_plots.append(plots)
     
@@ -573,7 +586,12 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     params_filename = os.path.join(output_dir, filename + '.json')
     with open(params_filename, 'r') as f:
         params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
-    
+    # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
+    if 'config_name' not in params:
+        params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
+    if 'units' not in params:
+        params['units'] = get_units_from_params(params)
+
     # Load results
     results_filename = os.path.join(output_dir, filename + '.npy')
     results = np.array(np.load(results_filename),dtype=np.float64)
@@ -596,9 +614,12 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     
     return params, results, plots, coeffs_dict
 
-def load_all(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf'):
+def load_all(output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=False):
+    return load_case(input_str='all', output_root=output_root, version=version, load_images=load_images, save_format=save_format, include_debug=include_debug)
+
+def load_case(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=True):
     """
-    Load all results given a full path to the output directory or just the simulation label.
+    Load all results for a given class of configuration parameters given a full path to the output directory or just the simulation label.
     
     Parameters:
     - input_str (str): Either the full path to the output directory or just the simulation label.
@@ -619,7 +640,7 @@ def load_all(input_str, output_root='~/scratch', version=version, load_images=Fa
         output_dir  = os.path.join(output_root, version)
         result_name = input_str
     
-    return load_multiple_results(output_dir, result_name, load_images, save_format)
+    return load_multiple_results(output_dir, result_name, load_images, save_format, nested=(input_str=='all'), include_debug=include_debug)
 
 def load_single(input_str, label=None, phash=None, output_root='~/scratch', version=version, save_format='pdf', load_plots=False, verbosity=0):
     """
@@ -810,6 +831,9 @@ k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 e
 
 get_times = lambda params_in, times_in: times_in if times_in is not None else t if t is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
 
+win_min  = lambda sens: int(t_num*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # min value / left endpoint (of the sensitivity window over which to average)
+win_max  = lambda sens: int(t_num*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # max value / right endpoint
+
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
 def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res
@@ -820,8 +844,7 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     k_func = lambda func: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][:])) for k_vi, k_v in enumerate(k_values)])])
     
     # k_sens : apply [k_func] but limit the time-series by [sens], e.g. sens = 0.1 to look at the first 10%. Negative values look at the end of the array instead.
-    win_min  = lambda sens: int(t_num*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # min value / left endpoint (of the sensitivity window over which to average)
-    win_max  = lambda sens: int(t_num*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # max value / right endpoint
+
     k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_min(sens):win_max(sens)])) for k_vi, k_v in enumerate(k_values)])])
 
     # k mode(s) with the largest contributions to overall number density growth
@@ -1000,7 +1023,7 @@ k_i     = lambda i, k_vals=None: k_vals[i]
 ImAAdot = lambda k, t: -(1/2)
 k_vals_p = lambda params: np.linspace(params['k_span'][0], params['k_span'][1], params['k_num'])
 
-# Particle number for k_mode value at index i (TODO: Verify units in below equation)
+# Particle number for k_mode value (TODO: Verify units in below equation)
 n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot) - 2*k*Im(k))
 # Wrapper function for the above, using only params and results as inputs
 n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)), 
@@ -1059,7 +1082,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.title(r'Occupation number per k mode', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.2)
-    plt.ylabel(r'$n[k]/n_0$' if scale_n else r'$n[k]$')
+    plt.ylabel(r'$n[k]$')
     plt.yscale('log'); #plt.ylim(bottom = 0.1)
     if add_colorbars:
         cbar1 = plt.colorbar(s_m_cbar, label=r'$k$', cmap=c_m, norm=cm_norm_cbar, drawedges=False, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1))
@@ -1076,10 +1099,15 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
         n_tot /= abs(n_tot[0])
         #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
 
-    t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
+    # This is to handle the fact that sometimes we have a large initial spike that quickly flattens out
+    #   (Don't classify this as resonance)
+    win_sens = params_in['t_sens']
+    #t_sens_range = times[0:win_min(win_sens)]
+    t_res_all = np.ma.argmax(np.array(n_tot) > res_con) 
+    t_res_i   = t_res_all if t_res_all > win_min(win_sens) else -1
     t_res   = times[t_res_i]
     n_res   = n_tot[t_res_i]
-    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, params_in['t_sens'], params_in['A_sens'])) > res_con else 'none'
+    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'none'
     if write_to_params:
         params_in['t_res'] = t_res
         params_in['res_class'] = tot_res
@@ -1094,7 +1122,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.title(r'Occupation Number (total)', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.1)
-    plt.ylabel(r'$n$')
+    plt.ylabel(r'$n/n_0$' if scale_n else r'$n$')
     plt.yscale('log')
     if add_colorbars:
         # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
@@ -1414,13 +1442,10 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=False):
     
     return plt
 
-# TODO: Make this function, which plots the result of a number of runs over a series of preferred metrics, for a given mass and density
-def plot_parameter_space(tex_fmt=False):
-    return None
-
 logfit = lambda x, a, b, c: a*np.log10(10*x+b)+c
 
 # Solve for F_pi given epsilon (millicharge) and ALP (unit) mass
+# TODO: Replace this with newer information
 def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
     if use_old_fit:
         # TODO: Fix for epsilon != 1?
@@ -1534,9 +1559,16 @@ def print_param_space(params, units_in):
         
     return textstr1, textstr2
 
+def get_units_from_params(params_in, verbosity=0):
+    return get_units(unitful_m=params_in['unitful_m'], rescale_m=params_in['rescale_m'], unitful_k=params_in['unitful_k'], rescale_k=params_in['rescale_k'], \
+                     unitful_amps=params_in['unitful_amps'], rescale_amps=params_in['rescale_amps'], rescale_consts=params_in['rescale_consts'], \
+                     unitful_c=not(params_in['use_natural_units']), unitful_h=not(params_in['use_natural_units']), unitful_G=not(params_in['use_natural_units']), \
+                     dimensionful_p=params_in['dimensionful_p'], use_mass_units=params_in['use_mass_units'], use_natural_units=params_in['use_natural_units'], \
+                     verbosity=verbosity)
+
 def get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p=False,
               unitful_c=False, unitful_h=False, unitful_G=False, use_mass_units=True, use_natural_units=None, verbosity=0):
-    global units, params
+    global units
     is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)]) if use_natural_units is None else use_natural_units
     units = {'c': 1 if not unitful_c else 'cm/s', 'h': 1 if not unitful_h else 'eV/Hz', 'G': 1 if not unitful_G else 'cm^5/(eV s^4)', 
              'm': 'm_u' if not((unitful_m and not rescale_m) or (not unitful_m and rescale_m)) else 'eV/c^2' if unitful_c else 'eV',
