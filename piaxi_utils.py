@@ -823,29 +823,33 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
         plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
 
-# k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
+# k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial amplitudes (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
 
 # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
-k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+# TODO: unify all of the different methods we use to classify resonance
+k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
 get_times = lambda params_in, times_in: times_in if times_in is not None else t if t is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
 
-win_min  = lambda sens: int(t_num*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # min value / left endpoint (of the sensitivity window over which to average)
-win_max  = lambda sens: int(t_num*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # max value / right endpoint
+# get indices for time-averaged windows, characterized by sensitivity
+# (e.g. sens = 0.1 means shave off 10% of the time window; sign (+/-) of sens determines which endpoint of the window is returned)
+win_lower  = lambda sens: win_L_N(sens, t_n=t_num)  # anchor left endpoint at 0 (-/+ sens for L/R endpoints)
+win_upper  = lambda sens: win_U_N(sens, t_n=t_num)  # anchor right endpoint at t[N] (-/+ sens for L/R endpoints)
+win_L_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # time window in [0, (1-sens)]
+win_U_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # time window in [sens, 1]
 
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
 def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
-    global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res
+    global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res, t_num
     t_num = len(results_in[0][0])
     k_values = k_values_in if k_values_in is not None else k_values if k_values is not None else None
 
     # k_func : apply [func] on the time-series for each k mode, e.g. max or mean
     k_func = lambda func: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][:])) for k_vi, k_v in enumerate(k_values)])])
     
-    # k_sens : apply [k_func] but limit the time-series by [sens], e.g. sens = 0.1 to look at the first 10%. Negative values look at the end of the array instead.
-
-    k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_min(sens):win_max(sens)])) for k_vi, k_v in enumerate(k_values)])])
+    # k_sens : apply [k_func] but limit the time-series by [sens], e.g. sens = 0.1 to skip the first 10% in calculating our time-averaged values
+    k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_lower(sens):win_upper(sens)])) for k_vi, k_v in enumerate(k_values)])])
 
     # k mode(s) with the largest contributions to overall number density growth
     k_peak = k_values[np.ma.argmax(k_func(max))]
@@ -862,6 +866,7 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
         #t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
         #t_res   = t[t_res_i]
         #params['t_res'] = t_res
+        # TODO: unify all of the different methods we use to classify resonance
         tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
         params['res_class'] = tot_res
     
@@ -991,7 +996,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
         plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signdict[0])
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
-        #plt.yscale('log')
+        plt.yscale('log')
         if add_colorbars:
             # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
             cbar3 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
@@ -1046,7 +1051,7 @@ def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
 sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(i, p_in, sol_in, k_v, times, n=n_in) for i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, tex_fmt=False, add_colorbars=False, write_to_params=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, tex_fmt=False, add_colorbars=False, write_to_params=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     fontsize = 16 if tex_fmt else 14
@@ -1102,12 +1107,18 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     # This is to handle the fact that sometimes we have a large initial spike that quickly flattens out
     #   (Don't classify this as resonance)
     win_sens = params_in['t_sens']
+    t_num = len(times)
     #t_sens_range = times[0:win_min(win_sens)]
-    t_res_all = np.ma.argmax(np.array(n_tot) > res_con) 
-    t_res_i   = t_res_all if t_res_all > win_min(win_sens) else -1
-    t_res   = times[t_res_i]
-    n_res   = n_tot[t_res_i]
-    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'none'
+    t_idx_a   = np.ma.argmax(np.array(n_tot) > res_con)
+    t_res_a   = times[t_idx_a]
+    n_res_a   = n_tot[t_idx_a]
+    t_idx_lim = win_U_N(-win_sens, t_n=t_num)
+    t_idx_b   = t_idx_a if t_idx_a >= t_idx_lim else np.ma.argmax(np.array(n_tot/n_res_a) > res_con)
+    t_res   = times[t_idx_b]
+    n_res   = n_tot[t_idx_b]
+    # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
+    #       - Also, unify all of the different methods we use to classify resonance
+    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a >= 0) else 'none'
     if write_to_params:
         params_in['t_res'] = t_res
         params_in['res_class'] = tot_res
@@ -1117,8 +1128,9 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.subplot2grid((2,5), (1,0), colspan=3)
     #fig,ax = plt.subplots()
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
-    plt.plot(np.ma.masked_greater_equal(times, t_res), n_tot, label='none', color='grey')
-    plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='blue')
+    plt.plot(np.ma.masked_greater(times, min(t_res,t_res_a)), n_tot, label='none', color='grey')
+    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_res_a), t_res), n_tot, label='energy injection', color='orange')
+    plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='red')
     plt.title(r'Occupation Number (total)', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.1)
@@ -1142,6 +1154,15 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.axis('off')
 
     plt.tight_layout()
+
+    print('a  | t: %.2f    n = %.2e' % (t_res_a, n_res_a))
+    print('b  | t: %.2f    n = %.2e' % (t_res, n_res))
+    print('t_sens =', win_sens)
+    print('k_ratio sum: ', sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])))
+    print('t_lim = %.2f' % times[t_idx_lim])
+    print('class = ', params_in['res_class'], '=', tot_res)
+    print('res condition: %s' % res_con)
+    #print(n_tot)
     
     return plt, params_in, t_res, n_res
 
@@ -1332,7 +1353,7 @@ def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
 
 def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
-    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'semi': 'blue', 'res': 'red'}
+    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'soft': 'orange', 'res': 'red'}
     res_con_in = params_in['res_con']
 
     t_sens = params_in['t_sens']
@@ -1431,7 +1452,6 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=False):
                         ax2.axvspan(min(m_s), max(m_s), ymin=0, ymax=1, color='black', label='$m_{(%s)}$' % (s_idx_str), alpha=0.5, visible=show_mass_ranges)
         ax2.legend()
                         
-        
         ## Background Image
         survey_img = image.imread('./tools/survey_img_crop.PNG')
         im_ax = ax.twinx()
@@ -1680,7 +1700,7 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
     for i, label in enumerate(k_class_arr):
         if label == 'res' and start_idx is None:
             start_idx = i
-        elif label not in ['res', 'semi'] and start_idx is not None:
+        elif label not in ['res', 'soft'] and start_idx is not None:
             start_indices.append(start_idx)
             end_indices.append(i-1)
             start_idx = None
@@ -1690,7 +1710,7 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
 
     # Determine resonance classification
     res_count  = np.ma.masked_where(k_class_arr != 'res', k_class_arr, copy=True).count()
-    semi_count = np.ma.masked_where(k_class_arr != 'semi', k_class_arr, copy=True).count()
+    soft_count = np.ma.masked_where(k_class_arr != 'soft', k_class_arr, copy=True).count()
     if not start_indices:  # No resonance segments found
         return None, None, None
     elif len(start_indices) == 1:  # Only one resonance segment
