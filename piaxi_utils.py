@@ -12,6 +12,7 @@ from IPython.display import display, clear_output, HTML, Image
 from pyparsing import line
 from scipy.signal import spectrogram
 from scipy.optimize import curve_fit
+from scipy.stats import binned_statistic
 import dill
 import json
 import hashlib
@@ -143,6 +144,15 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     m_c = params_in['m_c']      if 'm_c' in params_in else np.full((N_c, ), m[2]) # charged (complex) species
     m   = params_in['m']        if 'm'   in params_in else np.array([m_r, m_n, m_c], dtype=object)
 
+    # characteristic periods of oscillation for each species
+    if 'T_u' in params_in:
+        T_u = params_in['T_u']
+        T_r = params_in['T_r']
+        T_n = params_in['T_n']
+        T_c = params_in['T_c']
+    else:
+        T_u, T_r, T_n, T_c = get_timescales(m, m_0, m_u=1)
+
     # local DM densities for each species [eV/cm^3]
     p_r  = params_in['p_r'] if 'p_r' in params_in else np.full((N_r, ), None)   # (neutral) real species
     p_n  = params_in['p_n'] if 'p_n' in params_in else np.full((N_n, ), None)   # neutral (complex) species
@@ -219,7 +229,8 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'N_r': N_r, 'N_n': N_n, 'N_c': N_c, 'p_0': p_0,
               'm': m, 'm_r': m_r, 'm_n': m_n, 'm_c': m_c, 'p': p, 'p_r': p_r, 'p_n': p_n, 'p_c': p_c, 'm_0': m_0, 'm_q': m_q,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
-              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u, 't_u': t_0,
+              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u,
+              't_u': t_0, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_u,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
               'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 'int_method': int_method,
               'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p,
@@ -823,6 +834,35 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
         plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
 
+# Helper function for below (NOTE: m_u may not be the same m_u as in other parts of the code -- look into this)
+min_timescale = lambda m_min, m_u: 1./(np.min([m_min,1.]))*((2*np.pi)/(m_u))
+
+# Characteristic timescales (minimum amount of time needed to capture full oscillations) by species
+def get_timescales(m, m0, m_u=1., verbosity=0):
+    # Assuming m_min is given in units of [m_u], else set rescaling relation in m_u arg
+    t_min = lambda m: min_timescale(m, m_u)
+    for i in range(m.shape[0]):
+        m_min_r = np.min(m[0]*m0) if len(m[0]) > 0 else 0
+        t_min_r = t_min(m_min_r)  if len(m[0]) > 0 else 0
+        m_min_n = np.min(m[1]*m0) if len(m[1]) > 0 else 0
+        t_min_n = t_min(m_min_n)  if len(m[1]) > 0 else 0
+        m_min_c = np.min(m[2]*m0) if len(m[2]) > 0 else 0
+        t_min_c = t_min(m_min_c)  if len(m[2]) > 0 else 0
+    # find largest t_min to set as our characteristic time period
+    T_min   = np.max(np.abs([t_min_r, t_min_n, t_min_c]))
+
+    if verbosity >= 2:
+        if verbosity >= 5:
+            print('Characteristic timescales by species:')
+            print(' -   reals: m_min = %.2f [m_u]  --->  T_r = %.2fπ [1/m_u]' % (m_min_r, np.abs(t_min_r/np.pi)))
+            print(' - complex: m_min = %.2f [m_u]  --->  T_n = %.2fπ [1/m_u]' % (m_min_n, np.abs(t_min_n/np.pi)))
+            print(' - charged: m_min = %.2f [m_u]  --->  T_c = %.2fπ [1/m_u]' % (m_min_c, np.abs(t_min_c/np.pi)))
+            print(' -----------> T_min = %.2fπ [1/m_u]' % np.abs(T_min/np.pi))
+        else:
+            print('Characteristic timescale: T_min = %.2fπ [1/m_u]' % np.abs(T_min/np.pi))
+
+    return T_min, t_min_r, t_min_n, t_min_c
+
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial amplitudes (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
 
@@ -858,17 +898,15 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     # store max, all-time mean, and late-time mean for each k-mode locally, as well as resonance classifications
     if write_to_params:
         global params
+        # TODO: Update this to new logic
         params['k_peak_arr']  = k_func(max)
         params['k_mean_arr']  = k_func(np.mean)
         params['k_sens_arr']  = k_sens(np.mean, t_sens)
-        params['k_class_arr'] = k_class(np.mean, t_sens, A_sens, res_con)
+        #params['k_class_arr'] = k_class(np.mean, t_sens, A_sens, res_con)
 
-        #t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
-        #t_res   = t[t_res_i]
-        #params['t_res'] = t_res
         # TODO: unify all of the different methods we use to classify resonance
-        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
-        params['res_class'] = tot_res
+        #tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
+        #params['res_class'] = tot_res
     
     return k_peak, k_mean
 
@@ -910,11 +948,11 @@ def get_colorbar_params(k_values_in):
     return c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar
 
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, tex_fmt=False, add_colorbars=False):
-    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, tex_fmt, add_colorbars)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, plot_RMS=True, plot_avg=False, tex_fmt=False, add_colorbars=False):
+    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars)
     plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, tex_fmt=False, add_colorbars=False, abs_amps=None):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=True, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
@@ -986,13 +1024,18 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
     plt.yscale('log')
     plt.grid()
 
-
     if plot_Adot:
         #plt.subplot(2,1,2)
+        res_in_arr = np.array(results_in)
+        A_dims = (res_in_arr.shape[0], res_in_arr.shape[-1])
+        A_d = np.reshape(np.delete(res_in_arr, 1, axis=1), A_dims)
+        A_mean = np.reshape(A_d[list(k_values).index(k_mean)], (1, A_dims[1]))[0]
+        A_peak = np.reshape(A_d[list(k_values).index(k_peak)], (1, A_dims[1]))[0]
+        # Plot Amplitude rate of change
         plt.subplot2grid((ydim,xdim), (2,0), colspan=3)
-        plt.plot(times, [sum([results_in[i][1][t_i] for i in range(len(k_values))]) for t_i in range(len(times))], color='g', label='total')
-        plt.plot(times, [results_in[list(k_values).index(k_mean)][1][t_i] for t_i in range(len(times))], color='y', label='k = %d (mean)' % k_mean)
-        plt.plot(times, [results_in[list(k_values).index(k_peak)][1][t_i] for t_i in range(len(times))], color='orange', label='k = %d (peak)' % k_peak)
+        plt.plot(times, np.sum(A_d, axis=0), color='g', label=r'total')
+        plt.plot(times, A_mean, color='y', label=r'$k$ = %d (mean)' % k_mean)
+        plt.plot(times, A_peak, color='orange', label=r'$k$ = %d (peak)' % k_peak)
         plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signdict[0])
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
@@ -1001,6 +1044,31 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
             # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
             cbar3 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
             cbar3.remove()
+        
+        if plot_avg:
+            # TODO: Implement a decent average/convolution function (WIP)
+            avg = lambda a_in, m, dt=t_step, N=len(k_values): np.array([np.convolve(a_in[ki], np.ones(N)/N, mode=m) for ki in a_in])
+            plot_avg_modes = ['full', 'same', 'valid']
+            for mode in plot_avg_modes:
+                A_d_avg = avg(A_d, mode)
+                avg_times = np.linspace(times[0], times[-1], num=A_d_avg.shape[-1])
+                plt.plot(avg_times, A_d_avg, label=r'avg (%s)' % mode)
+        if plot_RMS:
+            # Plot Amplitude rate of change RMS / averaged values
+            rms = lambda a_in, t_in=times: np.sqrt(np.trapz(a_in**2, t_in)/(t_in[-1] - t_in[0]))
+            a_rms = lambda a_in, t_in=times, N=len(k_values): np.array([[rms(a_in[ki,:ti], t_in[:ti]) if ti > 1 else np.abs(a_in[ki,ti]) for ti, td in enumerate(t_in)] for ki in np.arange(N)])
+            # Calculate RMS for A_dot using two different methods
+            a_rms_1 = a_rms(np.reshape(np.sum(A_d, axis=0), (1, A_dims[1])), N=1)[0]
+            a_rms_2 = np.sum(a_rms(A_d), axis=0)
+            # Calculate for k_peak and k_mean
+            a_rms_peak  = a_rms(np.reshape(A_d[list(k_values).index(k_mean)], (1, A_dims[1])), N=1)[0]
+            a_rms_mean  = a_rms(np.reshape(A_d[list(k_values).index(k_peak)], (1, A_dims[1])), N=1)[0]
+
+            plt.plot(times, a_rms_1, color='black', linestyle='-', label=r'total (1)')
+            plt.plot(times, a_rms_2, color='black', linestyle=':', label=r'total (2)')
+            plt.plot(times, a_rms_peak, color='yellow', linestyle='-', label=r'$k$ = %d (mean)' % k_mean)
+            plt.plot(times, a_rms_mean, color='orange', linestyle='-', label=r'$k$ = %d (peak)' % k_peak)
+
         plt.legend()
         plt.grid()
 
@@ -1042,16 +1110,118 @@ w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
 #n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
 '''
 
+def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
+    b_baseline = k_stat[0]
+    class_label = 'none' if b_baseline < ln_rescon else 'injection'
+    b_max_val = 0.
+    b_max_idx = 0
+    for bidx in range(1, N_bins-1):
+        bval = k_stat[bidx] - b_baseline
+        if bval > b_max_val:
+            b_max_val = bval
+            b_max_idx = bidx
+        # Exponential growth
+        if bval >= ln_rescon:
+            if class_label in ['none', 'damp', 'burst']:
+                class_label = 'resonance'
+        # Exponential decay
+        elif bval <= -ln_rescon:
+            if class_label in ['none', 'damp']:
+                class_label = 'damp'
+            else:
+                class_label = 'burst'
+        # No significant change
+        else:
+            if class_label in ['injection']:
+                # Re-zero out initial reference number once energy injection has stabilized
+                b_max_val = 0.
+                b_max_idx = bidx
+                b_baseline = k_stat[bidx]
+        
+    ratio_max = b_max_val
+    ratio_final = k_stat[-1] - b_baseline
+    
+    if (ratio_final - ratio_max) <= -ln_rescon:
+        class_label = 'burst'
+    
+    if return_dict:
+        return {'label': class_label, 'ratio_final': ratio_final, 'ratio_max': ratio_max, 'baseline': b_baseline}
+    else:
+        return class_label, ratio_final, ratio_max, b_baseline
+
+# Classify amplitude growth given occupation numbers
+# Assume input has dimensions of (k x t)
+def classify_resonance(params_in, nk_arr, k_span, t_sens, A_sens, scale_n=True, method='binned'):
+    # TODO: Make this the main function for classifying resonance
+    # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
+
+    T_min = params_in['T_u']
+    t_f   = params_in['t_span'][1]
+    times = get_times(params_in, None)
+    res_con = params_in['res_con']
+    k_values = np.linspace(k_span[0], k_span[1], params_in['k_num'])
+    n_tot = np.sum(nk_arr, axis=0)
+
+    if method == 'binned':
+        # Split the plot into 4 < N < 10 bins, where N is given by the number of characteristic
+        # timescales included in the total integration time
+        N_bins = int(min(max(np.floor(t_f/T_min), 4), 10))
+        ln_rescon = max(1., np.log10(res_con))
+
+        nk_binned = binned_statistic(times, np.log10(nk_arr), bins=N_bins, statistic='mean')
+        class_res = pd.DataFrame([binned_classifier(nk_binned.statistic[k_i], N_bins, ln_rescon, return_dict=True) for k_i, _ in enumerate(k_values)])
+        nk_class = np.array(class_res['label'])
+        nk_ratios = dict(zip(k_values, class_res['ratio_final'] + class_res['ratio_max'] + class_res['baseline']))
+
+        nt_binned = binned_statistic(times, np.log10(n_tot), bins=N_bins, statistic='mean')
+        tot_class, ratio_f, ratio_m, base_val = binned_classifier(nt_binned.statistic, N_bins, ln_rescon)
+        
+        t_res = times[np.where(np.log10(n_tot) >= base_val)][0]
+        t_max = times[np.where(np.log10(n_tot) >= base_val+ratio_m)][0]
+
+    elif method == 'window':
+        # TODO: Flesh this out
+        '''
+        # (From plotting subroutine)
+        #tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a > 0) else 'none'
+        '''
+        return None
+    elif method == 'cutoff':
+        # TODO: Flesh this out
+        # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
+        '''
+        # (from k_class)
+        k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+        # (From get_peak_k_modes)
+        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
+        '''
+        return None
+    elif method == 'RMS':
+        # TODO: copy-paste RMS stuff from make_amplitudes_plot here
+        return None
+    elif method == 'avg':
+        # TODO: copy-paste running average stuff from make_amplitudes_plot here
+        return None
+    else:
+        print('Error: method=\'%s\' is not a valid option.' % method)
+        return None
+    # nk_class  : str   = [k]-dim array of classification labels for each mode
+    # tot_class : str   = single classification label for n_total
+    # nk_ratios : float = [k]-dim array of resonance strength quantified by numerical metrics
+    # ratio_f   : float = single value quantifying resonance strength for n_total
+    # ratio_m   : float = single value quantifying resonance strength for n_total
+    # t_res     : float = time, in given units, when resonance begins
+    return nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, tex_fmt=False, add_colorbars=False):
-    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, tex_fmt, add_colorbars)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, class_method='binned', tex_fmt=False, add_colorbars=False):
+    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, class_method, tex_fmt, add_colorbars)
     plt.show()
 
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
 sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(i, p_in, sol_in, k_v, times, n=n_in) for i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, tex_fmt=False, add_colorbars=False, write_to_params=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, class_method='binned', tex_fmt=False, add_colorbars=False, write_to_params=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     fontsize = 16 if tex_fmt else 14
@@ -1099,37 +1269,59 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
 
     n_tot = sum_n_p(numf, params_in, results_in, k_values, times)
 
-    res_con = params_in['res_con']
-    if scale_n:
-        n_tot /= abs(n_tot[0])
-        #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
+    '''
+    use_legacy_classification = False
+    if use_legacy_classification:
+        res_con = params_in['res_con']
+        if scale_n:
+            n_tot /= abs(n_tot[0])
+            #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
 
-    # This is to handle the fact that sometimes we have a large initial spike that quickly flattens out
-    #   (Don't classify this as resonance)
-    win_sens = params_in['t_sens']
-    t_num = len(times)
-    #t_sens_range = times[0:win_min(win_sens)]
-    t_idx_a   = np.ma.argmax(np.array(n_tot) > res_con)
-    t_res_a   = times[t_idx_a]
-    n_res_a   = n_tot[t_idx_a]
-    t_idx_lim = win_U_N(-win_sens, t_n=t_num)
-    t_idx_b   = t_idx_a if t_idx_a >= t_idx_lim else np.ma.argmax(np.array(n_tot/n_res_a) > res_con)
-    t_res   = times[t_idx_b]
-    n_res   = n_tot[t_idx_b]
-    # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
-    #       - Also, unify all of the different methods we use to classify resonance
-    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a >= 0) else 'none'
+        # This is to handle the fact that sometimes we have a large initial spike that quickly flattens out
+        #   (Don't classify this as resonance)
+        win_sens = params_in['t_sens']
+        t_num = len(times)
+        #t_sens_range = times[0:win_min(win_sens)]
+        t_idx_a   = np.ma.argmax(np.array(n_tot) > res_con)
+        t_res_a   = times[t_idx_a]
+        n_res_a   = n_tot[t_idx_a]
+        t_idx_lim = win_U_N(-win_sens, t_n=t_num)
+        t_idx_b   = t_idx_a if t_idx_a >= t_idx_lim and t_idx_a < t_num else np.ma.argmax(np.array(n_tot/n_res_a) > res_con)
+        t_res   = times[t_idx_b]
+        n_res   = n_tot[t_idx_b]
+        # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
+        #       - Also, unify all of the different methods we use to classify resonance
+        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a > 0) else 'none'
+    '''
+    
+    nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf) for k_i,_ in enumerate(k_values)])
+    class_method = 'binned'
+    k_class_arr, tot_class, k_ratio_arr, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, t_sens, A_sens, scale_n, class_method)
+
+    print(tot_class)
+    print(ratio_f)
+    print(ratio_m)
+    print(t_res)
+    print(t_max)
+
     if write_to_params:
         params_in['t_res'] = t_res
-        params_in['res_class'] = tot_res
+        params_in['res_class'] = tot_class
+        params_in['res_ratio_f'] = ratio_f
+        params_in['res_ratio_m'] = ratio_m
+        params_in['k_class_arr'] = k_class_arr
+        params_in['k_ratio_arr'] = k_ratio_arr
     #n_res = res_con*sum(k_sens(np.mean, -t_sens))
+    n_res = n_tot[np.where(times >= t_res)][0]
+    n_max = n_tot[np.where(times >= t_max)][0]
 
     #with plt.xkcd():
     plt.subplot2grid((2,5), (1,0), colspan=3)
     #fig,ax = plt.subplots()
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
-    plt.plot(np.ma.masked_greater(times, min(t_res,t_res_a)), n_tot, label='none', color='grey')
-    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_res_a), t_res), n_tot, label='energy injection', color='orange')
+    # TODO: Fix how the plot is drawn/labeled
+    plt.plot(np.ma.masked_greater(times, min(t_res, t_max)), n_tot, label='none', color='grey')
+    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot, label='energy injection', color='orange')
     plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='red')
     plt.title(r'Occupation Number (total)', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
@@ -1155,13 +1347,13 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
 
     plt.tight_layout()
 
-    print('a  | t: %.2f    n = %.2e' % (t_res_a, n_res_a))
-    print('b  | t: %.2f    n = %.2e' % (t_res, n_res))
-    print('t_sens =', win_sens)
-    print('k_ratio sum: ', sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])))
-    print('t_lim = %.2f' % times[t_idx_lim])
-    print('class = ', params_in['res_class'], '=', tot_res)
+    print('res  | t: %.2f    n = %.2e' % (t_res, n_res))
+    print('max  | t: %.2f    n = %.2e' % (t_max, n_max))
     print('res condition: %s' % res_con)
+    #print('t_sens =', win_sens)
+    #print('k_ratio sum: ', sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])))
+    #print('t_lim = %.2f' % times[t_idx_lim])
+    print('class = ', params_in['res_class'], '=>', tot_class)
     #print(n_tot)
     
     return plt, params_in, t_res, n_res
@@ -1347,17 +1539,22 @@ k_to_Hz = lambda ki, k0, h, c: ki * ((k0*c) / (2*np.pi*h))
 #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
 Hz_to_k = lambda fi, k0, h, c: fi * ((h*2*np.pi) / (k0*c))
 
-def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
-    plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt)
+def plot_resonance_spectrum(params_in, results_in, units_in, fwd_fn, inv_fn, numf_in=None, class_method='binned', tex_fmt=False):
+    plt = make_resonance_spectrum(params_in, results_in, units_in, fwd_fn, inv_fn, numf_in, class_method, tex_fmt)
     plt.show()
 
-def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn, tex_fmt=False):
+def make_resonance_spectrum(params_in, results_in, units_in, fwd_fn, inv_fn, numf_in=None, class_method='binned', tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
-    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'soft': 'orange', 'res': 'red'}
+    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'injection': 'orange', 'soft': 'orange', 'burst':'purple', 'res': 'red'}
     res_con_in = params_in['res_con']
 
     t_sens = params_in['t_sens']
     A_sens = params_in['A_sens']
+    times  = np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
+
+    nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf_in if numf_in is not None else n_k) for k_i,_ in enumerate(k_values)])
+    class_method = 'binned'
+    nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, t_sens, A_sens, scale_n=True, method=class_method)
     
     plt.figure(figsize = (20,6))
     plt.suptitle(r'Resonance Classification')

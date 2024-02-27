@@ -248,6 +248,10 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     L4_sc = abs(L4) if not rescale_consts else L4 / m_unit
     F_sc  = abs(F)  if not rescale_consts else  F / m_unit
 
+    # Characteristic timescales (minimum binsize to capture full oscillations) by species
+    T_min, T_r, T_n, T_c = get_timescales(m, m0, m_u=1, verbosity=verbosity)
+
+    # Get units and pretty print parameters and system configuration to console
     units = get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p, unitful_c, unitful_h, unitful_G, use_mass_units, verbosity=verbosity)
     print_params(units, m=m, p=p, amps=amps, Th=Th, d=d, m_q=m_scale, m_0=m0, m_u=m_u, natural_units=use_natural_units, verbosity=verbosity)
 
@@ -322,14 +326,15 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     # Collect all simulation configuration parameters
     parameters = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4, 'res_con': res_con,
-                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 't_sens': t_sens, 'A_sens': A_sens, 't_step': t_step, 'k_step': k_step,
+                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 'A_sens': A_sens, 'k_step': k_step,
+                't_sens': t_sens, 't_step': t_step, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_min,
                 'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'm_0': m0, 'm_u': m_unit, 'm_scale': m_scale, 'p_unit': p_unit,
                 'm_r': m[0], 'm_n': m[1], 'm_c': m[2], 'p_r': p[0], 'p_n': p[1], 'p_c': p[2], 'Th_r': Th[0], 'Th_n': Th[1], 'Th_c': Th[2],
                 'amp_r': amps[0], 'amp_n': amps[1], 'amp_c': amps[2], 'd_r': d[0], 'd_n': d[1], 'd_c': d[2], 'k_0': k0,
                 'unitful_m': unitful_masses, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
                 'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
-                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'int_method': int_method, 
-                'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D, 'em_bg': em_bg}
+                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'em_bg': em_bg,
+                'int_method': int_method, 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D}
 
     # Create unique hash for input parameters (to compare identical runs)
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
@@ -378,8 +383,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             times = t
 
             scale_n = True
-            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, scale_n=scale_n, write_to_params=True)
-            n_tot = sum_n_p(n_k, params, solutions, k_values, times)
+            n_k_local = n_k
+            class_method = 'binned'
+            
+            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, scale_n=scale_n, write_to_params=True, numf_in=n_k_local, class_method=class_method)
+            n_tot = sum_n_p(n_k_local, params, solutions, k_values, times)
             result_plots['nums'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -417,7 +425,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
-            plt = make_resonance_spectrum(params, units, k_to_Hz_local, Hz_to_k_local)
+            plt = make_resonance_spectrum(params, solutions, units, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
             result_plots['resonance'] = plt.gcf()
             if show_plots:
                 plt.show()
