@@ -33,7 +33,7 @@ then
     PIAXI_JOB_SUFFIX="_full"
 elif [[ "$INPUT_ARG1" = "SAMPLED" ]]
 then
-    PIAXI_DQMC="None None None None None None"
+    PIAXI_DQMC="x x x x x x"
     PIAXI_JOB_SUFFIX="_sampled"
 fi
 

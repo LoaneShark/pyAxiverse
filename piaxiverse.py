@@ -159,7 +159,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     #qc_arr_in = args.dqm_c.split('_')
     #print(qc_arr_in)
     #qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in qc_arr_in], dtype=float)
-    qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in args.dqm_c], dtype=float).reshape((6,))
+    qc = np.array([qc_val if qc_val != 'x' else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in args.dqm_c], dtype=float).reshape((6,))
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
     dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
@@ -385,7 +385,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             scale_n = True
             n_k_local = n_k
             class_method = 'binned'
-            
+
             plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, scale_n=scale_n, write_to_params=True, numf_in=n_k_local, class_method=class_method)
             n_tot = sum_n_p(n_k_local, params, solutions, k_values, times)
             result_plots['nums'] = plt.gcf()
@@ -456,6 +456,8 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
                         save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots,
                         save_coefficients=True, P=P, B=B, C=C, D=D, plot_types=['amps', 'nums', 'coeffs', 'resonance', 'alp'])
+
+        plt.close()
 
         if verbosity > 1:
             print('Done!')
@@ -781,7 +783,7 @@ if __name__ == '__main__':
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
     parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
 
-    parser.add_argument('--dqm_c', type=list, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
+    parser.add_argument('--dqm_c', type=list, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
 
     args = parser.parse_args()
     main(args)
