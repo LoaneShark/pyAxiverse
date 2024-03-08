@@ -149,17 +149,17 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     ## Dark SM Parameters
     sample_qmass = False # TODO
-    sample_qcons = args.dqm_c is None
+    sample_qcons = args.dqm_c is None or args.dqm_c == 'None'
 
     # SM quark masses for all 3 generations
     qm = m_scale*np.array([1., 2., 40.]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
 
     # dSM quark scaling constants (up, down, strange, charm, bottom, top) sampled from uniform distribution [0.7, 1.3]
-    #qc = np.array(args.dqm_c) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
-    #qc_arr_in = args.dqm_c.split('_')
-    #print(qc_arr_in)
+    #print(args.dqm_c)
+    qc_in = np.full(6, None) if sample_qcons else map(lambda cx: None if cx in ['None','x'] else cx, args.dqm_c)
+    #print(qc_in)
     #qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in qc_arr_in], dtype=float)
-    qc = np.array([qc_val if qc_val != 'x' else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in args.dqm_c], dtype=float).reshape((6,))
+    qc = np.array([rng.uniform(0.7, 1.3) if qc_val is None else qc_val for qc_val in qc_in], dtype=float).reshape((6,))
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
     dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
@@ -359,6 +359,12 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Solve the equations of motion
         solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress, method=int_method)
+        
+        # Classify resonance from results
+        class_method = 'heaviside'
+        n_k_local = n_k
+        n_tot = sum_n_p(n_k_local, params, solutions, k_values, t)
+        tot_res = classify_resonance(params, [n_tot], k_span=(k_values[0], k_values[-1]), method=class_method)[0]
 
         # Generate plots and optionally show them
         make_plots = args.make_plots
@@ -367,7 +373,6 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Plot results (Amplitudes)
         k_peak, k_mean = get_peak_k_modes(solutions, k_values, write_to_params=True)
-        tot_res = params['res_class']
         if make_plots:
             if verbosity > 0:
                 print('max (peak) k mode: ' + str(k_peak))
@@ -378,16 +383,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             result_plots['amps'] = plt.gcf()
             if show_plots:
                 plt.show()
-        
+
+        # Plot results (Occupation number)
         if make_plots:
-            times = t
-
-            scale_n = True
-            n_k_local = n_k
-            class_method = 'binned'
-
-            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, scale_n=scale_n, write_to_params=True, numf_in=n_k_local, class_method=class_method)
-            n_tot = sum_n_p(n_k_local, params, solutions, k_values, times)
+            write_to_params = True
+            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n_k_local, class_method=class_method, write_to_params=write_to_params)
             result_plots['nums'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -396,8 +396,8 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             if 'res' in tot_res and verbosity > 2:
                 print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
 
+        # Plot results (Oscillating coefficient values)
         if make_plots:
-            # Plot results (Oscillating coefficient values)
             plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
             result_plots['coeffs'] = plt.gcf()
             if show_plots:
@@ -425,7 +425,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
-            plt = make_resonance_spectrum(params, solutions, units, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
+            plt = make_resonance_spectrum(params, units, solutions, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
             result_plots['resonance'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -783,7 +783,7 @@ if __name__ == '__main__':
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
     parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
 
-    parser.add_argument('--dqm_c', type=list, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
+    parser.add_argument('--dqm_c', type=str, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
 
     args = parser.parse_args()
     main(args)
