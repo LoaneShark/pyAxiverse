@@ -20,10 +20,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.cm as cm
 from scipy.stats import norm
 import matplotlib.patheffects as pe
+import os
 
-rootdir = 'tools/AxionLimits/'
-pltdir  = rootdir+'plots/'
-lmtdir  = rootdir+'limit_data/'
+rootdir = os.path.abspath('./AxionLimits/')
+pltdir  = rootdir+'/plots/'
+lmtdir  = rootdir+'/limit_data/'
 pltdir_png = pltdir+'plots_png/'
 
 #==============================================================================#
@@ -317,8 +318,13 @@ class AxionPhoton():
             #F_pi = ((6*(h2Omega_pi)/(5*(9*h2Omega_r)**(3/4)))*((H0/100)**(-1/2))*(H0**(1/2))*(Mpl**2)*(theta**(-2))*(m_a**(-1/4)))**(4/9)
 
             #return (alpha)*(F_pi**(-1))*(epsilon**2)*(lambda1)
+            
             return (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_a**(1/4))
 
+        # TODO: Why is this function seemingly inverted in the log-trend (1/g) compared to the above, despite being sourced from the same equations?
+        # NOTE: Currently not used until the above is addressed
+        def g_x_alt(lambda1,m_I,epsilon,m_a):
+            return 2*lambda1*(epsilon**2)/(m_a**2/m_I)
 
         # Plot Band
         n = 200
@@ -331,7 +337,7 @@ class AxionPhoton():
 
         cols.set_under('w') # Set lowest color to white
         vmin = amax(piAx)/(C_logwidth/4.6)
-        #plt.contourf(m, g, piAx, 50,cmap=cols,vmin=vmin,vmax=vmax,zorder=0)
+        #plt.contourf(m, g, piAx, 50,cmap=cols,vmin=vmin,vmax=vmax,zorder=1)
 
         trans_angle = plt.gca().transData.transform_angles(array((rot,)),array([[0, 0]]))[0]
 
