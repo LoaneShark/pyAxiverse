@@ -364,7 +364,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
         class_method = 'heaviside'
         n_k_local = n_k
         n_tot = sum_n_p(n_k_local, params, solutions, k_values, t)
-        tot_res = classify_resonance(params, [n_tot], k_span=(k_values[0], k_values[-1]), method=class_method)[0]
+        tot_res = classify_resonance(params, [n_tot], k_span=(k_values[0], k_values[-1]), method=class_method, verbosity=verbosity)[0]
 
         # Generate plots and optionally show them
         make_plots = args.make_plots

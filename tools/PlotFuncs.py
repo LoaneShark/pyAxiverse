@@ -22,7 +22,7 @@ from scipy.stats import norm
 import matplotlib.patheffects as pe
 import os
 
-rootdir = os.path.abspath('./AxionLimits/')
+rootdir = os.path.abspath('./tools/AxionLimits' if os.path.isdir('./tools/AxionLimits') else './AxionLimits/' if os.path.isdir('./AxionLimits') else './')
 pltdir  = rootdir+'/plots/'
 lmtdir  = rootdir+'/limit_data/'
 pltdir_png = pltdir+'plots_png/'

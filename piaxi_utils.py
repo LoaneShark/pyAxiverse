@@ -514,7 +514,7 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                 fname = file.split('/')[-1]
                 print(f'  {fname:{flen}}  | {sizeof_fmt(fsize)}')
 
-def load_multiple_results(output_dir, label, load_images=False, save_format='pdf', nested=False, include_debug=True):
+def load_multiple_results(output_dir, label, load_images=False, save_format='pdf', nested=False, include_debug=True, load_method='json'):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -527,7 +527,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     - all_results (list of np.arrays): List of simulation results.
     - all_plots (list of lists or None): A list of lists containing matplotlib figures or images for each simulation.
     """
-    
+    load_pandas = load_method in ['pandas','pd']
     output_path = os.path.expanduser(output_dir) if '~' in output_dir else output_dir
     if nested:
         file_dirs  = [os.path.join(os.path.expanduser(output_path), sub_dir) for sub_dir in os.listdir(output_path) if not('debug' in sub_dir) or include_debug]
@@ -550,8 +550,11 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         
         # Load parameters
         params_filename = os.path.join(filepath, base_name + '.json')
-        with open(params_filename, 'r') as f:
-            params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
+        if load_pandas:
+            params = pd.read_json(params_filename, dtype=True, typ='series')
+        else:
+            with open(params_filename, 'r') as f:
+                params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
         # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
         if 'config_name' not in params:
             params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
@@ -870,8 +873,8 @@ def get_timescales(m, m0, m_u=1., verbosity=0):
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
 
 # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
-# TODO: unify all of the different methods we use to classify resonance
-k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+# (DEPRECATED) see classify_resonance instead
+# k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
 get_times = lambda params_in, times_in: times_in if times_in is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
 
@@ -884,7 +887,7 @@ win_U_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. + sens)*np.sign(sens) + 
 
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
 def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
-    global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res, t_num
+    global k_func, k_sens, k_ratio, k_peak, k_mean, tot_res, t_num
     t_num = len(results_in[0][0])
     k_values = k_values_in if k_values_in is not None else k_values if k_values is not None else None
 
@@ -1105,14 +1108,6 @@ n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot) - 2*k*Im(k))
 n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)), 
                                                                 A=A_i(i, solns), Adot=Adot_i(i, solns), Im=lambda k: ImAAdot(k, t=get_times(params, t_in)))
 
-'''(Deprecated)
-#k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
-w_p = lambda i, params: w(i, k_vals_p(params), params['m_u'])
-w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
-#n_p = lambda i, params, solns: n(i, lambda j: w_p(j, params), solns)
-#n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
-'''
-
 def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
     b_baseline = k_stat[0]
     class_label = 'none' if b_baseline < ln_rescon else 'injection'
@@ -1221,14 +1216,15 @@ def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
             n_class = 'damp'
         else: # otherwise, no resonance
             n_class = 'none'
+    if verbosity >= 8:
+        print('res_class: ', n_class)
 
     return n_class, ratio_f, ratio_m, t_res, t_max
 
 # Classify amplitude growth given occupation numbers
 # Assume input has dimensions of (k x t)
-def classify_resonance(params_in, nk_arr, k_span, method='heaviside'):
-    # TODO: Make this the main function for classifying resonance
-    # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
+def classify_resonance(params_in, nk_arr, k_span, method='heaviside', verbosity=5):
+    # TODO: Either flesh out or remove the unimplemented methods beyond heaviside
 
     T_min = params_in['T_u'] if 'T_u' in params_in else get_timescales(np.array(params_in['m'], dtype=object), params_in['m_0'], m_u=1)[0]
     t_f   = params_in['t_span'][1]
@@ -1257,7 +1253,7 @@ def classify_resonance(params_in, nk_arr, k_span, method='heaviside'):
         # TODO: peak-to-peak classification method?
         return None
     elif method == 'heaviside':
-        tot_class, ratio_f, ratio_m, t_res, t_max = heaviside_classifier(times, n_tot, res_con, verbosity=5)
+        tot_class, ratio_f, ratio_m, t_res, t_max = heaviside_classifier(times, n_tot, res_con, verbosity=verbosity)
         nk_class_arr = np.array([heaviside_classifier(times, n_k, res_con, verbosity=0) for n_k in nk_arr])
         nk_class = nk_class_arr[:,0]
         nk_ratios = nk_class_arr[:,1:].astype(np.float64)
@@ -1669,7 +1665,7 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     
     return plt
 
-def plot_ALP_survey(params_in, verbosity=0, tex_fmt=False):
+def plot_ALP_survey_old(params_in, verbosity=0, tex_fmt=False):
     plt.figure(figsize = (16,12))
     #plt.suptitle('ALP Survey Results')
 
@@ -1745,6 +1741,76 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=False):
         im_ax = im_ax.twiny()
         im_ax.axis('off')
         im_ax.imshow(survey_img, extent=[xmin, xmax, ymin, ymax], aspect='auto')
+    
+    return plt
+
+def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
+    tools_dir = os.path.abspath(os.path.join('./tools'))
+    if tools_dir not in sys.path:
+        sys.path.append(tools_dir)
+
+    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
+
+    fig,ax = FigSetup(Shape='Rectangular',ylab='$|g_{a\gamma\gamma}|$ [GeV$^{-1}$]',mathpazo=True)
+
+    # Plot QCD axion lines and experimental bounds
+    AxionPhoton.QCDAxion(ax,C_center=abs(5/3-1.92)*(44/3-1.92)/2,C_width=0.7,vmax=1.1,)
+    AxionPhoton.Cosmology(ax)
+    AxionPhoton.StellarBounds(ax)
+    AxionPhoton.SolarBasin(ax)
+    AxionPhoton.Haloscopes(ax,projection=True,BASE_arrow_on=False)
+    AxionPhoton.Helioscopes(ax,projection=True)
+    AxionPhoton.LSW(ax,projection=True)
+    AxionPhoton.LowMassAstroBounds(ax,projection=True)
+
+    # Dark matter astro/cosmo bounds:
+    AxionPhoton.ALPdecay(ax,projection=True)
+    AxionPhoton.NeutronStars(ax)
+    AxionPhoton.AxionStarExplosions(ax)
+
+    # TODO: Verify we are using the appropriate equation to calculate the g_pi-m_pi relation
+    AxionPhoton.piAxion(ax,epsilon=1,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+    AxionPhoton.piAxion(ax,epsilon=0.5,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+    AxionPhoton.piAxion(ax,epsilon=0.01,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+
+    AxionPhoton.piAxion(ax,epsilon=eps,lambda1=l1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='GnBu',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+
+    ## Plot markers for this run
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    res_color  = '#b042f5' if 'res' in params['res_class'] else 'grey'
+    m_u = params_in['m_u']
+    F   = params_in['F']
+    l1  = params_in['l1']
+    eps = params_in['eps']
+
+    # Primary data
+    ax1 = plt.gcf().add_subplot()
+    ax1.set_xscale('log')
+    ax1.set_xlim(xmin, xmax)
+    ax1.set_yscale('log')
+    ax1.set_ylim(ymin, ymax)
+    ax1.axis('off')
+    ax1.set_zorder(3)
+    #g_u = GeV/F
+    g_u = lambda eps=eps, l1=l1, F=F, GeV=1e9: 2*l1*(eps**2) / (F/GeV)
+    ax1.scatter(m_u, g_u(), s=2000, c='white', marker='*')
+    ax1.scatter(m_u, g_u(), s=1000, c=res_color, marker='*')
+
+    # Secondary Data
+    ax2 = plt.gcf().add_subplot()
+    ax2.set_xscale('log')
+    ax2.set_xlim(xmin, xmax)
+    ax2.set_yscale('log')
+    ax2.set_ylim(ymin, ymax)
+    ax2.axis('off')
+    ax2.set_zorder(2)
+    for m_v in m[0]:
+        ax2.scatter(m_v, g_u(), s=1000, c='grey', marker='*')
     
     return plt
 
