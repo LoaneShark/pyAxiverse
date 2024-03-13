@@ -21,7 +21,10 @@ def main(args):
 
     return None
 
+# Helper function to get sample space for exponential variable distributions
 get_values = lambda xmin, xmax, N: np.geomspace(10**np.float64(xmin), 10**np.float64(xmax), N)
+
+# Perform integrations over ranges of allowable parameter choices
 def run_multiple_cases(args):
 
     mass_values = [args.m_scale]
@@ -36,6 +39,8 @@ def run_multiple_cases(args):
     Lambda4_N   = args.scan_Lambda4_N if args.scan_Lambda4_N is not None else args.scan_Lambda
     eps_values  = [args.eps]
     eps_N       = args.scan_epsilon_N
+    rho_values  = [args.rho]
+    rho_N       = args.scan_rho_N
 
     scan_mass     = np.float64(args.scan_mass)    if args.scan_mass    is not None else None
     scan_F        = np.float64(args.scan_F)       if args.scan_F       is not None else None
@@ -43,6 +48,7 @@ def run_multiple_cases(args):
     scan_Lambda3  = np.float64(args.scan_Lambda3) if args.scan_Lambda3 is not None else None
     scan_Lambda4  = np.float64(args.scan_Lambda4) if args.scan_Lambda4 is not None else None
     scan_eps      = np.float64(args.scan_epsilon) if args.scan_epsilon is not None else None
+    scan_rho      = np.float64(args.scan_rho)     if args.scan_rho     is not None else None
     N_samples     = args.num_samples if args.num_samples is not None else 1
 
     if scan_mass is not None:
@@ -58,6 +64,10 @@ def run_multiple_cases(args):
         F_values = get_values(F_min, F_max, F_N)
         # TODO: Allow this to scan about inferred value from epsilon if said argument is enabled?
         fit_F = False
+    
+    if scan_rho is not None:
+        rho_min, rho_max = scan_rho
+        rho_values = get_values(rho_min, rho_max, rho_N)
 
     if args.verbosity >= 9:
         print('scanning args in: ')
@@ -75,18 +85,19 @@ def run_multiple_cases(args):
 
     i = 0
     for Ni in range(N_samples):
-        for mass in mass_values:
-            for eps in eps_values:
-                for F in F_values:
-                    for L3 in L3_values:
-                        for L4 in L4_values:
-                            if args.verbosity >= 7:
-                                print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
-                            run_single_case(args, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
-                            i += 1
+        for rho in rho_values:
+            for mass in mass_values:
+                for eps in eps_values:
+                    for F in F_values:
+                        for L3 in L3_values:
+                            for L4 in L4_values:
+                                if args.verbosity >= 7:
+                                    print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
+                                run_single_case(args, rho_in=rho, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
+                                i += 1
     return None
 
-def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
+def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
     ## INPUT PARAMETERS
     verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
@@ -123,7 +134,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     # Tuneable constants
     e    = 0.3         # dimensionless electron charge
     F    = Fpi_in if Fpi_in is not None else args.F      # pi-axion decay constant (GeV) >= 10^11
-    p_t  = args.rho    # total local DM density (GeV/cm^3)
+    p_t  = rho_in if rho_in is not None else args.rho    # total local DM density (GeV/cm^3)
     ## --> TODO: Could/Should we support spatially dependent distributions?
     eps  = eps_in if eps_in is not None else args.eps    # millicharge, vary to enable/disable charged species (<= 10e-25 ~ ON, >= 10e-15 ~ OFF)
     L3   = L3_in  if L3_in  is not None else args.L3     # Coupling constant Lambda_3
@@ -131,7 +142,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     l1 = l2 = l3 = l4 = 1
     
     # Unit scaling:
-    m_scale = args.m_scale             # dark quark mass scale (eV) <= 10-20
+    m_scale = m_scale_in if m_scale_in is not None else args.m_scale     # dark quark mass scale (eV) <= 10-20
     ## Handle optional fitting of F_pi as a function of fundamental mass scale]
     fit_F = fit_F_in if fit_F_in is not None else args.fit_F
     if fit_F:
@@ -771,17 +782,19 @@ if __name__ == '__main__':
 
     parser.add_argument('--fit_F', action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
     parser.add_argument('--scan_F',         type=int,  nargs=2,       help='Provide min and max values of F_pi values to search, in [log GeV] scale')
-    parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to search within specified F_pi range')
+    parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to sample within specified F_pi range')
     parser.add_argument('--scan_mass',      type=int,  nargs=2,       help='Provide min and max values of mass scales to search, in [log eV] scale')
-    parser.add_argument('--scan_mass_N',    type=int,  default=10,    help='Provide number of values to search within specified mass range')
+    parser.add_argument('--scan_mass_N',    type=int,  default=10,    help='Provide number of values to sample within specified mass range')
     parser.add_argument('--scan_Lambda',    type=int,  nargs=2,       help='Provide min and max values of coupling constant scales to search, in [log GeV] units (L_3=L_4)')
     parser.add_argument('--scan_Lambda3',   type=int,  nargs=2,       help='Provide min and max values of L_3 values to search, in [log GeV]')
     parser.add_argument('--scan_Lambda4',   type=int,  nargs=2,       help='Provide min and max values of L_4 values to search, in [log GeV]')
-    parser.add_argument('--scan_Lambda_N',  type=int,  default=10,    help='Provide number of values to search within specified Lambda range')
-    parser.add_argument('--scan_Lambda3_N', type=int,  default=None,  help='Provide number of values to search within specified L_3 range')
-    parser.add_argument('--scan_Lambda4_N', type=int,  default=None,  help='Provide number of values to search within specified L_4 range')
+    parser.add_argument('--scan_Lambda_N',  type=int,  default=10,    help='Provide number of values to sample within specified Lambda range')
+    parser.add_argument('--scan_Lambda3_N', type=int,  default=None,  help='Provide number of values to sample within specified L_3 range')
+    parser.add_argument('--scan_Lambda4_N', type=int,  default=None,  help='Provide number of values to sample within specified L_4 range')
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
-    parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
+    parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to sample within specified millicharge range')
+    parser.add_argument('--scan_rho',       type=int,  nargs=2,       help='Provide min and max values of DM energy density scales to search, in [log GeV/cm^3] units')
+    parser.add_argument('--scan_rho_N',     type=int,  default=1,    help='Provide number of values to sample within specified DM energy density range')
 
     parser.add_argument('--dqm_c', type=str, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
 

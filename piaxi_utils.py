@@ -27,7 +27,7 @@ signtex = {1: '+', -1: '-', 0: '\pm'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v3.2.5'
+version='v3.2.6'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
@@ -1749,10 +1749,22 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     if tools_dir not in sys.path:
         sys.path.append(tools_dir)
 
-    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
+    # Shade of purple chosen for visibility against existing plot colors
+    res_color  = '#b042f5' if 'res' in params['res_class'] else 'grey'
 
+    # Import plotting functions from AxionLimits and set up AxionPhoton plot
+    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
     fig,ax = FigSetup(Shape='Rectangular',ylab='$|g_{a\gamma\gamma}|$ [GeV$^{-1}$]',mathpazo=True)
 
+    # Current values for model parameters
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    m_u = params_in['m_u']
+    F   = params_in['F']
+    l1  = params_in['l1']
+    eps = params_in['eps']
+
+    ## Populate standard AxionPhoton limits plot
     # Plot QCD axion lines and experimental bounds
     AxionPhoton.QCDAxion(ax,C_center=abs(5/3-1.92)*(44/3-1.92)/2,C_width=0.7,vmax=1.1,)
     AxionPhoton.Cosmology(ax)
@@ -1779,15 +1791,7 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     AxionPhoton.piAxion(ax,epsilon=eps,lambda1=l1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='GnBu',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
 
-    ## Plot markers for this run
-    xmin, xmax = ax.get_xlim()
-    ymin, ymax = ax.get_ylim()
-    res_color  = '#b042f5' if 'res' in params['res_class'] else 'grey'
-    m_u = params_in['m_u']
-    F   = params_in['F']
-    l1  = params_in['l1']
-    eps = params_in['eps']
-
+    ## Plot star marker for this specific parameter configuration
     # Primary data
     ax1 = plt.gcf().add_subplot()
     ax1.set_xscale('log')
