@@ -84,7 +84,7 @@ def run_multiple_cases(args):
         L4_values = get_values(L4_min, L4_max, Lambda4_N)
 
     i = 0
-    for Ni in range(N_samples):
+    for s_idx in range(N_samples):
         for rho in rho_values:
             for mass in mass_values:
                 for eps in eps_values:
@@ -794,7 +794,7 @@ if __name__ == '__main__':
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
     parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to sample within specified millicharge range')
     parser.add_argument('--scan_rho',       type=int,  nargs=2,       help='Provide min and max values of DM energy density scales to search, in [log GeV/cm^3] units')
-    parser.add_argument('--scan_rho_N',     type=int,  default=1,    help='Provide number of values to sample within specified DM energy density range')
+    parser.add_argument('--scan_rho_N',     type=int,  default=1,     help='Provide number of values to sample within specified DM energy density range')
 
     parser.add_argument('--dqm_c', type=str, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
 

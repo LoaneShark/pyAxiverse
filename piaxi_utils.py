@@ -2087,3 +2087,83 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
         print('%s resonance detected from %.0g to %.0g Hz' % (classification, min_res_Hz, max_res_Hz))
     
     return min_res_Hz, max_res_Hz, classification
+
+## Fine Structure Constant corrections
+alpha_sm   = lambda t: 1./137
+alpha_off  = lambda t: 1.
+# (include sum over all surviving species, where lambda(3 or 4) and Lambda(3 or 4) are determined by neutral/charged species)
+# TODO: This is incomplete (only have equation for diagonal terms, missing off-diagonal contributions)
+piaxi_fs = lambda t, lambdas, Lambdas, e, eps, amps, masses, phases, alpha=alpha_sm: \
+    alpha(t) * (1 + (2*(e**2))*(eps**2)*np.sum([(l_i)/(L_i**2) * np.abs(amp_i)**2 * np.cos(m_i*t + d_i)**2 for amp_i, m_i, d_i, l_i, L_i in zip(amps, masses, phases, lambdas, Lambdas)]))
+
+def get_fs_corrections(params_in):
+    e_in  = params_in['e']
+    l3_in = params_in['l3']
+    l4_in = params_in['l4']
+    L3_in = params_in['L3']
+    L4_in = params_in['L4']
+    m_in  = np.concatenate(params_in['m'], axis=None)
+    d_in  = np.concatenate(params_in['d'], axis=None)
+    amps_in  = np.concatenate(params_in['amps'], axis=None)
+    eps_in = params_in['eps']
+    Nr_in  = params_in['N_r']
+    Nn_in  = params_in['N_n']
+    Nc_in  = params_in['N_c']
+
+    lambdas_in = np.array([l3_in]*Nr_in + [l3_in]*Nn_in + [l4_in]*Nc_in)
+    Lambdas_in = np.array([L3_in]*Nr_in + [L3_in]*Nn_in + [L4_in]*Nc_in)
+
+    alpha_corrected = lambda t: piaxi_fs(t, lambdas=lambdas_in, Lambdas=Lambdas_in, e=e_in, eps=eps_in, amps=amps_in, masses=m_in, phases=d_in)
+    return alpha_corrected
+
+def plot_fs_constant(params_in, verbosity=0, return_plot=False):
+    alpha_e = get_fs_corrections(params_in)
+
+    if verbosity >= 5:
+        print('Fine Structure Constant Oscillations: ')
+        print('    alpha_SM     = %.1e ' % alpha_sm(t=0))
+        print('    alpha_e(t=0) = %.1e ' % alpha_e(t=0))
+
+    # Show plot of alpha
+    m_ref_in = params_in['m_u']
+    fs_t = np.linspace(0, 3./m_ref_in, 100)
+    plt.plot(fs_t, [alpha_sm(t) for t in fs_t], label=r'$\alpha_{SM}$')
+    plt.plot(fs_t, [alpha_e(t)  for t in fs_t], label=r'$\alpha_{e}(t)$')
+    plt.grid()
+    plt.legend()
+    if return_plot:
+        return plt
+    else:
+        plt.show()
+
+## Coupling Constants
+# Parity-Odd Interaction (triangle anomaly)
+g_anomaly  = lambda F_pi, l1=1., eps=1., fs_in=alpha_sm, t=0: fs_in(t)*(eps**2)/(2 * F_pi) * l1
+# Scalar QED interactions and scattering couplings
+g_coupling = lambda Li, li=1., eps=1., fs_in=alpha_off, t=0: fs_in(t)*(eps**2)*li/(2 * Li**2)
+
+def get_coupling_constants(params_in, verbosity=0):
+    l1_in = params_in['l1']
+    l2_in = params_in['l2']
+    l3_in = params_in['l3']
+    l4_in = params_in['l4']
+    L3_in = params_in['L3']
+    L4_in = params_in['L4']
+    eps_in = params_in['eps']
+    Fpi_in = params_in['F']
+    alpha_e = get_fs_corrections(params_in)
+    # Parity-Even
+    g_1 = g_anomaly(F_pi=Fpi_in, l1=l1_in, eps=eps_in)
+    g_2 = g_coupling(Li=1., li=l2_in, eps=eps_in)
+    g_3 = g_coupling(Li=L3_in, li=l3_in, eps=eps_in, alpha_fs=alpha_e)
+    g_4 = g_coupling(Li=L4_in, li=l4_in, eps=eps_in, alpha_fs=alpha_e)
+
+    if verbosity >= 7:
+        print('g_anomaly = %.1e [eV]   |   triangle anomaly' % g_1)
+        print('g_2       = %.1e [eV]   |   scalar QED' % g_2)
+        print('g_3       = %.1e [eV]   |   charged scattering' % g_3)
+        print('g_4       = %.1e [eV]   |   neutral scattering' % g_4)
+    
+    return g_1, g_2, g_3, g_4
+
+cosmo_stability = lambda m_in, F_pi, eps: 1e-34 * (eps**4) * (m_in/(1e-5))**3 * (1e21/F_pi)**2
