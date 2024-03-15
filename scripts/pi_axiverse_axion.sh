@@ -39,7 +39,7 @@ PIAXI_KMODE_RES=0.1
 PIAXI_L4="7.2"
 
 # Density [GeV] ~ (amp_a)^2*m_a / 2
-PIAXI_DENSITY="1e22"
+PIAXI_DENSITY="22"
 # F_pi [GeV] ~ 2/g_a
 PIAXI_F="15.2"
 # m_I [eV] ~ (m_a)^2 / F_pi
