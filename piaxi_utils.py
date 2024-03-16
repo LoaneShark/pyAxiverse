@@ -2110,8 +2110,8 @@ def get_fs_corrections(params_in):
     Nn_in  = params_in['N_n']
     Nc_in  = params_in['N_c']
 
-    lambdas_in = np.array([l3_in]*Nr_in + [l3_in]*Nn_in + [l4_in]*Nc_in)
-    Lambdas_in = np.array([L3_in]*Nr_in + [L3_in]*Nn_in + [L4_in]*Nc_in)
+    lambdas_in = np.array([l4_in]*Nr_in + [l4_in]*Nn_in + [l3_in]*Nc_in)
+    Lambdas_in = np.array([L4_in]*Nr_in + [L4_in]*Nn_in + [L3_in]*Nc_in)
 
     alpha_corrected = lambda t: piaxi_fs(t, lambdas=lambdas_in, Lambdas=Lambdas_in, e=e_in, eps=eps_in, amps=amps_in, masses=m_in, phases=d_in)
     return alpha_corrected
@@ -2155,8 +2155,8 @@ def get_coupling_constants(params_in, verbosity=0):
     # Parity-Even
     g_1 = g_anomaly(F_pi=Fpi_in, l1=l1_in, eps=eps_in)
     g_2 = g_coupling(Li=1., li=l2_in, eps=eps_in)
-    g_3 = g_coupling(Li=L3_in, li=l3_in, eps=eps_in, alpha_fs=alpha_e)
-    g_4 = g_coupling(Li=L4_in, li=l4_in, eps=eps_in, alpha_fs=alpha_e)
+    g_3 = g_coupling(Li=L3_in, li=l3_in, eps=eps_in, fs_in=alpha_e)
+    g_4 = g_coupling(Li=L4_in, li=l4_in, eps=eps_in, fs_in=alpha_e)
 
     if verbosity >= 7:
         print('g_anomaly = %.1e [eV]   |   triangle anomaly' % g_1)

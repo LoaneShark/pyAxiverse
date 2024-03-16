@@ -21,6 +21,9 @@ then
     conda info
 fi
 
+INPUT_ARG1="${1:-"0"}"
+PIAXI_JOB_SUFFIX=""
+
 PIAXI_SYS_NAME=$SLURM_JOB_NAME
 PIAXI_N_CORES=$SLURM_JOB_NUM_NODES
 PIAXI_COREMEM=$SLURM_MEM_PER_NODE
@@ -45,4 +48,27 @@ PIAXI_F="15.2"
 # m_I [eV] ~ (m_a)^2 / F_pi
 PIAXI_MASS="-37.5"
 
-python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --num_samples 1 --t $PIAXI_MAX_TIME --tN $PIAXI_N_TIMES --use_mass_units $PIAXI_MASS_UNIT --verbosity $PIAXI_VERBOSITY --k $PIAXI_MAX_KMODE --k_res $PIAXI_KMODE_RES --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --eps=1 --dqm_c 0.5 0.5 0 0 0 0 --no-fit_F --F $PIAXI_F --L4 $PIAXI_L4 --save_output_files --make_plots
+if [[ "$INPUT_ARG1" = "0" ]]
+then
+    PIAXI_DQMC="0.5 0.5 0 0 0 0"
+elif [[ "$INPUT_ARG1" = "SIMPLE" ]] || [[ "$INPUT_ARG1" = "QCD" ]]
+then
+    PIAXI_DQMC="0.5 0.5 0 0 0 0"
+elif [[ "$INPUT_ARG1" = "REAL" ]]
+then
+    PIAXI_DQMC="x x 0 0 0 0"
+elif [[ "$INPUT_ARG1" = "COMPLEX" ]]
+then
+    PIAXI_DQMC="0 x x 0 0 0"
+elif [[ "$INPUT_ARG1" = "CHARGED" ]]
+then
+    PIAXI_DQMC="0 0 x x 0 0"
+elif [[ "$INPUT_ARG1" = "FULL" ]]
+then
+    PIAXI_DQMC="1 1 1 1 1 1"
+elif [[ "$INPUT_ARG1" = "SAMPLED" ]]
+then
+    PIAXI_DQMC="x x x x x x"
+fi
+
+python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --num_samples 1 --t $PIAXI_MAX_TIME --tN $PIAXI_N_TIMES --use_mass_units $PIAXI_MASS_UNIT --verbosity $PIAXI_VERBOSITY --k $PIAXI_MAX_KMODE --k_res $PIAXI_KMODE_RES --m_scale $PIAXI_MASS --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --eps=1 --dqm_c $PIAXI_DQMC --no-fit_F --F $PIAXI_F --L4 $PIAXI_L4 --save_output_files --make_plots
