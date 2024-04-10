@@ -74,7 +74,7 @@ def get_param_space():
 
 k_count_max = 0  # TODO: Make sure this max counter works
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
-def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45'):
+def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45', write_to_params=True):
     global k_count_max
     # Determine the environment
     is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
@@ -127,14 +127,14 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     # Initialize photon apmlitudes via bunch-davies initial conditions
     A_scale    = params['A_0']
     Adot_scale = params['Adot_0']
-    k_N = len(k_values)
+    k_N  = len(k_values)
     y0_k = init_photons(k_N, A_scale=A_scale, Adot_scale=Adot_scale)
 
     # Solve the differential equation for each k, in parallel
     if parallelize:
         with mp.Pool(num_cores) as pool:
             #solutions = np.array(p.map(solve_subsystem, k_values))
-            pool_params = [(system_in, params, y0, k, verbosity, method) for k, y0 in zip(k_values, y0_k)]
+            pool_params = [(system_in, params, np.float64(y0), np.float64(k), verbosity, method) for k, y0 in zip(k_values, y0_k)]
             pool_inputs = tqdm.tqdm(pool_params, total=k_N) if show_progress_bar else pool_params
             solutions = pool.starmap(solve_subsystem, pool_inputs)
     else:
@@ -146,7 +146,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             if verbosity > 7 and show_progress_bar:
                 #print('i = %d,   k[i] = %d' % (i, k))
                 progress_val(i)
-            solutions[i] = solve_subsystem(system_in, params, y0_k[i], k, verbosity=0, method=method) # Store the solution
+            solutions[i] = solve_subsystem(system_in, params, np.float64(y0_k[i]), np.float64(k), verbosity=0, method=method) # Store the solution
     
     # `solutions` contains the solutions for A(t) for each k.
     # e.g. `solutions[i]` is the solution for `k_values[i]`.
@@ -158,10 +158,12 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     timestr = str(time_elapsed) + (' elapsed on %d cores' % num_cores if parallelize else '')
     
     # update parameters with performance statistics
-    params['time_elapsed'] = time_elapsed
-    params['num_cores'] = num_cores if parallelize else 1
-    params['parallel'] = parallelize
-    params['jupyter'] = jupyter
+    if write_to_params:
+        params['time_elapsed'] = time_elapsed
+        params['num_cores']    = num_cores if parallelize else 1
+        params['parallel']     = parallelize
+        params['jupyter']      = jupyter
+        params['mem_per_core'] = params['mem_per_core'] if parallelize and 'mem_per_core' in params and params['mem_per_core'] is not None and params['mem_per_core'] > 0 else None
 
     if verbosity >= 0:
         print(timestr)
@@ -192,7 +194,7 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45'):
 def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G):
     # System of differential equations to be solved (bg = photon background)
     dy0dt = y[1]
-    dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*k0) + D(t))*y[0]) - (k*k0)**2*y[0]
+    dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*np.float64(k0)) + D(t))*y[0]) - (k*np.float64(k0))**2*y[0]
     return [dy0dt, dy1dt]
 
 def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):
@@ -202,6 +204,7 @@ def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):
 
     return np.array([A_0, Adot_0], dtype=np.float64).T
 
+# TODO: Verify / implement this
 def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_modes=[]):
     """
     Calculate the Floquet exponents for a system with multiple k-modes.
@@ -247,18 +250,18 @@ def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_mode
     
     return floquet_exponents
 
-# Example usage
-'''
-p_func = lambda t: np.cos(t)
-q_func = lambda t, k: np.sin(t) + k
-T = 2 * np.pi
-y0 = [1, 1]
-yp0 = [0, 0]
-k_modes = [1, 2]
+    # Example usage
+    '''
+    p_func = lambda t: np.cos(t)
+    q_func = lambda t, k: np.sin(t) + k
+    T = 2 * np.pi
+    y0 = [1, 1]
+    yp0 = [0, 0]
+    k_modes = [1, 2]
 
-exponents = floquet_exponent(p_func, q_func, T, k_modes)
-print(exponents)
-'''
+    exponents = floquet_exponent(p_func, q_func, T, k_modes)
+    print(exponents)
+    '''
 
 # Helper function to print parameters of model (deprecated)
 def get_text_params_old(case='full', units_in={}):

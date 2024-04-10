@@ -21,7 +21,10 @@ def main(args):
 
     return None
 
+# Helper function to get sample space for exponential variable distributions
 get_values = lambda xmin, xmax, N: np.geomspace(10**np.float64(xmin), 10**np.float64(xmax), N)
+
+# Perform integrations over ranges of allowable parameter choices
 def run_multiple_cases(args):
 
     mass_values = [args.m_scale]
@@ -36,6 +39,8 @@ def run_multiple_cases(args):
     Lambda4_N   = args.scan_Lambda4_N if args.scan_Lambda4_N is not None else args.scan_Lambda
     eps_values  = [args.eps]
     eps_N       = args.scan_epsilon_N
+    rho_values  = [args.rho]
+    rho_N       = args.scan_rho_N
 
     scan_mass     = np.float64(args.scan_mass)    if args.scan_mass    is not None else None
     scan_F        = np.float64(args.scan_F)       if args.scan_F       is not None else None
@@ -43,6 +48,7 @@ def run_multiple_cases(args):
     scan_Lambda3  = np.float64(args.scan_Lambda3) if args.scan_Lambda3 is not None else None
     scan_Lambda4  = np.float64(args.scan_Lambda4) if args.scan_Lambda4 is not None else None
     scan_eps      = np.float64(args.scan_epsilon) if args.scan_epsilon is not None else None
+    scan_rho      = np.float64(args.scan_rho)     if args.scan_rho     is not None else None
     N_samples     = args.num_samples if args.num_samples is not None else 1
 
     if scan_mass is not None:
@@ -58,6 +64,10 @@ def run_multiple_cases(args):
         F_values = get_values(F_min, F_max, F_N)
         # TODO: Allow this to scan about inferred value from epsilon if said argument is enabled?
         fit_F = False
+    
+    if scan_rho is not None:
+        rho_min, rho_max = scan_rho
+        rho_values = get_values(rho_min, rho_max, rho_N)
 
     if args.verbosity >= 9:
         print('scanning args in: ')
@@ -74,19 +84,20 @@ def run_multiple_cases(args):
         L4_values = get_values(L4_min, L4_max, Lambda4_N)
 
     i = 0
-    for Ni in range(N_samples):
-        for mass in mass_values:
-            for eps in eps_values:
-                for F in F_values:
-                    for L3 in L3_values:
-                        for L4 in L4_values:
-                            if args.verbosity >= 7:
-                                print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
-                            run_single_case(args, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
-                            i += 1
+    for s_idx in range(N_samples):
+        for rho in rho_values:
+            for mass in mass_values:
+                for eps in eps_values:
+                    for F in F_values:
+                        for L3 in L3_values:
+                            for L4 in L4_values:
+                                if args.verbosity >= 7:
+                                    print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
+                                run_single_case(args, rho_in=rho, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
+                                i += 1
     return None
 
-def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
+def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
     ## INPUT PARAMETERS
     verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
@@ -97,6 +108,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     config_name       = args.config_name          # Descriptive name for the given parameter case. Output files will be saved in a directory with this name.
     seed              = args.seed                 # rng_seed, integer value (None for random)
     num_cores         = args.num_cores            # Number of parallel threads available
+    mem_per_core      = args.mem_per_core         # Number of parallel threads available
     data_path         = args.data_path            # Path to directory where output files will be saved
     skip_existing     = args.skip_existing
 
@@ -122,7 +134,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     # Tuneable constants
     e    = 0.3         # dimensionless electron charge
     F    = Fpi_in if Fpi_in is not None else args.F      # pi-axion decay constant (GeV) >= 10^11
-    p_t  = args.rho    # total local DM density (GeV/cm^3)
+    p_t  = rho_in if rho_in is not None else args.rho    # total local DM density (GeV/cm^3)
     ## --> TODO: Could/Should we support spatially dependent distributions?
     eps  = eps_in if eps_in is not None else args.eps    # millicharge, vary to enable/disable charged species (<= 10e-25 ~ ON, >= 10e-15 ~ OFF)
     L3   = L3_in  if L3_in  is not None else args.L3     # Coupling constant Lambda_3
@@ -130,7 +142,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     l1 = l2 = l3 = l4 = 1
     
     # Unit scaling:
-    m_scale = args.m_scale             # dark quark mass scale (eV) <= 10-20
+    m_scale = m_scale_in if m_scale_in is not None else args.m_scale     # dark quark mass scale (eV) <= 10-20
     ## Handle optional fitting of F_pi as a function of fundamental mass scale]
     fit_F = fit_F_in if fit_F_in is not None else args.fit_F
     if fit_F:
@@ -148,13 +160,17 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     ## Dark SM Parameters
     sample_qmass = False # TODO
-    sample_qcons = args.dqm_c is None
+    sample_qcons = args.dqm_c is None or args.dqm_c == 'None'
 
     # SM quark masses for all 3 generations
     qm = m_scale*np.array([1., 2., 40.]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
 
     # dSM quark scaling constants (up, down, strange, charm, bottom, top) sampled from uniform distribution [0.7, 1.3]
-    qc = np.array(args.dqm_c) if not sample_qcons else rng.uniform(0.7, 1.3, (6,))
+    #print(args.dqm_c)
+    qc_in = np.full(6, None) if sample_qcons else map(lambda cx: None if cx in ['None','x'] else cx, args.dqm_c)
+    #print(qc_in)
+    #qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in qc_arr_in], dtype=float)
+    qc = np.array([rng.uniform(0.7, 1.3) if qc_val is None else qc_val for qc_val in qc_in], dtype=float).reshape((6,))
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
     dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
@@ -173,8 +189,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     k_min = 0 if use_k_eq_0 else 1
     k_max = args.k if args.k > 0 else args.kN  # default to a k-mode granularity of 1
     k_span = [k_min, k_max]  # TODO: replace with the appropriate values
-    k_res = args.k/args.kN if args.k > 0 else 1.         # k-mode granularity
-    k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)    # Number of k-modes
+    #k_res = args.k/args.kN if args.k > 0 else 1.         # k-mode granularity
+    k_res = args.k_res                                    # k-mode granularity
+    k_N = int((1./k_res)*max((k_max - k_min), 0) + 1)     # Number of k-modes
     #k_N = args.kN
 
     # Initial Conditions
@@ -242,6 +259,10 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
     L4_sc = abs(L4) if not rescale_consts else L4 / m_unit
     F_sc  = abs(F)  if not rescale_consts else  F / m_unit
 
+    # Characteristic timescales (minimum binsize to capture full oscillations) by species
+    T_min, T_r, T_n, T_c = get_timescales(m, m0, m_u=1, verbosity=verbosity)
+
+    # Get units and pretty print parameters and system configuration to console
     units = get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p, unitful_c, unitful_h, unitful_G, use_mass_units, verbosity=verbosity)
     print_params(units, m=m, p=p, amps=amps, Th=Th, d=d, m_q=m_scale, m_0=m0, m_u=m_u, natural_units=use_natural_units, verbosity=verbosity)
 
@@ -316,33 +337,45 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
     # Collect all simulation configuration parameters
     parameters = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4, 'res_con': res_con,
-                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 't_sens': t_sens, 'A_sens': A_sens, 't_step': t_step, 'k_step': k_step,
+                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 'A_sens': A_sens, 'k_step': k_step,
+                't_sens': t_sens, 't_step': t_step, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_min,
                 'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'm_0': m0, 'm_u': m_unit, 'm_scale': m_scale, 'p_unit': p_unit,
                 'm_r': m[0], 'm_n': m[1], 'm_c': m[2], 'p_r': p[0], 'p_n': p[1], 'p_c': p[2], 'Th_r': Th[0], 'Th_n': Th[1], 'Th_c': Th[2],
                 'amp_r': amps[0], 'amp_n': amps[1], 'amp_c': amps[2], 'd_r': d[0], 'd_n': d[1], 'd_c': d[2], 'k_0': k0,
                 'unitful_m': unitful_masses, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
                 'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
-                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'int_method': int_method, 
-                'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D, 'em_bg': em_bg}
+                'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'em_bg': em_bg,
+                'int_method': int_method, 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D}
 
+    # Create unique hash for input parameters (to compare identical runs)
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
+
+    # Save system performance related input parameters (not to be hashed because these don't affect the final state, only performance time)
+    parameters['num_cores']    = num_cores
+    parameters['mem_per_core'] = mem_per_core
 
     if skip_existing and if_output_exists(output_dir, phash):
         if verbosity >= 1:
-            print('SKIP: output file already exists for this configuration')
+            print('SKIP: output file already exists for this parameter configuration')
     else:
-
         # Solve the system, in parallel for each k-mode
         os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
         is_parallel = (num_cores > 1)
         show_progress = (verbosity >= 0)
 
+        # Initialize parameters
         params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
-        #params = set_param_space(init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N))
-
+        # Define system of equations to solve
         local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
 
+        # Solve the equations of motion
         solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress, method=int_method)
+        
+        # Classify resonance from results
+        class_method = 'heaviside'
+        n_k_local = n_k
+        n_tot = sum_n_p(n_k_local, params, solutions, k_values, t)
+        tot_res = classify_resonance(params, [n_tot], k_span=(k_values[0], k_values[-1]), method=class_method, verbosity=verbosity)[0]
 
         # Generate plots and optionally show them
         make_plots = args.make_plots
@@ -351,7 +384,6 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Plot results (Amplitudes)
         k_peak, k_mean = get_peak_k_modes(solutions, k_values, write_to_params=True)
-        tot_res = params['res_class']
         if make_plots:
             if verbosity > 0:
                 print('max (peak) k mode: ' + str(k_peak))
@@ -362,13 +394,11 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             result_plots['amps'] = plt.gcf()
             if show_plots:
                 plt.show()
-        
-        if make_plots:
-            times = t
 
-            scale_n = True
-            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, scale_n=scale_n, write_to_params=True)
-            n_tot = sum_n_p(n_k, params, solutions, k_values, times)
+        # Plot results (Occupation number)
+        if make_plots:
+            write_to_params = True
+            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n_k_local, class_method=class_method, write_to_params=write_to_params)
             result_plots['nums'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -377,8 +407,8 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
             if 'res' in tot_res and verbosity > 2:
                 print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
 
+        # Plot results (Oscillating coefficient values)
         if make_plots:
-            # Plot results (Oscillating coefficient values)
             plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
             result_plots['coeffs'] = plt.gcf()
             if show_plots:
@@ -406,7 +436,7 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
-            plt = make_resonance_spectrum(params, units, k_to_Hz_local, Hz_to_k_local)
+            plt = make_resonance_spectrum(params, units, solutions, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
             result_plots['resonance'] = plt.gcf()
             if show_plots:
                 plt.show()
@@ -435,7 +465,10 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
         if save_output_files:
             output_name  = '_'.join([config_name, phash])
             save_results(output_dir, output_name, params, solutions, result_plots, verbosity=verbosity, save_format='pdf',
-                        save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots)
+                        save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots,
+                        save_coefficients=True, P=P, B=B, C=C, D=D, plot_types=['amps', 'nums', 'coeffs', 'resonance', 'alp'])
+
+        plt.close()
 
         if verbosity > 1:
             print('Done!')
@@ -443,9 +476,9 @@ def run_single_case(args, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
 
 # Functions to rescale mass, k-modes, and time to desired units
-m0_f = lambda m_u, c, rescale_m, unitful_m: 1./c**2 if not rescale_m else (1./(m_u*c**2) if unitful_m else (m_u/c**2))
-k0_f = lambda m_u, c, rescale_k, unitful_m: m_u/c if rescale_k else 1.
-t0_f = lambda m_u, h, rescale_m, unitful_m: h/m_u if unitful_m else 1.
+m0_f = lambda m_in, c_in, rescale_m, unitful_m: 1./c_in**2 if not rescale_m else (1./(m_in*c_in**2) if unitful_m else (m_in/c_in**2))
+k0_f = lambda m_in, c_in, rescale_k, unitful_m: m_in/c_in if rescale_k else 1./c_in
+t0_f = lambda m_in, h_in, rescale_m, unitful_m: h_in/m_in if unitful_m else h_in
 
 ## Pi-axion Species Mass Definitions
 def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
@@ -454,6 +487,9 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     m_c = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype=float)   # charged
     # Pi-axion Species Labels
     s_l = np.array([np.full_like(m_r, '', dtype=str), np.full_like(m_n, '', dtype=str), np.full_like(m_c, '', dtype=str)], dtype=object)
+    
+    # Millicharge upper bound (charged species do not survive past this)
+    eps_bound = 1e-10
 
     ## Real Neutral Masses
     # pi_3
@@ -494,31 +530,31 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
 
     ## Charged Masses
     # pi_1  +/- i*pi_2
-    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) < 0.1 else 0.
+    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*eps_c[0]*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) <= eps_bound else 0.
     s_l[2][0] = '$\pi_1 \pm i\pi_2$'
     # pi_4  +/- i*pi_5
-    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) < 0.1 else 0.
+    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*eps_c[1]*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) <= eps_bound else 0.
     s_l[2][1] = '$\pi_4 \pm i\pi_5$'
     # pi_15 +/- i*pi_16
-    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) < 0.1 else 0.
+    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*eps_c[2]*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][2] = '$\pi_{15} \pm i\pi_{16}$'
     # pi_11 +/- i*pi_12
-    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*F)**2) if 0. not in [qc[1], qc[3]] and abs(eps) < 0.1 else 0.
+    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*eps_c[3]*F)**2) if 0. not in [qc[1], qc[3]] and abs(eps) <= eps_bound else 0.
     s_l[2][3] = '$\pi_{11} \pm i\pi_{12}$'
     # pi_23 +/- i*pi_24
-    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*F)**2) if 0. not in [qc[1], qc[5]] and abs(eps) < 0.1 else 0.
+    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*eps_c[4]*F)**2) if 0. not in [qc[1], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][4] = '$\pi_{23} \pm i\pi_{24}$'
     # pi_13 +/- i*pi_14
-    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*F)**2) if 0. not in [qc[2], qc[3]] and abs(eps) < 0.1 else 0.
+    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*eps_c[5]*F)**2) if 0. not in [qc[2], qc[3]] and abs(eps) <= eps_bound else 0.
     s_l[2][5] = '$\pi_{13} \pm i\pi_{14}$'
     # pi_25 +/- i*pi_26
-    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*F)**2) if 0. not in [qc[2], qc[5]] and abs(eps) < 0.1 else 0.
+    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*eps_c[6]*F)**2) if 0. not in [qc[2], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][6] = '$\pi_{25} \pm i\pi_{26}$'
     # pi_27 +/- i*pi_28
-    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*F)**2) if 0. not in [qc[3], qc[4]] and abs(eps) < 0.1 else 0.
+    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*eps_c[7]*F)**2) if 0. not in [qc[3], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][7] = '$\pi_{27} \pm i\pi_{28}$'
     # pi_32 +/- i*pi_33
-    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*F)**2) if 0. not in [qc[4], qc[5]] and abs(eps) < 0.1 else 0.
+    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*eps_c[8]*F)**2) if 0. not in [qc[4], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][8] = '$\pi_{32} \pm i\pi_{33}$'
 
     # Mask zero-valued / disabled species in arrays
@@ -707,6 +743,7 @@ if __name__ == '__main__':
     parser.add_argument('--tN',         type=int, default=300,  help='Number of timesteps')
     parser.add_argument('--k' ,         type=int, default=-1,   help='Max k-mode to include in calculations (-1 to assume kN)')
     parser.add_argument('--kN',         type=int, default=200,  help='Number of k-modes')
+    parser.add_argument('--k_res',      type=float, default=1,  help='Stepsize of k-modes to sample')
     parser.add_argument('--seed',       type=int, default=None, help='RNG seed')
 
     parser.add_argument('--eps',        type=np.float64, default=1,     help='Millicharge value')
@@ -736,7 +773,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     parser.add_argument('--int_method',        type=str,  default='RK45',          help='Numerical integration method, to be used by scipy solve_ivp')
     parser.add_argument('--num_samples',       type=int,  default=1,               help='Number of times to rerun a parameter set, except randomly sampled variables')
-
+    parser.add_argument('--mem_per_core',      type=int,  default=0,               help='Amount of memory available to each parallelized node, in GB')
 
     parser.add_argument('--P', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the P(t) coefficient in the numerics')
     parser.add_argument('--B', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the B(t) coefficient in the numerics')
@@ -745,19 +782,21 @@ if __name__ == '__main__':
 
     parser.add_argument('--fit_F', action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
     parser.add_argument('--scan_F',         type=int,  nargs=2,       help='Provide min and max values of F_pi values to search, in [log GeV] scale')
-    parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to search within specified F_pi range')
+    parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to sample within specified F_pi range')
     parser.add_argument('--scan_mass',      type=int,  nargs=2,       help='Provide min and max values of mass scales to search, in [log eV] scale')
-    parser.add_argument('--scan_mass_N',    type=int,  default=10,    help='Provide number of values to search within specified mass range')
+    parser.add_argument('--scan_mass_N',    type=int,  default=10,    help='Provide number of values to sample within specified mass range')
     parser.add_argument('--scan_Lambda',    type=int,  nargs=2,       help='Provide min and max values of coupling constant scales to search, in [log GeV] units (L_3=L_4)')
     parser.add_argument('--scan_Lambda3',   type=int,  nargs=2,       help='Provide min and max values of L_3 values to search, in [log GeV]')
     parser.add_argument('--scan_Lambda4',   type=int,  nargs=2,       help='Provide min and max values of L_4 values to search, in [log GeV]')
-    parser.add_argument('--scan_Lambda_N',  type=int,  default=10,    help='Provide number of values to search within specified Lambda range')
-    parser.add_argument('--scan_Lambda3_N', type=int,  default=None,  help='Provide number of values to search within specified L_3 range')
-    parser.add_argument('--scan_Lambda4_N', type=int,  default=None,  help='Provide number of values to search within specified L_4 range')
+    parser.add_argument('--scan_Lambda_N',  type=int,  default=10,    help='Provide number of values to sample within specified Lambda range')
+    parser.add_argument('--scan_Lambda3_N', type=int,  default=None,  help='Provide number of values to sample within specified L_3 range')
+    parser.add_argument('--scan_Lambda4_N', type=int,  default=None,  help='Provide number of values to sample within specified L_4 range')
     parser.add_argument('--scan_epsilon',   type=int,  nargs=2,       help='Provide min and max values of millicharge scales to search, in [log] units')
-    parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to search within specified millicharge range')
+    parser.add_argument('--scan_epsilon_N', type=int,  default=10,    help='Provide number of values to sample within specified millicharge range')
+    parser.add_argument('--scan_rho',       type=int,  nargs=2,       help='Provide min and max values of DM energy density scales to search, in [log GeV/cm^3] units')
+    parser.add_argument('--scan_rho_N',     type=int,  default=1,     help='Provide number of values to sample within specified DM energy density range')
 
-    parser.add_argument('--dqm_c', type=float, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Provide scaling constants c1-c6 used to define dQCD quark species masses. None = random sample')
+    parser.add_argument('--dqm_c', type=str, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
 
     args = parser.parse_args()
     main(args)

@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 import matplotlib.image as image
+import matplotlib.colors as colors
 import matplotlib.cm as cm
 from matplotlib.figure import Figure
 from matplotlib.pyplot import subplot2grid
@@ -11,6 +12,8 @@ from IPython.display import display, clear_output, HTML, Image
 from pyparsing import line
 from scipy.signal import spectrogram
 from scipy.optimize import curve_fit
+from scipy.stats import binned_statistic
+import sklearn.metrics
 import dill
 import json
 import hashlib
@@ -20,10 +23,11 @@ import ast
 import glob
 
 signstr = {1: '+', -1: '-', 0: '±'}
+signtex = {1: '+', -1: '-', 0: '\pm'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v3.1'
+version='v3.2.6'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
@@ -141,6 +145,15 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     m_c = params_in['m_c']      if 'm_c' in params_in else np.full((N_c, ), m[2]) # charged (complex) species
     m   = params_in['m']        if 'm'   in params_in else np.array([m_r, m_n, m_c], dtype=object)
 
+    # characteristic periods of oscillation for each species
+    if 'T_u' in params_in:
+        T_u = params_in['T_u']
+        T_r = params_in['T_r']
+        T_n = params_in['T_n']
+        T_c = params_in['T_c']
+    else:
+        T_u, T_r, T_n, T_c = get_timescales(m, m_0, m_u=1)
+
     # local DM densities for each species [eV/cm^3]
     p_r  = params_in['p_r'] if 'p_r' in params_in else np.full((N_r, ), None)   # (neutral) real species
     p_n  = params_in['p_n'] if 'p_n' in params_in else np.full((N_n, ), None)   # neutral (complex) species
@@ -182,6 +195,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
             Th = [np.mod(np.random.normal(mu_Th, sig_Th, len(Th_i)), 2*np.pi) for Th_i in Th]
             
     # rescaling and unit configuration
+    int_method = params_in['int_method']
     use_natural_units = params_in['use_natural_units']
     use_mass_units    = params_in['use_mass_units']
     unitful_m      = params_in['unitful_m']
@@ -195,6 +209,10 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     unitful_c = False if use_natural_units else c != 1
     unitful_h = False if use_natural_units else h != 1
     unitful_G = False if use_natural_units else G != 1
+
+    # performance metrics
+    num_cores    = params_in['num_cores']    if 'num_cores'    in params_in else 1
+    mem_per_core = params_in['mem_per_core'] if 'mem_per_core' in params_in else None
 
     t_0 = 1./m_u if unitful_m else 1.
 
@@ -212,10 +230,12 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'N_r': N_r, 'N_n': N_n, 'N_c': N_c, 'p_0': p_0,
               'm': m, 'm_r': m_r, 'm_n': m_n, 'm_c': m_c, 'p': p, 'p_r': p_r, 'p_n': p_n, 'p_c': p_c, 'm_0': m_0, 'm_q': m_q,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
-              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u, 't_u': t_0,
+              't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u,
+              't_u': t_0, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_u,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
-              'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 
-              'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p}
+              'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 'int_method': int_method,
+              'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p,
+              'num_cores': num_cores, 'mem_per_core': mem_per_core}
     
     return params
 
@@ -266,9 +286,9 @@ def convert_string_to_list(data, key):
 
 def parse_array_string(value):
     arrays = []
-    array_dtype = value.replace(')','').replace(']','').split('dtype=')[1] if 'dtype=' in value else 'float64'
-    parts = value.split('array(')
+    parts = [subval.strip() for subval in value.split('array(')]
     for part in parts:
+        array_dtype = part.replace(')','').replace(']','').split('dtype=')[1] if 'dtype=' in part else 'float64'
         if part:
             start_index = part.find('[')
             end_index = part.find(']')
@@ -326,6 +346,8 @@ class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, int):
+            return '%s' % obj
         return super(NumpyEncoder, self).default(obj)
     
     def decode(dct):
@@ -350,12 +372,12 @@ def get_parameter_space_hash(params_in, verbosity=0):
     return phash
 
 def get_rng(seed=None, verbosity=0):
-    entropy_size = 4 # TODO: Probably should reduce to 8 or 4
+    entropy_size = 4
     if seed is not None:
-        rng_ss = np.random.SeedSequence(entropy=seed, pool_size=entropy_size)
+        rng_ss = np.random.SeedSequence(entropy=int(seed), pool_size=entropy_size)
     else:
         rng_ss = np.random.SeedSequence(pool_size=entropy_size)
-    rng_seed = rng_ss.entropy
+    rng_seed = str(rng_ss.entropy)
     rng = np.random.default_rng(rng_ss)
 
     if verbosity > 3 or (verbosity >= 0 and seed is not None):
@@ -390,7 +412,7 @@ def load_coefficient_functions(filename):
 
 def save_results(output_dir_in, filename, params_in, results=None, plots=None, save_format='pdf', verbosity=0,
                  save_params=True, save_results=True, save_plots=True, plot_types=['amps', 'nums', 'resonance', 'alp'],
-                 test_run=False, scratch_dir=scratch_output_directory, save_coefficients=True, P=None, B=None, C=None, D=None):
+                 test_run=False, scratch_dir=scratch_output_directory, save_coefficients=False, P=None, B=None, C=None, D=None):
     
     # Don't save to longterm data for a test run
     output_dir = scratch_dir if test_run else output_dir_in
@@ -407,15 +429,18 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
     # Save parameters
     if save_params and params_in is not None:
         params_filename = os.path.join(output_dir, filename + '.json')
-        file_list.append(params_filename)
+        params_in['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
+        params_in['units'] = get_units_from_params(params_in)
         with open(params_filename, 'w') as f:
-            json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
+            with np.printoptions(threshold=np.inf):
+                json.dump(params_in, f, sort_keys=True, indent=4, cls=NumpyEncoder, default=str)
+        file_list.append(params_filename)
     
     # Save results
     if save_results and results is not None:
         results_filename = os.path.join(output_dir, filename + '.npy')
-        file_list.append(results_filename)
         np.save(results_filename, results)
+        file_list.append(results_filename)
 
     # Save P(t), D(t), C(t), and B(t) definitions
     if save_coefficients:
@@ -427,10 +452,11 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
             'D': D
         }
         save_coefficient_functions(functions_in, coeffs_filename)
+        file_list.append(coeffs_filename)
     
     # Save plots
     doc_formats = ['pdf', 'document', 'doc', 'all']
-    tex_formats = ['tex', 'latex', 'all'] # TODO
+    tex_formats = ['tex', 'latex', 'svg', 'pgf', 'all'] # TODO
     img_formats = ['png', 'img', 'image', 'jpg', 'all']
     nbk_formats = ['notebook', 'nb', 'ipynb', 'jupyter', 'all']
     web_formats = ['html', 'web', 'all']
@@ -488,7 +514,7 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                 fname = file.split('/')[-1]
                 print(f'  {fname:{flen}}  | {sizeof_fmt(fsize)}')
 
-def load_multiple_results(output_dir, label, load_images=False, save_format='pdf'):
+def load_multiple_results(output_dir, label, load_images=False, save_format='pdf', nested=False, include_debug=True, load_method='json'):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -501,34 +527,48 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     - all_results (list of np.arrays): List of simulation results.
     - all_plots (list of lists or None): A list of lists containing matplotlib figures or images for each simulation.
     """
+    load_pandas = load_method in ['pandas','pd']
+    output_path = os.path.expanduser(output_dir) if '~' in output_dir else output_dir
+    if nested:
+        file_dirs  = [os.path.join(os.path.expanduser(output_path), sub_dir) for sub_dir in os.listdir(output_path) if not('debug' in sub_dir) or include_debug]
+        all_files  = [os.path.join(sub_dir, nested_file) for sub_dir in file_dirs for nested_file in os.listdir(sub_dir)]
+    else:
+        file_dir   = os.path.join(os.path.expanduser(output_path), label)
+        all_files  = [os.path.join(file_dir, file_name) for file_name in os.listdir(file_dir) if not('debug' in file_name) or include_debug]
     
-    file_dir  = os.path.join(os.path.expanduser(output_dir), label) if '~' in output_dir else os.path.join(output_dir, label)
-    all_files = os.listdir(file_dir)
-    
-    relevant_files = [f for f in all_files if f.startswith(label) and f.endswith('.json')] # Assume input params are being saved for now, at least
+    # List of tuples (filename, absolute path)
+    relevant_files = [os.path.split(f) for f in all_files if (os.path.basename(f).startswith(label) or label == 'all') and os.path.basename(f).endswith('.json')] # Assume input params are being saved for now, at least
     
     all_params = []
     all_results = []
     all_plots = []
     all_coeffs = []
     
-    for filename in relevant_files:
+    for filepath, filename in relevant_files:
         # Extract base name without extension
         base_name = filename.rsplit('.', 1)[0]
         
         # Load parameters
-        params_filename = os.path.join(file_dir, base_name + '.json')
-        with open(params_filename, 'r') as f:
-            params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
+        params_filename = os.path.join(filepath, base_name + '.json')
+        if load_pandas:
+            params = pd.read_json(params_filename, dtype=True, typ='series')
+        else:
+            with open(params_filename, 'r') as f:
+                params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
+        # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
+        if 'config_name' not in params:
+            params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
+        if 'units' not in params:
+            params['units'] = get_units_from_params(params)
         all_params.append(params)
         
         # Load results
-        results_filename = os.path.join(file_dir, base_name + '.npy')
+        results_filename = os.path.join(filepath, base_name + '.npy')
         results = np.array(np.load(results_filename), dtype=object)
         all_results.append(results)
 
         # Load coefficient functions
-        coeffs_filename = os.path.join(file_dir, base_name, '_funcs.pkl')
+        coeffs_filename = os.path.join(filepath, base_name, '_funcs.pkl')
         if os.path.exists(coeffs_filename):
             all_coeffs.append(load_coefficient_functions(coeffs_filename))
         else:
@@ -538,8 +578,8 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         plots = []
         if load_images and save_format == 'png':
             i = 0
-            while os.path.exists(os.path.join(file_dir, base_name + f'_plot_{i}.png')):
-                plots.append(plt.imread(os.path.join(file_dir, base_name + f'_plot_{i}.png')))
+            while os.path.exists(os.path.join(filepath, base_name + f'_plot_{i}.png')):
+                plots.append(plt.imread(os.path.join(filepath, base_name + f'_plot_{i}.png')))
                 i += 1
         all_plots.append(plots)
     
@@ -561,7 +601,12 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     params_filename = os.path.join(output_dir, filename + '.json')
     with open(params_filename, 'r') as f:
         params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
-    
+    # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
+    if 'config_name' not in params:
+        params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
+    if 'units' not in params:
+        params['units'] = get_units_from_params(params)
+
     # Load results
     results_filename = os.path.join(output_dir, filename + '.npy')
     results = np.array(np.load(results_filename),dtype=np.float64)
@@ -584,9 +629,12 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     
     return params, results, plots, coeffs_dict
 
-def load_all(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf'):
+def load_all(output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=False):
+    return load_case(input_str='all', output_root=output_root, version=version, load_images=load_images, save_format=save_format, include_debug=include_debug)
+
+def load_case(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=True):
     """
-    Load all results given a full path to the output directory or just the simulation label.
+    Load all results for a given class of configuration parameters given a full path to the output directory or just the simulation label.
     
     Parameters:
     - input_str (str): Either the full path to the output directory or just the simulation label.
@@ -607,9 +655,9 @@ def load_all(input_str, output_root='~/scratch', version=version, load_images=Fa
         output_dir  = os.path.join(output_root, version)
         result_name = input_str
     
-    return load_multiple_results(output_dir, result_name, load_images, save_format)
+    return load_multiple_results(output_dir, result_name, load_images, save_format, nested=(input_str=='all'), include_debug=include_debug)
 
-def load_single(input_str, label=None, phash=None, output_root='~/scratch', version='v2.8', save_format='pdf', load_plots=False, verbosity=0):
+def load_single(input_str, label=None, phash=None, output_root='~/scratch', version=version, save_format='pdf', load_plots=False, verbosity=0):
     """
     Load results of a single run given a full filepath to any of the files associated with a run, or just the label and unique parameter hash.
     
@@ -718,10 +766,10 @@ def if_output_exists(directory, phash):
     return False
 
 # Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False):
+def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False, tex_fmt=False, add_colorbars=False, version=version):
 
     # Load results
-    params, results, _, coeffs = load_single(input_str, output_root=output_dir)
+    params, results, _, coeffs = load_single(input_str, output_root=output_dir, version=version)
 
     t_span = params['t_span']
     t_num  = params['t_num']
@@ -733,9 +781,12 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
                              t_max=t_span[1], t_min=t_span[0], t_N=t_num, 
                              k_max=k_span[1], k_min=k_span[0], k_N=k_num)
 
-    k_sens_arr = np.array(params.get('k_sens_arr', None), dtype=np.float64)
-    k_mean_arr = np.array(params.get('k_mean_arr', None), dtype=np.float64)
-    k_peak_arr = np.array(params.get('k_peak_arr', None), dtype=np.float64)
+    k_sens_in  = params.get('k_sens_arr', None)
+    k_sens_arr = np.array(k_sens_in.split() if type(k_sens_in) is str else k_sens_in, dtype=np.float64)
+    k_mean_in  = params.get('k_mean_arr', None)
+    k_mean_arr = np.array(k_mean_in.split() if type(k_mean_in) is str else k_mean_in, dtype=np.float64)
+    k_peak_in = params.get('k_peak_arr', None)
+    k_peak_arr = np.array(k_peak_in.split() if type(k_peak_in) is str else k_peak_in, dtype=np.float64)
 
     # Define which k values should be plotted
     k_peak = np.max(k_sens_arr) # peak (running avg) value per k-mode
@@ -768,11 +819,11 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 
     # Plot results of numerical integration, as imported from file
     if plot_res:
-        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times)
+        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
-        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, omega=None, k_samples=k_samples, times=times)
+        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
@@ -780,34 +831,71 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         B = coeffs['B'] if coeffs is not None else B_off
         C = coeffs['C'] if coeffs is not None else C_off
         D = coeffs['D'] if coeffs is not None else D_off
-        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times)
+        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
     
     if plot_spectrum:
-        k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw, e=e: k_to_Hz(ki, k0, h, c, e)
-        Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw, e=e: Hz_to_k(fi, k0, h, c, e)
-        plot_resonance_spectrum(params_in=params, units_in=units, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local)
+        k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw: k_to_Hz(ki, k0, h, c)
+        Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
+        plot_resonance_spectrum(params_in=params, units_in=units, results_in=results, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
 
-# k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial ampltidues (sensitive to a windowed average specified by [sens])
+# Helper function for below (NOTE: m_u may not be the same m_u as in other parts of the code -- look into this)
+min_timescale = lambda m_min, m_u: 1./(np.min([m_min,1.]))*((2*np.pi)/(m_u))
+
+# Characteristic timescales (minimum amount of time needed to capture full oscillations) by species
+def get_timescales(m, m0, m_u=1., verbosity=0):
+    # Assuming m_min is given in units of [m_u], else set rescaling relation in m_u arg
+    t_min = lambda m: min_timescale(m, m_u)
+    for i in range(m.shape[0]):
+        m_min_r = np.min(m[0]*m0) if len(m[0]) > 0 else 0
+        t_min_r = t_min(m_min_r)  if len(m[0]) > 0 else 0
+        m_min_n = np.min(m[1]*m0) if len(m[1]) > 0 else 0
+        t_min_n = t_min(m_min_n)  if len(m[1]) > 0 else 0
+        m_min_c = np.min(m[2]*m0) if len(m[2]) > 0 else 0
+        t_min_c = t_min(m_min_c)  if len(m[2]) > 0 else 0
+    # find largest t_min to set as our characteristic time period
+    T_min   = np.max(np.abs([t_min_r, t_min_n, t_min_c]))
+
+    if verbosity >= 2:
+        if verbosity >= 5:
+            print('Characteristic timescales by species:')
+            print(' -   reals: m_min = %.2f [m_u]  --->  T_r = %.2fπ [1/m_u]' % (m_min_r, np.abs(t_min_r/np.pi)))
+            print(' - complex: m_min = %.2f [m_u]  --->  T_n = %.2fπ [1/m_u]' % (m_min_n, np.abs(t_min_n/np.pi)))
+            print(' - charged: m_min = %.2f [m_u]  --->  T_c = %.2fπ [1/m_u]' % (m_min_c, np.abs(t_min_c/np.pi)))
+            if verbosity >= 8:
+                print(' -----------> T_min = %.2fπ [1/m_u]' % np.abs(T_min/np.pi))
+        else:
+            print('Characteristic timescale: T_min = %.2fπ [1/m_u]' % np.abs(T_min/np.pi))
+        print('----------------------------------------------------')
+
+    return T_min, t_min_r, t_min_n, t_min_c
+
+# k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial amplitudes (sensitive to a windowed average specified by [sens])
 k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
 
 # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
-k_class = lambda func, t_sens, A_sens: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'semi' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+# (DEPRECATED) see classify_resonance instead
+# k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
-get_times = lambda params_in, times_in: times_in if times_in is not None else t if t is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
+get_times = lambda params_in, times_in: times_in if times_in is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
+
+# get indices for time-averaged windows, characterized by sensitivity
+# (e.g. sens = 0.1 means shave off 10% of the time window; sign (+/-) of sens determines which endpoint of the window is returned)
+win_lower  = lambda sens: win_L_N(sens, t_n=t_num)  # anchor left endpoint at 0 (-/+ sens for L/R endpoints)
+win_upper  = lambda sens: win_U_N(sens, t_n=t_num)  # anchor right endpoint at t[N] (-/+ sens for L/R endpoints)
+win_L_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # time window in [0, (1-sens)]
+win_U_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # time window in [sens, 1]
 
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
 def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
-    global k_func, k_sens, k_ratio, k_class, k_peak, k_mean, tot_res
+    global k_func, k_sens, k_ratio, k_peak, k_mean, tot_res, t_num
     t_num = len(results_in[0][0])
     k_values = k_values_in if k_values_in is not None else k_values if k_values is not None else None
 
     # k_func : apply [func] on the time-series for each k mode, e.g. max or mean
     k_func = lambda func: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][:])) for k_vi, k_v in enumerate(k_values)])])
     
-    # k_sens : apply [k_func] but limit the time-series by [sens], e.g. sens = 0.1 to look at the first 10%. Negative values look at the end of the array instead.
-    win_min  = lambda sens: int(t_num*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # min value / left endpoint (of the sensitivity window over which to average)
-    win_max  = lambda sens: int(t_num*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # max value / right endpoint
-    k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_min(sens):win_max(sens)])) for k_vi, k_v in enumerate(k_values)])])
+    # k_sens : apply [k_func] but limit the time-series by [sens], e.g. sens = 0.1 to skip the first 10% in calculating our time-averaged values
+    k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_lower(sens):win_upper(sens)])) for k_vi, k_v in enumerate(k_values)])])
 
     # k mode(s) with the largest contributions to overall number density growth
     k_peak = k_values[np.ma.argmax(k_func(max))]
@@ -816,30 +904,74 @@ def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
     # store max, all-time mean, and late-time mean for each k-mode locally, as well as resonance classifications
     if write_to_params:
         global params
+        # TODO: Update this to new logic
         params['k_peak_arr']  = k_func(max)
         params['k_mean_arr']  = k_func(np.mean)
         params['k_sens_arr']  = k_sens(np.mean, t_sens)
-        params['k_class_arr'] = k_class(np.mean, t_sens, A_sens)
+        #params['k_class_arr'] = k_class(np.mean, t_sens, A_sens, res_con)
 
-        #t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
-        #t_res   = t[t_res_i]
-        #params['t_res'] = t_res
-        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
-        params['res_class'] = tot_res
+        # TODO: unify all of the different methods we use to classify resonance
+        #tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
+        #params['res_class'] = tot_res
     
     return k_peak, k_mean
 
+## Helper function for colorbar plotting
+def get_colorbar_params(k_values_in):
+    k_values = k_values_in
+    cm_vals = np.linspace(0,1,len(k_values))
+
+    # helper to normalize data into the [0.0, 1.0] interval.
+    cm_norm_pri = colors.Normalize(vmin=np.min(cm_vals), vmax=np.max(cm_vals))
+    # alternative to normalize data into the [-1.0, 1.0] interval.
+    cm_norm_alt = colors.Normalize(vmin=-np.max(cm_vals), vmax=np.max(cm_vals))
+
+    # choose a colormap
+    #c_m = cm.viridis
+    #c_m = cm.cividis_r
+    #c_m = cm.cool
+    c_m = cm.winter
+    #c_m = cm.PuBuGn
+    #c_m = cm.plasma
+    #c_m = cm.hsv
+    #c_m = cm.twilight
+    #c_m = cm.CMRmap
+
+    # create a ScalarMappable and initialize a data structure
+    s_m_pri = cm.ScalarMappable(cmap=c_m, norm=cm_norm_pri)
+    s_m_alt = cm.ScalarMappable(cmap=c_m, norm=cm_norm_alt)
+
+    # in case we need to have different colobar normalization schema for the data vs the plotting function
+    s_m_plt = s_m_pri
+    cm_norm_plt = cm_norm_pri
+    s_m_cbar = s_m_pri
+    cm_norm_cbar = cm_norm_pri
+
+    # Format text labels and tickmark locations for colorbar legend
+    cbar_ticks = np.linspace(0, 1, 2)
+    cbar_labels = [r'$%s$' % k_values[int(tick_val-1)] for tick_val in np.linspace(k_values[0], k_values[-1], len(cbar_ticks))]
+
+    return c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar
+
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True):
-    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False):
+    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars)
     plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in=None, plot_Adot=True):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
-    if len(k_samples) <= 0:
+    plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
+    if plot_all_k:
+        k_samples = [i for i, k_i in enumerate(k_values)]
+    elif len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,50,100,150,200,500,k_peak,k_mean]]
+    else:
+        k_samples = k_samples_in
+    
+    signdict = signtex if tex_fmt else signstr
+    fontsize = 16 if tex_fmt else 14
     times = get_times(params_in, times_in)
 
     xdim = 5
@@ -850,42 +982,99 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
 
     #fig = Figure(figsize=(4*xdim, 4*ydim))
     #plt.subplot2grid((ydim,xdim), (0,0), fig=fig, colspan=3)
-    plt.figure(figsize=(4*xdim, 4*ydim))
-    plt.subplot2grid((ydim,xdim), (0,0), colspan=3)
+    fig = plt.figure(figsize=(4*xdim, 4*ydim))
+    ax1 = plt.subplot2grid((ydim,xdim), (0,0), colspan=3, fig=fig)
 
-    #plot_colors = cm.get_cmap('plasma').jet(np.linspace(0,1,len(k_samples)))
+    if add_colorbars:
+        c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar = get_colorbar_params(k_values)
 
     for k_idx, k_sample in enumerate(k_samples):
-        k_s = int(k_sample)
+        k_s = int(k_sample-1)
         #print(results_in[k_s, 0])
-        plt.plot(times, results_in[k_s][0], label='k='+str(k_values[k_s]))
-    plt.title('Evolution of the mode function $A_{'+signstr[0]+'}$(k)')
-    plt.xlabel('Time [%s]' % units_in['t'])
-    plt.ylabel('$A_{'+signstr[0]+'}$(k)')
+
+        if abs_amps is None:
+            abs_amps = True if add_colorbars else False
+        if abs_amps or add_colorbars:
+            y = np.abs(results_in[k_s][0])
+        else:
+            y = results_in[k_s][0]
+
+        if add_colorbars:
+            plt.plot(times, y, label='k='+str(k_values[k_s]), linewidth=1, color=c_m(cm_norm_plt(cm_vals[k_idx])))
+        else:
+            plt.plot(times, y, label='k='+str(k_values[k_s]))
+
+    if add_colorbars:
+        cbar1 = plt.colorbar(s_m_cbar, label=r'$k$', cmap=c_m, norm=cm_norm_cbar, drawedges=False, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1))
+        cbar1.set_ticks(cbar_ticks)
+        cbar1.set_ticklabels(cbar_labels)
+    else:
+        plt.legend()
+    absbuff = '|' if abs_amps else ''
+    plt.title(r'Evolution of the mode function $%sA_{%s}(k)%s$' % (absbuff, signdict[0], absbuff))
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
+    plt.ylabel(r'$%sA_{%s}(k)%s$' % (absbuff, signdict[0], absbuff))
     plt.yscale('log')
-    plt.legend()
     plt.grid()
 
     #plt.subplot(2,1,2)
     plt.subplot2grid((ydim,xdim), (1,0), colspan=3)
     plt.plot(times, [sum([np.abs(results_in[i][0][t_i])**2 for i in range(len(k_values))]) for t_i in range(len(times))])
-    plt.title('Evolution of the (total) power for $A_{'+signstr[0]+'}$')
-    plt.xlabel('Time [%s]' % units_in['t'])
-    plt.ylabel('$|A_{'+signstr[0]+'}|^2$')
+    if add_colorbars:
+        # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
+        cbar2 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
+        cbar2.remove()
+    plt.title(r'Evolution of the (total) power $|A_{%s}|^2$' % signdict[0])
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
+    plt.ylabel(r'$|A_{%s}|^2$' % signdict[0])
     plt.yscale('log')
     plt.grid()
 
-
     if plot_Adot:
         #plt.subplot(2,1,2)
+        res_in_arr = np.array(results_in)
+        A_dims = (res_in_arr.shape[0], res_in_arr.shape[-1])
+        A_d = np.reshape(np.delete(res_in_arr, 1, axis=1), A_dims)
+        A_mean = np.reshape(A_d[list(k_values).index(k_mean)], (1, A_dims[1]))[0]
+        A_peak = np.reshape(A_d[list(k_values).index(k_peak)], (1, A_dims[1]))[0]
+        # Plot Amplitude rate of change
         plt.subplot2grid((ydim,xdim), (2,0), colspan=3)
-        plt.plot(times, [sum([results_in[i][1][t_i] for i in range(len(k_values))]) for t_i in range(len(times))], color='g', label='total')
-        plt.plot(times, [results_in[list(k_values).index(k_mean)][1][t_i] for t_i in range(len(times))], color='y', label='k = %d (mean)' % k_mean)
-        plt.plot(times, [results_in[list(k_values).index(k_peak)][1][t_i] for t_i in range(len(times))], color='orange', label='k = %d (peak)' % k_peak)
-        plt.title('Evolution of the (total) change in amplitude for A'+signstr[0])
-        plt.xlabel('Time [%s]' % units_in['t'])
-        plt.ylabel('$\dot{A}_{'+signstr[0]+'}$')
-        #plt.yscale('log')
+        plt.plot(times, np.sum(A_d, axis=0), color='g', label=r'total')
+        plt.plot(times, A_mean, color='y', label=r'$k$ = %d (mean)' % k_mean)
+        plt.plot(times, A_peak, color='orange', label=r'$k$ = %d (peak)' % k_peak)
+        plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signdict[0])
+        plt.xlabel(r'Time $[%s]$' % units_in['t'])
+        plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
+        plt.yscale('log')
+        if add_colorbars:
+            # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
+            cbar3 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
+            cbar3.remove()
+        
+        if plot_avg:
+            # TODO: Implement a decent average/convolution function (WIP)
+            avg = lambda a_in, m, dt=t_step, N=len(k_values): np.array([np.convolve(a_in[ki], np.ones(N)/N, mode=m) for ki in a_in])
+            plot_avg_modes = ['full', 'same', 'valid']
+            for mode in plot_avg_modes:
+                A_d_avg = avg(A_d, mode)
+                avg_times = np.linspace(times[0], times[-1], num=A_d_avg.shape[-1])
+                plt.plot(avg_times, A_d_avg, label=r'avg (%s)' % mode)
+        if plot_RMS:
+            # Plot Amplitude rate of change RMS / averaged values
+            rms = lambda a_in, t_in=times: np.sqrt(np.trapz(a_in**2, t_in)/(t_in[-1] - t_in[0]))
+            a_rms = lambda a_in, t_in=times, N=len(k_values): np.array([[rms(a_in[ki,:ti], t_in[:ti]) if ti > 1 else np.abs(a_in[ki,ti]) for ti, td in enumerate(t_in)] for ki in np.arange(N)])
+            # Calculate RMS for A_dot using two different methods
+            a_rms_1 = a_rms(np.reshape(np.sum(A_d, axis=0), (1, A_dims[1])), N=1)[0]
+            a_rms_2 = np.sum(a_rms(A_d), axis=0)
+            # Calculate for k_peak and k_mean
+            a_rms_peak  = a_rms(np.reshape(A_d[list(k_values).index(k_mean)], (1, A_dims[1])), N=1)[0]
+            a_rms_mean  = a_rms(np.reshape(A_d[list(k_values).index(k_peak)], (1, A_dims[1])), N=1)[0]
+
+            plt.plot(times, a_rms_1, color='black', linestyle='-', label=r'total (1)')
+            plt.plot(times, a_rms_2, color='black', linestyle=':', label=r'total (2)')
+            plt.plot(times, a_rms_peak, color='yellow', linestyle='-', label=r'$k$ = %d (mean)' % k_mean)
+            plt.plot(times, a_rms_mean, color='orange', linestyle='-', label=r'$k$ = %d (peak)' % k_peak)
+
         plt.legend()
         plt.grid()
 
@@ -894,11 +1083,11 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples=[], times_in
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((ydim,xdim), (max(0,ydim-3),3), rowspan=(3 if plot_Adot else 2))
-    plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=14)
+    plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=fontsize)
     plt.axis('off')
 
     plt.subplot2grid((ydim,xdim), (max(0,ydim-3),4), rowspan=(3 if plot_Adot else 2))
-    plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=14)
+    plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=fontsize)
     plt.axis('off')
 
     plt.tight_layout()
@@ -913,96 +1102,343 @@ k_i     = lambda i, k_vals=None: k_vals[i]
 ImAAdot = lambda k, t: -(1/2)
 k_vals_p = lambda params: np.linspace(params['k_span'][0], params['k_span'][1], params['k_num'])
 
-# Particle number for k_mode value at index i (TODO: Verify units in below equation)
+# Particle number for k_mode value (TODO: Verify units in below equation)
 n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot) - 2*k*Im(k))
 # Wrapper function for the above, using only params and results as inputs
 n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)), 
                                                                 A=A_i(i, solns), Adot=Adot_i(i, solns), Im=lambda k: ImAAdot(k, t=get_times(params, t_in)))
 
-'''(Deprecated)
-#k_to_w = np.float64(4.555e25) # 2πc/hbar [(Hz/eV)*(cm/s)]
-w_p = lambda i, params: w(i, k_vals_p(params), params['m_u'])
-w = lambda i, k_v, k_u, c=c_raw, h=h_raw: np.abs(k_v[i]*k_u*(2*np.pi/h))
-#n_p = lambda i, params, solns: n(i, lambda j: w_p(j, params), solns)
-#n = lambda i, w, solns: (w(i)/2) * (((np.square(np.abs(solns[i][1])))/(np.square(w(i)))) + np.square(np.abs(solns[i][0]))) - (1/2)
-'''
+def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
+    b_baseline = k_stat[0]
+    class_label = 'none' if b_baseline < ln_rescon else 'injection'
+    b_max_val = 0.
+    b_max_idx = 0
+    for bidx in range(1, N_bins-1):
+        bval = k_stat[bidx] - b_baseline
+        if bval > b_max_val:
+            b_max_val = bval
+            b_max_idx = bidx
+        # Exponential growth
+        if bval >= ln_rescon:
+            if class_label in ['none', 'damp', 'burst']:
+                class_label = 'resonance'
+        # Exponential decay
+        elif bval <= -ln_rescon:
+            if class_label in ['none', 'damp']:
+                class_label = 'damp'
+            else:
+                class_label = 'burst'
+        # No significant change
+        else:
+            if class_label in ['injection']:
+                # Re-zero out initial reference number once energy injection has stabilized
+                b_max_val = 0.
+                b_max_idx = bidx
+                b_baseline = k_stat[bidx]
+        
+    ratio_max = b_max_val
+    ratio_final = k_stat[-1] - b_baseline
+    
+    if (ratio_final - ratio_max) <= -ln_rescon:
+        class_label = 'burst'
+    
+    if return_dict:
+        return {'label': class_label, 'ratio_final': ratio_final, 'ratio_max': ratio_max, 'baseline': b_baseline}
+    else:
+        return class_label, ratio_final, ratio_max, b_baseline
 
+def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
+    n_ini = n_in[0]
+    n_fin = n_in[-1]
+    n_max = np.max(n_in)
+    n_min = np.min(n_in)
+    n_norm = n_in/n_ini
+    n_max_norm = np.max(n_norm)
+
+    n_fit = (n_norm) / (n_max_norm)
+    if verbosity >= 8:
+        print('t_in:', t_in.shape, t_in.dtype)
+        print('n_in:', n_in.shape, n_in.dtype)
+        print('n_fit:', n_fit.shape)
+
+    n_fit_max = np.max(n_fit)
+    if verbosity >= 8:
+        print('n_max:', n_max)
+        print('n_min:', n_min)
+        print('n_ini:', n_ini)
+        print('n_fin:', n_fin)
+
+    x_obs = t_in
+    y_obs = n_fit
+
+    H = lambda x,a,b,c: a * (np.sign(x-b)) + c # Heaviside fitting function
+
+    popt, pcov = curve_fit(H,x_obs,y_obs,p0=(1,0,0),bounds=(0, 1))
+    if verbosity >= 3:
+        print('fit = a: %.2f   b: %.2f   c: %.2f' % (popt[0], popt[1], popt[2]))
+        print('pcov = \n %s' % pcov)
+
+    # Use optimized parameters with your function
+    predicted = H(x_obs,popt[0],popt[1],popt[2]) 
+
+    # Use some metric to quantify fit quality, for now mean-squared error
+    lms_err = np.log10(sklearn.metrics.mean_squared_error(y_obs*n_max_norm, predicted*n_max_norm))
+    #rms_err = np.sqrt(sklearn.metrics.mean_squared_error(y_obs, predicted))
+    if verbosity >= 1:
+        print('log-mean-squared error: %.2f' % lms_err)
+
+    ratio_m = n_max / n_ini
+    ratio_f = n_fin / n_ini
+    t_res_idx = np.argwhere((n_fit / n_fit[0]) >= res_con)
+    t_max_idx = np.argwhere(n_fit >= n_fit_max)
+    t_res = t_in[t_res_idx[0] if len(t_res_idx) > 0 else -1]
+    t_res = t_res if type(t_res) is np.float64 else t_res[0]
+    t_max = t_in[0 if len(t_max_idx) == 0 else t_max_idx[0]]
+    t_max = t_max if type(t_max) is np.float64 else t_max[0]
+    if verbosity >= 8:
+        print('ratio_m: ', ratio_m)
+        print('ratio_f: ', ratio_f)
+        print('t_res: ', t_res)
+        print('t_max: ', t_max)
+
+    if lms_err > err_thresh: # if bad fit, assume exponential growth
+        if n_max/n_fin > res_con: # if n_max != n_final, assume energy "burst"
+            n_class = 'burst'
+        else: # otherwise, runaway instability
+            n_class = 'resonance'
+    else:
+        if ratio_f > res_con: # if n_final > n_initial, assume energy injection
+            if n_max/n_fin > res_con: # second check to catch energy "burst" form
+                n_class = 'burst'
+            else: # otherwise, "plateau" shaped energy injection
+                n_class = 'injection'
+        elif 1./ratio_f > res_con: # if n_initial >> n_final, assume overall damping (probably shouldn't happen)
+            n_class = 'damp'
+        else: # otherwise, no resonance
+            n_class = 'none'
+    if verbosity >= 8:
+        print('res_class: ', n_class)
+
+    return n_class, ratio_f, ratio_m, t_res, t_max
+
+# Classify amplitude growth given occupation numbers
+# Assume input has dimensions of (k x t)
+def classify_resonance(params_in, nk_arr, k_span, method='heaviside', verbosity=5):
+    # TODO: Either flesh out or remove the unimplemented methods beyond heaviside
+
+    T_min = params_in['T_u'] if 'T_u' in params_in else get_timescales(np.array(params_in['m'], dtype=object), params_in['m_0'], m_u=1)[0]
+    t_f   = params_in['t_span'][1]
+    times = np.array(get_times(params_in, None))
+    res_con = params_in['res_con']
+    k_values = np.linspace(k_span[0], k_span[1], params_in['k_num'])
+    n_tot = np.sum(nk_arr, axis=0)
+
+    if method == 'binned':
+        # Split the plot into 4 < N < 10 bins, where N is given by the number of characteristic
+        # timescales included in the total integration time
+        N_bins = int(min(max(np.floor(t_f/T_min), 4), 10))
+        ln_rescon = max(1., np.log10(res_con))
+
+        nk_binned = binned_statistic(times, np.log10(nk_arr), bins=N_bins, statistic='mean')
+        class_res = pd.DataFrame([binned_classifier(nk_binned.statistic[k_i], N_bins, ln_rescon, return_dict=True) for k_i, _ in enumerate(k_values)])
+        nk_class = np.array(class_res['label'])
+        nk_ratios = np.array(zip(k_values, class_res['ratio_final'] + class_res['ratio_max'] + class_res['baseline']))
+
+        nt_binned = binned_statistic(times, np.log10(n_tot), bins=N_bins, statistic='mean')
+        tot_class, ratio_f, ratio_m, base_val = binned_classifier(nt_binned.statistic, N_bins, ln_rescon)
+        
+        t_res = times[np.where(np.log10(n_tot) >= base_val)][0]
+        t_max = times[np.where(np.log10(n_tot) >= base_val+ratio_m)][0]
+    elif method == 'peaks':
+        # TODO: peak-to-peak classification method?
+        return None
+    elif method == 'heaviside':
+        tot_class, ratio_f, ratio_m, t_res, t_max = heaviside_classifier(times, n_tot, res_con, verbosity=verbosity)
+        nk_class_arr = np.array([heaviside_classifier(times, n_k, res_con, verbosity=0) for n_k in nk_arr])
+        nk_class = nk_class_arr[:,0]
+        nk_ratios = nk_class_arr[:,1:].astype(np.float64)
+    elif method == 'window':
+        # TODO: Flesh this out
+        '''
+        # (From plotting subroutine)
+        #tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a > 0) else 'none'
+        '''
+        return None
+    elif method == 'cutoff':
+        # TODO: Flesh this out
+        # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
+        '''
+        # (from k_class)
+        k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
+        # (From get_peak_k_modes)
+        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
+        '''
+        return None
+    elif method == 'RMS':
+        # TODO: copy-paste RMS stuff from make_amplitudes_plot here
+        return None
+    elif method == 'avg':
+        # TODO: copy-paste running average stuff from make_amplitudes_plot here
+        return None
+    else:
+        print('Error: method=\'%s\' is not a valid option.' % method)
+        return None
+    # nk_class  : str   = [k]-dim array of classification labels for each mode
+    # tot_class : str   = single classification label for n_total
+    # nk_ratios : float = [k]-dim array of resonance strength quantified by numerical metrics
+    # ratio_f   : float = single value quantifying resonance strength for n_total
+    # ratio_m   : float = single value quantifying resonance strength for n_total
+    # t_res     : float = time, in given units, when resonance begins
+    # t_max     : float = time, in given units, of maximum total n value
+    return nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False):
-    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, class_method='heaviside', tex_fmt=False, add_colorbars=False):
+    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, class_method, tex_fmt, add_colorbars)
     plt.show()
 
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
-sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(i, p_in, sol_in, k_v, times, n=n_in) for i in range(len(k_v))], axis=0)
+sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(k_i, p_in, sol_in, k_v, times, n=n_in) for k_i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=False, write_to_params=False):
-    k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, class_method='heaviside', tex_fmt=False, add_colorbars=False, write_to_params=False):
+    k_span = (params_in['k_span'][0], params_in['k_span'][1])
+    k_values = np.linspace(k_span[0], k_span[1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(results_in, k_values)
-    if len(k_samples_in) <= 0:
+    fontsize = 16 if tex_fmt else 14
+
+    plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
+    if plot_all_k:
+        k_samples = [k_i for k_i, k_val in enumerate(k_values)]
+    elif len(k_samples_in) <= 0:
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [k_i for k_i, k_val in enumerate(k_values) if k_val in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
     else:
         k_samples = k_samples_in
+
     times = get_times(params_in, times_in)
+    t_sens = params_in['t_sens']
+    A_sens = params_in['A_sens']
+    res_con = params_in['res_con']
     numf = numf_in if numf_in is not None else n_k
     
     plt.figure(figsize=(20, 9))
 
     plt.subplot2grid((2,5), (0,0), colspan=3)
-    for k_sample in k_samples:
+
+    if add_colorbars:
+        c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar = get_colorbar_params(k_values)
+
+    for s_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
         k_nums = n_p(k_s, params_in, results_in, k_values, times, n=numf)
-        plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
-    plt.title('Occupation number per k mode', fontsize=16)
-    plt.xlabel('Time $[%s]$' % units_in['t'])
+
+        if add_colorbars:
+            plt.plot(times, k_nums, label='k='+str(k_values[k_s]), linewidth=1, color=c_m(cm_norm_plt(cm_vals[s_idx])))
+        else:
+            plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
+    
+    plt.title(r'Occupation number per k mode', fontsize=16)
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.2)
-    plt.ylabel('n[k]/$n_0$' if scale_n else 'n[k]')
+    plt.ylabel(r'$n[k]$')
     plt.yscale('log'); #plt.ylim(bottom = 0.1)
-    plt.legend()
+    if add_colorbars:
+        cbar1 = plt.colorbar(s_m_cbar, label=r'$k$', cmap=c_m, norm=cm_norm_cbar, drawedges=False, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1))
+        cbar1.set_ticks(cbar_ticks)
+        cbar1.set_ticklabels(cbar_labels)
+    else:
+        plt.legend()
     plt.grid()
 
     n_tot = sum_n_p(numf, params_in, results_in, k_values, times)
 
-    res_con = params_in['res_con']
-    if scale_n:
-        n_tot /= abs(n_tot[0])
-        #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
+    '''
+    use_legacy_classification = False
+    if use_legacy_classification:
+        res_con = params_in['res_con']
+        if scale_n:
+            n_tot /= abs(n_tot[0])
+            #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
 
-    t_res_i = np.ma.argmax(np.array(n_tot) > res_con)
-    t_res   = times[t_res_i]
-    n_res   = n_tot[t_res_i]
-    tot_res = 'resonance' if sum(k_ratio(np.ma.mean, params_in['t_sens'], params_in['A_sens'])) > res_con else 'none'
+        # This is to handle the fact that sometimes we have a large initial spike that quickly flattens out
+        #   (Don't classify this as resonance)
+        win_sens = params_in['t_sens']
+        t_num = len(times)
+        #t_sens_range = times[0:win_min(win_sens)]
+        t_idx_a   = np.ma.argmax(np.array(n_tot) > res_con)
+        t_res_a   = times[t_idx_a]
+        n_res_a   = n_tot[t_idx_a]
+        t_idx_lim = win_U_N(-win_sens, t_n=t_num)
+        t_idx_b   = t_idx_a if t_idx_a >= t_idx_lim and t_idx_a < t_num else np.ma.argmax(np.array(n_tot/n_res_a) > res_con)
+        t_res   = times[t_idx_b]
+        n_res   = n_tot[t_idx_b]
+        # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
+        #       - Also, unify all of the different methods we use to classify resonance
+        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a > 0) else 'none'
+    '''
+    
+    nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf) for k_i,_ in enumerate(k_values)])
+    k_class_arr, tot_class, k_ratio_arr, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, class_method)
+    t_res = t_res[0] if type(t_res) is list else t_res
+    print('tot_class:', tot_class)
+    print('ratio_f:', ratio_f)
+    print('ratio_m:', ratio_m)
+    print('t_res:', t_res)
+    print('t_max:', t_max)
+
     if write_to_params:
         params_in['t_res'] = t_res
-        params_in['res_class'] = tot_res
+        params_in['res_class'] = tot_class
+        params_in['res_ratio_f'] = ratio_f
+        params_in['res_ratio_m'] = ratio_m
+        params_in['k_class_arr'] = k_class_arr
+        params_in['k_ratio_arr'] = k_ratio_arr
     #n_res = res_con*sum(k_sens(np.mean, -t_sens))
+    n_res = n_tot[np.where(times >= t_res)][0]
+    n_max = n_tot[np.where(times >= t_max)][0]
+    print('n_res:', n_res)
+    print('n_max:', n_max)
 
     #with plt.xkcd():
     plt.subplot2grid((2,5), (1,0), colspan=3)
     #fig,ax = plt.subplots()
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
-    plt.plot(np.ma.masked_greater_equal(times, t_res), n_tot, label='none', color='grey')
-    plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='blue')
-    plt.title('Occupation Number (total)', fontsize=16)
-    plt.xlabel('Time $[%s]$' % units_in['t'])
+    # TODO: Fix how the plot is drawn/labeled
+    plt.plot(np.ma.masked_greater(times, min(t_res, t_max)), n_tot, label='none', color='grey')
+    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot, label='energy injection', color='orange')
+    plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='red')
+    plt.title(r'Occupation Number (total)', fontsize=16)
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
     #plt.xlim(0,0.1)
-    plt.ylabel('n')
+    plt.ylabel(r'$n/n_0$' if scale_n else r'$n$')
     plt.yscale('log')
+    if add_colorbars:
+        # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
+        cbar2 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
+        cbar2.remove()
     plt.legend()
     plt.grid()
 
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.1, textstr1, fontsize=14)
+    plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
     plt.axis('off')
 
     plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.1, textstr2, fontsize=14)
+    plt.text(0, 0.05, textstr2, fontsize=fontsize)
     plt.axis('off')
 
     plt.tight_layout()
+
+    print('res  | t: %.2f    n = %.2e' % (t_res, n_res))
+    print('max  | t: %.2f    n = %.2e' % (t_max, n_max))
+    print('res condition: %s' % res_con)
+    #print('t_sens =', win_sens)
+    #print('k_ratio sum: ', sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])))
+    #print('t_lim = %.2f' % times[t_idx_lim])
+    print('class = ', params_in['res_class'], '=>', tot_class)
+    #print(n_tot)
     
     return plt, params_in, t_res, n_res
 
@@ -1015,14 +1451,15 @@ Alpha = lambda t, k, k0, P, C, D, A_pm: ((C(t, A_pm)*(k*k0) + D(t)) / (1. + P(t)
 Beta  = lambda t, B, P: B(t) / (1. + P(t))
 
 # Plot time-dependent coefficient values of the model
-def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True):
-    plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all)
+def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True, tex_fmt=False):
+    plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all, tex_fmt)
     plt.show()
     
-def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True):
+def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True, tex_fmt=False):
     global k_0
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     #k_peak, k_mean = get_peak_k_modes(results_in, k_values)
+    fontsize = 16 if tex_fmt else 14
     P = P_in if P_in is not None else P_off
     B = B_in if B_in is not None else B_off
     D = D_in if D_in is not None else D_off
@@ -1044,7 +1481,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     for (c_t, c_label) in get_coefficient_values(params_in, P, B, C, D, times):
         plt.plot(times, c_t, label=c_label)
 
-    plt.xlabel('Time $[%s]$' % units_in['t'])
+    plt.xlabel(r'Time $[%s]$' % units_in['t'])
     plt.yscale('log')
     plt.title(r'$\left(1 + P(t)\right)\left(\ddot{A}_{k,\pm} + k^2 A_{k,\pm}\right) + B(t)\dot{A}_{k,\pm} + \left(C_{\pm}(t) k + D(t)\right) A_{k,\pm} = 0 $', fontsize=16)
     plt.grid()
@@ -1083,7 +1520,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
         plt.plot(times, beta_s, label=label_b)
 
         plt.grid()
-        plt.xlabel('Time $[%s]$' % units_in['t'])
+        plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.yscale('log')
         plt.title(r'$\ddot{A}_{k,\pm} + \beta(t)\dot{A}_{k,\pm} + \alpha_{k}(t)A_{k,\pm} = 0$', fontsize=16)
         plt.legend()
@@ -1092,11 +1529,11 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     textstr1, textstr2 = print_param_space(params_in, units_in)
 
     plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.1, textstr1, fontsize=14)
+    plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
     plt.axis('off')
 
     plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.1, textstr2, fontsize=14)
+    plt.text(0, 0.05, textstr2, fontsize=fontsize)
     plt.axis('off')
 
     plt.tight_layout()
@@ -1116,11 +1553,11 @@ def get_coefficient_values(params_in, P, B, C, D, times_in=[]):
             c_t = c_func(times)
 
         if type(c_t) is np.float64:
-            label   = '[[$' + l_root + '$]]'
+            label   = r'[[$%s$]]' % l_root
             c_t     = np.ma.array(c_t + np.full(len(times), 0.0, dtype=float), mask=True)
             c_range = (np.nan, np.nan)
         else:
-            label   = '$' + l_root + '$'
+            label   = r'$%s$' % l_root
             c_range = (min(c_t), max(c_t))
 
         func_vals.append((c_t, label))
@@ -1143,7 +1580,7 @@ def get_coefficient_ranges(params_in, P, B, C, D, k_samples, times_in=None):
             c_t     = np.ma.array(c_t + np.full(len(t), 0.0, dtype=float), mask=True)
             c_range = (np.nan, np.nan)
         else:
-            label   = '$' + l_root + '$'
+            label   = r'$%s$' % l_root
             c_range = (min(c_t), max(c_t))
 
         c_ranges.append(l_root[0] + '(t) range: [%.1e, %.1e]' % c_range + (' for + case ' if sign > 0 else ' for - case ' if sign < 0 else ''))
@@ -1186,41 +1623,49 @@ k_to_Hz = lambda ki, k0, h, c: ki * ((k0*c) / (2*np.pi*h))
 #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
 Hz_to_k = lambda fi, k0, h, c: fi * ((h*2*np.pi) / (k0*c))
 
-def plot_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
-    plot = make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn)
+def plot_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
+    plt = make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in, class_method, tex_fmt)
     plt.show()
 
-def make_resonance_spectrum(params_in, units_in, fwd_fn, inv_fn):
-    k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
-    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'semi': 'blue', 'res': 'red'}
+def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
+    k_span = (params_in['k_span'][0], params_in['k_span'][1])
+    k_values = np.linspace(k_span[0], k_span[1], params_in['k_num'])
+    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'injection': 'orange', 'burst':'purple', 'resonance': 'red'}
+    res_con_in = params_in['res_con']
 
     t_sens = params_in['t_sens']
     A_sens = params_in['A_sens']
+    times  = np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
+
+    nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf_in if numf_in is not None else n_k) for k_i,_ in enumerate(k_values)])
+    nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, method=class_method)
     
     plt.figure(figsize = (20,6))
-    plt.suptitle('Resonance Classification')
+    plt.suptitle(r'Resonance Classification')
 
     ax = plt.subplot2grid((2,4), (0,0), colspan=2, rowspan=2)
-    plt.scatter(k_values, k_ratio(np.mean, t_sens, A_sens), c=[class_colors[k_c] if k_c in class_colors else 'orange' for k_c in k_class(np.mean, t_sens, A_sens)])
-    plt.xlabel('$k$')
+    plt.scatter(k_values, nk_ratios[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
+    plt.scatter(k_values, nk_ratios[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
+    plt.xlabel(r'$k$')
     axT = ax.secondary_xaxis('top', functions=(fwd_fn, inv_fn))
-    axT.set_xlabel('$f_{\gamma}$ (Hz)')
-    plt.ylabel('Growth in $n_k$')
+    #axT.set_xlabel(r'$f_{\gamma}$ [Hz]')
+    axT.set_xlabel(r'$\nu$ [Hz]')
+    plt.ylabel(r'Growth in $n_k$')
     plt.yscale('log')
     plt.grid()
 
     plt.subplot2grid((2,4), (0,2), colspan=2, rowspan=2)
-    class_counts = [(np.array(k_class(np.mean, t_sens, A_sens)) == class_label).sum() for class_label in class_colors.keys()]
+    class_counts = [(nk_class == class_label).sum() for class_label in class_colors.keys()]
     plt.bar(class_colors.keys(),class_counts,color=class_colors.values())
-    plt.xlabel('Classification')
-    plt.ylabel('Count')
+    plt.xlabel(r'Classification')
+    plt.ylabel(r'Count')
     plt.grid()
 
     plt.tight_layout()
     
     return plt
 
-def plot_ALP_survey(params_in, verbosity=0):
+def plot_ALP_survey_old(params_in, verbosity=0, tex_fmt=False):
     plt.figure(figsize = (16,12))
     #plt.suptitle('ALP Survey Results')
 
@@ -1236,10 +1681,10 @@ def plot_ALP_survey(params_in, verbosity=0):
         # Log-scaled axes
         ax = plt.gca()
         ax.minorticks_on()
-        ax.set_xlabel('$m_a\quad[eV]$',fontsize=30)
+        ax.set_xlabel(r'$m_a\quad[eV]$',fontsize=30)
         ax.set_xlim(xmin, xmax)
         ax.set_xscale('log')
-        ax.set_ylabel('$|g_{a\gamma}|\quad[GeV^{-1}]$',fontsize=30)
+        ax.set_ylabel(r'$|g_{a\gamma}|\quad[GeV^{-1}]$',fontsize=30)
         ax.set_ylim(ymin, ymax)
         ax.set_yscale('log')
         ax.tick_params(axis='both', which='major', labelsize=15)
@@ -1289,7 +1734,6 @@ def plot_ALP_survey(params_in, verbosity=0):
                         ax2.axvspan(min(m_s), max(m_s), ymin=0, ymax=1, color='black', label='$m_{(%s)}$' % (s_idx_str), alpha=0.5, visible=show_mass_ranges)
         ax2.legend()
                         
-        
         ## Background Image
         survey_img = image.imread('./tools/survey_img_crop.PNG')
         im_ax = ax.twinx()
@@ -1300,13 +1744,84 @@ def plot_ALP_survey(params_in, verbosity=0):
     
     return plt
 
-# TODO: Make this function, which plots the result of a number of runs over a series of preferred metrics, for a given mass and density
-def plot_parameter_space():
-    return None
+def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
+    tools_dir = os.path.abspath(os.path.join('./tools'))
+    if tools_dir not in sys.path:
+        sys.path.append(tools_dir)
+
+    # Shade of purple chosen for visibility against existing plot colors
+    res_color  = '#b042f5' if 'res' in params['res_class'] else 'grey'
+
+    # Import plotting functions from AxionLimits and set up AxionPhoton plot
+    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
+    fig,ax = FigSetup(Shape='Rectangular',ylab='$|g_{a\gamma\gamma}|$ [GeV$^{-1}$]',mathpazo=True)
+
+    # Current values for model parameters
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    m_u = params_in['m_u']
+    F   = params_in['F']
+    l1  = params_in['l1']
+    eps = params_in['eps']
+
+    ## Populate standard AxionPhoton limits plot
+    # Plot QCD axion lines and experimental bounds
+    AxionPhoton.QCDAxion(ax,C_center=abs(5/3-1.92)*(44/3-1.92)/2,C_width=0.7,vmax=1.1,)
+    AxionPhoton.Cosmology(ax)
+    AxionPhoton.StellarBounds(ax)
+    AxionPhoton.SolarBasin(ax)
+    AxionPhoton.Haloscopes(ax,projection=True,BASE_arrow_on=False)
+    AxionPhoton.Helioscopes(ax,projection=True)
+    AxionPhoton.LSW(ax,projection=True)
+    AxionPhoton.LowMassAstroBounds(ax,projection=True)
+
+    # Dark matter astro/cosmo bounds:
+    AxionPhoton.ALPdecay(ax,projection=True)
+    AxionPhoton.NeutronStars(ax)
+    AxionPhoton.AxionStarExplosions(ax)
+
+    # TODO: Verify we are using the appropriate equation to calculate the g_pi-m_pi relation
+    AxionPhoton.piAxion(ax,epsilon=1,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+    AxionPhoton.piAxion(ax,epsilon=0.5,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+    AxionPhoton.piAxion(ax,epsilon=0.01,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+
+    AxionPhoton.piAxion(ax,epsilon=eps,lambda1=l1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='GnBu',fs=18,rot = 6.0,
+                    C_center=1,C_width=1.2,vmax=0.9)
+
+    ## Plot star marker for this specific parameter configuration
+    # Primary data
+    ax1 = plt.gcf().add_subplot()
+    ax1.set_xscale('log')
+    ax1.set_xlim(xmin, xmax)
+    ax1.set_yscale('log')
+    ax1.set_ylim(ymin, ymax)
+    ax1.axis('off')
+    ax1.set_zorder(3)
+    #g_u = GeV/F
+    g_u = lambda eps=eps, l1=l1, F=F, GeV=1e9: 2*l1*(eps**2) / (F/GeV)
+    ax1.scatter(m_u, g_u(), s=2000, c='white', marker='*')
+    ax1.scatter(m_u, g_u(), s=1000, c=res_color, marker='*')
+
+    # Secondary Data
+    ax2 = plt.gcf().add_subplot()
+    ax2.set_xscale('log')
+    ax2.set_xlim(xmin, xmax)
+    ax2.set_yscale('log')
+    ax2.set_ylim(ymin, ymax)
+    ax2.axis('off')
+    ax2.set_zorder(2)
+    for m_v in m[0]:
+        ax2.scatter(m_v, g_u(), s=1000, c='grey', marker='*')
+    
+    return plt
 
 logfit = lambda x, a, b, c: a*np.log10(10*x+b)+c
 
 # Solve for F_pi given epsilon (millicharge) and ALP (unit) mass
+# TODO: Replace this with newer information
 def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
     if use_old_fit:
         # TODO: Fix for epsilon != 1?
@@ -1420,9 +1935,16 @@ def print_param_space(params, units_in):
         
     return textstr1, textstr2
 
+def get_units_from_params(params_in, verbosity=0):
+    return get_units(unitful_m=params_in['unitful_m'], rescale_m=params_in['rescale_m'], unitful_k=params_in['unitful_k'], rescale_k=params_in['rescale_k'], \
+                     unitful_amps=params_in['unitful_amps'], rescale_amps=params_in['rescale_amps'], rescale_consts=params_in['rescale_consts'], \
+                     unitful_c=not(params_in['use_natural_units']), unitful_h=not(params_in['use_natural_units']), unitful_G=not(params_in['use_natural_units']), \
+                     dimensionful_p=params_in['dimensionful_p'], use_mass_units=params_in['use_mass_units'], use_natural_units=params_in['use_natural_units'], \
+                     verbosity=verbosity)
+
 def get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p=False,
               unitful_c=False, unitful_h=False, unitful_G=False, use_mass_units=True, use_natural_units=None, verbosity=0):
-    global units, params
+    global units
     is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)]) if use_natural_units is None else use_natural_units
     units = {'c': 1 if not unitful_c else 'cm/s', 'h': 1 if not unitful_h else 'eV/Hz', 'G': 1 if not unitful_G else 'cm^5/(eV s^4)', 
              'm': 'm_u' if not((unitful_m and not rescale_m) or (not unitful_m and rescale_m)) else 'eV/c^2' if unitful_c else 'eV',
@@ -1534,7 +2056,7 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
     for i, label in enumerate(k_class_arr):
         if label == 'res' and start_idx is None:
             start_idx = i
-        elif label not in ['res', 'semi'] and start_idx is not None:
+        elif label not in ['res', 'soft'] and start_idx is not None:
             start_indices.append(start_idx)
             end_indices.append(i-1)
             start_idx = None
@@ -1544,18 +2066,18 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
 
     # Determine resonance classification
     res_count  = np.ma.masked_where(k_class_arr != 'res', k_class_arr, copy=True).count()
-    semi_count = np.ma.masked_where(k_class_arr != 'semi', k_class_arr, copy=True).count()
+    soft_count = np.ma.masked_where(k_class_arr != 'soft', k_class_arr, copy=True).count()
     if not start_indices:  # No resonance segments found
         return None, None, None
     elif len(start_indices) == 1:  # Only one resonance segment
         if start_indices[0] == 0 and end_indices[0] == len(k_class_arr) - 1:
-            classification = "broad-band"
+            classification = 'broad-band'
         elif (int(res_count) / int(len(k_class_arr))) >= float(class_sens):
-            classification = "broad-band"
+            classification = 'broad-band'
         else:
-            classification = "narrow-band"
+            classification = 'narrow-band'
     else:  # Multiple resonance segments
-        classification = "multi-band"
+        classification = 'multi-band'
 
     # Convert k-values to HZ and return results
     min_res_Hz = float(k_to_HZ(min(k_values_in[start_indices[0]:end_indices[-1] + 1])))
@@ -1565,3 +2087,83 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
         print('%s resonance detected from %.0g to %.0g Hz' % (classification, min_res_Hz, max_res_Hz))
     
     return min_res_Hz, max_res_Hz, classification
+
+## Fine Structure Constant corrections
+alpha_sm   = lambda t: 1./137
+alpha_off  = lambda t: 1.
+# (include sum over all surviving species, where lambda(3 or 4) and Lambda(3 or 4) are determined by neutral/charged species)
+# TODO: This is incomplete (only have equation for diagonal terms, missing off-diagonal contributions)
+piaxi_fs = lambda t, lambdas, Lambdas, e, eps, amps, masses, phases, alpha=alpha_sm: \
+    alpha(t) * (1 + (2*(e**2))*(eps**2)*np.sum([(l_i)/(L_i**2) * np.abs(amp_i)**2 * np.cos(m_i*t + d_i)**2 for amp_i, m_i, d_i, l_i, L_i in zip(amps, masses, phases, lambdas, Lambdas)]))
+
+def get_fs_corrections(params_in):
+    e_in  = params_in['e']
+    l3_in = params_in['l3']
+    l4_in = params_in['l4']
+    L3_in = params_in['L3']
+    L4_in = params_in['L4']
+    m_in  = np.concatenate(params_in['m'], axis=None)
+    d_in  = np.concatenate(params_in['d'], axis=None)
+    amps_in  = np.concatenate(params_in['amps'], axis=None)
+    eps_in = params_in['eps']
+    Nr_in  = params_in['N_r']
+    Nn_in  = params_in['N_n']
+    Nc_in  = params_in['N_c']
+
+    lambdas_in = np.array([l4_in]*Nr_in + [l4_in]*Nn_in + [l3_in]*Nc_in)
+    Lambdas_in = np.array([L4_in]*Nr_in + [L4_in]*Nn_in + [L3_in]*Nc_in)
+
+    alpha_corrected = lambda t: piaxi_fs(t, lambdas=lambdas_in, Lambdas=Lambdas_in, e=e_in, eps=eps_in, amps=amps_in, masses=m_in, phases=d_in)
+    return alpha_corrected
+
+def plot_fs_constant(params_in, verbosity=0, return_plot=False):
+    alpha_e = get_fs_corrections(params_in)
+
+    if verbosity >= 5:
+        print('Fine Structure Constant Oscillations: ')
+        print('    alpha_SM     = %.1e ' % alpha_sm(t=0))
+        print('    alpha_e(t=0) = %.1e ' % alpha_e(t=0))
+
+    # Show plot of alpha
+    m_ref_in = params_in['m_u']
+    fs_t = np.linspace(0, 3./m_ref_in, 100)
+    plt.plot(fs_t, [alpha_sm(t) for t in fs_t], label=r'$\alpha_{SM}$')
+    plt.plot(fs_t, [alpha_e(t)  for t in fs_t], label=r'$\alpha_{e}(t)$')
+    plt.grid()
+    plt.legend()
+    if return_plot:
+        return plt
+    else:
+        plt.show()
+
+## Coupling Constants
+# Parity-Odd Interaction (triangle anomaly)
+g_anomaly  = lambda F_pi, l1=1., eps=1., fs_in=alpha_sm, t=0: fs_in(t)*(eps**2)/(2 * F_pi) * l1
+# Scalar QED interactions and scattering couplings
+g_coupling = lambda Li, li=1., eps=1., fs_in=alpha_off, t=0: fs_in(t)*(eps**2)*li/(2 * Li**2)
+
+def get_coupling_constants(params_in, verbosity=0):
+    l1_in = params_in['l1']
+    l2_in = params_in['l2']
+    l3_in = params_in['l3']
+    l4_in = params_in['l4']
+    L3_in = params_in['L3']
+    L4_in = params_in['L4']
+    eps_in = params_in['eps']
+    Fpi_in = params_in['F']
+    alpha_e = get_fs_corrections(params_in)
+    # Parity-Even
+    g_1 = g_anomaly(F_pi=Fpi_in, l1=l1_in, eps=eps_in)
+    g_2 = g_coupling(Li=1., li=l2_in, eps=eps_in)
+    g_3 = g_coupling(Li=L3_in, li=l3_in, eps=eps_in, fs_in=alpha_e)
+    g_4 = g_coupling(Li=L4_in, li=l4_in, eps=eps_in, fs_in=alpha_e)
+
+    if verbosity >= 7:
+        print('g_anomaly = %.1e [eV]   |   triangle anomaly' % g_1)
+        print('g_2       = %.1e [eV]   |   scalar QED' % g_2)
+        print('g_3       = %.1e [eV]   |   charged scattering' % g_3)
+        print('g_4       = %.1e [eV]   |   neutral scattering' % g_4)
+    
+    return g_1, g_2, g_3, g_4
+
+cosmo_stability = lambda m_in, F_pi, eps: 1e-34 * (eps**4) * (m_in/(1e-5))**3 * (1e21/F_pi)**2
