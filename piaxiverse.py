@@ -33,6 +33,7 @@ def run_multiple_cases(args):
     L4_values   = [args.L4]
     F_values    = [args.F]
     fit_F       = args.fit_F
+    fit_QCD     = args.fit_QCD
     F_N         = args.scan_F_N
     Lambda_N    = args.scan_Lambda_N
     Lambda3_N   = args.scan_Lambda3_N if args.scan_Lambda3_N is not None else args.scan_Lambda
@@ -93,11 +94,11 @@ def run_multiple_cases(args):
                             for L4 in L4_values:
                                 if args.verbosity >= 7:
                                     print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
-                                run_single_case(args, rho_in=rho, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F)
+                                run_single_case(args, rho_in=rho, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F, fit_QCD_in=fit_QCD)
                                 i += 1
     return None
 
-def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None):
+def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None, fit_QCD_in=None):
     ## INPUT PARAMETERS
     verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
@@ -108,9 +109,13 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     config_name       = args.config_name          # Descriptive name for the given parameter case. Output files will be saved in a directory with this name.
     seed              = args.seed                 # rng_seed, integer value (None for random)
     num_cores         = args.num_cores            # Number of parallel threads available
-    mem_per_core      = args.mem_per_core         # Number of parallel threads available
+    num_nodes         = args.num_nodes            # Number of nodes across which to spread threads
+    job_qos           = args.job_qos              # Quality of Service for the submitted batch job
+    mem_per_core      = args.mem_per_core         # Amount of memory available for each node
     data_path         = args.data_path            # Path to directory where output files will be saved
     skip_existing     = args.skip_existing
+    slurm_nc_parse = lambda v: int(v.replace(')','').replace('(','').split('x')[0]) * int((1. if len(v.replace(')','').replace('(','').split('x')) <= 1 else v.replace(')','').replace('(','').split('x')[1]))
+    num_cores = sum([slurm_nc_parse(nc_val) for nc_val in num_cores.split(',')])
 
     # Initialize rng
     rng, rng_seed = get_rng(seed=seed, verbosity=verbosity)
@@ -143,10 +148,6 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     
     # Unit scaling:
     m_scale = m_scale_in if m_scale_in is not None else args.m_scale     # dark quark mass scale (eV) <= 10-20
-    ## Handle optional fitting of F_pi as a function of fundamental mass scale]
-    fit_F = fit_F_in if fit_F_in is not None else args.fit_F
-    if fit_F:
-        F = fit_Fpi(eps, m_scale, verbosity=verbosity)
     dimensionful_p = not(use_natural_units)
     #p_unit = 1.906e-12
     p_unit = (c_raw*h_raw)**3 if not(dimensionful_p) else (c_u*h_u)**3   # convert densities from units of [1/cm^3] to [eV^3]
@@ -231,6 +232,16 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     if verbosity >= 6:
         print('masks: ', masks)
         print('counts: ', counts)
+    
+    ## TODO: Optionally enforce constraint of F_pi as a function of l1, eps, and m_pi
+    fit_F   = fit_F_in   if fit_F_in   is not None else args.fit_F
+    fit_QCD = fit_QCD_in if fit_QCD_in is not None else args.fit_QCD
+    '''
+    if fit_QCD:
+        F_fit = check_Fpi_fit(eps, m_u, l1, F, fit_QCD=True, verbosity=verbosity)
+    elif fit_F:
+        F_fit = check_Fpi_fit(eps, m_u, l1, F, fit_QCD=False, verbosity=verbosity)
+    '''
 
     ## Populate pi-axion dark matter energy densities for all species
     p = init_densities(masks, p_t=p_t, normalized_subdens=True)
@@ -273,6 +284,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
 
     # Define coefficient functions to clean up differential equation representation
     P = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
+        np.float64( \
             2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j] * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
                                                 for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
             2*l4/(L4**2) * eps**2 * (np.sum([amps[1][i]*amps[1][j] * np.cos(phi(t,1,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][i]-Th[1][j]) \
@@ -280,32 +292,39 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                                      np.sum([amps[0][i]*amps[0][j] * np.cos(phi(t,0,i))*np.cos(phi(t,0,j)) \
                                                 for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
                                    2*np.sum([amps[0][i]*amps[1][j] * np.cos(phi(t,0,i))*np.cos(phi(t,1,j)) * np.cos(Th[1][j]) \
-                                                for i in range(len(m[0])) for j in range(len(m[1]))], axis=0))
+                                                for i in range(len(m[0])) for j in range(len(m[1]))], axis=0)) \
+        )
 
     B = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-                (-1)*2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j] * np.cos(Th[2][i]-Th[2][j])  * \
-                                                    ((m[2][i]*M) * np.sin(phi(t,2,i)) * np.cos(phi(t,2,j)) + \
-                                                     (m[2][j]*M) * np.cos(phi(t,2,i)) * np.sin(phi(t,2,j))) \
-                                                    for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
-                (-1)*2*l4/(L4**2) * eps**2 * (np.sum([amps[0][i]*amps[0][j] * ((m[0][i]*M) * np.sin(phi(t,0,i)) * np.cos(phi(t,0,j)) + \
-                                                                               (m[0][j]*M) * np.cos(phi(t,0,i)) * np.sin(phi(t,0,j))) \
-                                                    for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
-                                                    np.sum([amps[1][i]*amps[1][j] * np.cos(Th[1][i]-Th[1][j])  * \
-                                                            ((m[1][i]*M) * np.sin(phi(t,1,i)) * np.cos(phi(t,1,j)) + \
-                                                             (m[1][j]*M) * np.cos(phi(t,1,i)) * np.sin(phi(t,1,j))) \
-                                                            for i in range(len(m[1])) for j in range(len(m[1]))], axis=0) + \
-                                                    np.sum([np.abs(amps[0][i]*amps[1][j]) * np.cos(Th[1][j]) * \
-                                                            ((m[0][i]*M) * np.sin(phi(t,0,i)) * np.cos(phi(t,1,j)) + \
-                                                             (m[1][j]*M) * np.cos(phi(t,0,i)) * np.sin(phi(t,1,j))) \
-                                                            for i in range(len(m[0])) for j in range(len(m[1]))], axis=0))
+        np.float64( \
+            (-1)*2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j] * np.cos(Th[2][i]-Th[2][j])  * \
+                                                ((m[2][i]*M) * np.sin(phi(t,2,i)) * np.cos(phi(t,2,j)) + \
+                                                    (m[2][j]*M) * np.cos(phi(t,2,i)) * np.sin(phi(t,2,j))) \
+                                                for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)) + \
+            (-1)*2*l4/(L4**2) * eps**2 * (np.sum([amps[0][i]*amps[0][j] * ((m[0][i]*M) * np.sin(phi(t,0,i)) * np.cos(phi(t,0,j)) + \
+                                                                            (m[0][j]*M) * np.cos(phi(t,0,i)) * np.sin(phi(t,0,j))) \
+                                                for i in range(len(m[0])) for j in range(len(m[0]))], axis=0) + \
+                                                np.sum([amps[1][i]*amps[1][j] * np.cos(Th[1][i]-Th[1][j])  * \
+                                                        ((m[1][i]*M) * np.sin(phi(t,1,i)) * np.cos(phi(t,1,j)) + \
+                                                            (m[1][j]*M) * np.cos(phi(t,1,i)) * np.sin(phi(t,1,j))) \
+                                                        for i in range(len(m[1])) for j in range(len(m[1]))], axis=0) + \
+                                                np.sum([np.abs(amps[0][i]*amps[1][j]) * np.cos(Th[1][j]) * \
+                                                        ((m[0][i]*M) * np.sin(phi(t,0,i)) * np.cos(phi(t,1,j)) + \
+                                                            (m[1][j]*M) * np.cos(phi(t,0,i)) * np.sin(phi(t,1,j))) \
+                                                        for i in range(len(m[0])) for j in range(len(m[1]))], axis=0)) \
+        )
 
     C = lambda t, pm, l1=l1, F=F_sc, eps=eps, amps=amps, m=m, M=m0, d=d, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-                (-1) * pm * (2*l1 / F) * eps**2 * np.sum([amps[0][i] * (m[0][i]*M) * np.sin(phi(t,0,i)) \
-                                                        for i in range(len(m[0]))], axis=0)
+        np.float64( \
+            (-1) * pm * (2*l1 / F) * eps**2 * np.sum([amps[0][i] * (m[0][i]*M) * np.sin(phi(t,0,i)) \
+                                                      for i in range(len(m[0]))], axis=0) \
+        )
 
     D = lambda t, l2=l2, e=e, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
-                l2 * eps**2 * e**2 * np.sum([amps[2][i]*amps[2][j] * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
-                                            for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)
+        np.float64( \
+            l2 * eps**2 * e**2 * np.sum([amps[2][i]*amps[2][j] * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
+                                         for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)
+        )
 
     # TODO: Add support for supplying custom functions?
     disable_P = not(args.P)
@@ -352,6 +371,8 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
 
     # Save system performance related input parameters (not to be hashed because these don't affect the final state, only performance time)
     parameters['num_cores']    = num_cores
+    parameters['num_nodes']    = num_nodes
+    parameters['job_qos']      = job_qos
     parameters['mem_per_core'] = mem_per_core
 
     if skip_existing and if_output_exists(output_dir, phash):
@@ -511,10 +532,10 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     ## Complex Neutral Masses
     # pi_6  +/- i*pi_7
     m_n[0]    = np.sqrt((qc[1]*qm[0] + qc[2]*qm[1]) * F) if 0. not in [qc[1], qc[2]] else 0.
-    s_l[1][0] = '$\pi_6 \pm i\pi_7$'
+    s_l[1][0] = '$\pi_{6} \pm i\pi_{7}$'
     # pi_9  +/- i*pi_10
     m_n[1]    = np.sqrt((qc[0]*qm[0] + qc[3]*qm[1]) * F) if 0. not in [qc[0], qc[3]] else 0.
-    s_l[1][1] = '$\pi_9 \pm i\pi_{10}$'
+    s_l[1][1] = '$\pi_{9} \pm i\pi_{10}$'
     # pi_17 +/- i*pi_18
     m_n[2]    = np.sqrt((qc[1]*qm[0] + qc[4]*qm[2]) * F) if 0. not in [qc[1], qc[4]] else 0.
     s_l[1][2] = '$\pi_{17} \pm i\pi_{18}$'
@@ -531,10 +552,10 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     ## Charged Masses
     # pi_1  +/- i*pi_2
     m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*eps_c[0]*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) <= eps_bound else 0.
-    s_l[2][0] = '$\pi_1 \pm i\pi_2$'
+    s_l[2][0] = '$\pi_{1} \pm i\pi_{2}$'
     # pi_4  +/- i*pi_5
     m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*eps_c[1]*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) <= eps_bound else 0.
-    s_l[2][1] = '$\pi_4 \pm i\pi_5$'
+    s_l[2][1] = '$\pi_{4} \pm i\pi_{5}$'
     # pi_15 +/- i*pi_16
     m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*eps_c[2]*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][2] = '$\pi_{15} \pm i\pi_{16}$'
@@ -769,7 +790,9 @@ if __name__ == '__main__':
     parser.add_argument('--verbosity',         type=int,  default=0,               help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
     parser.add_argument('--save_output_files', action=argparse.BooleanOptionalAction, default=True, help='Toggle whether or not to save the results from this run')
     parser.add_argument('--config_name',       type=str,  default='default',       help='Descriptive name to give to this parameter case')
-    parser.add_argument('--num_cores',         type=int,  default=1,               help='Number of parallel processing threads to use')
+    parser.add_argument('--num_cores',         type=str,  default='1',             help='Number of parallel processing threads to use, as a list if more than one node')
+    parser.add_argument('--num_nodes',         type=int,  default=1,               help='Number of nodes available across which to spread processes.')
+    parser.add_argument('--job_qos',           type=str,  default='unknown',       help='QoS for submitted job, to compare runtime metrics across distributed systems')
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     parser.add_argument('--int_method',        type=str,  default='RK45',          help='Numerical integration method, to be used by scipy solve_ivp')
     parser.add_argument('--num_samples',       type=int,  default=1,               help='Number of times to rerun a parameter set, except randomly sampled variables')
@@ -780,7 +803,8 @@ if __name__ == '__main__':
     parser.add_argument('--C', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the C_+/-(t) coefficient in the numerics')
     parser.add_argument('--D', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the D(t) coefficient in the numerics')
 
-    parser.add_argument('--fit_F', action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
+    parser.add_argument('--fit_F',   action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from given mass & millicharge (True) or provided manually (False)')
+    parser.add_argument('--fit_QCD', action=argparse.BooleanOptionalAction, help='Toggle whether F_pi is determined from QCD axion mass-coupling relation for a given millicharge')
     parser.add_argument('--scan_F',         type=int,  nargs=2,       help='Provide min and max values of F_pi values to search, in [log GeV] scale')
     parser.add_argument('--scan_F_N',       type=int,  default=3,     help='Provide number of values to sample within specified F_pi range')
     parser.add_argument('--scan_mass',      type=int,  nargs=2,       help='Provide min and max values of mass scales to search, in [log eV] scale')

@@ -1147,6 +1147,7 @@ def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
     else:
         return class_label, ratio_final, ratio_max, b_baseline
 
+# TODO: Handle inf and NaN values gracefully
 def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
     n_ini = n_in[0]
     n_fin = n_in[-1]
@@ -1821,10 +1822,104 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
 logfit = lambda x, a, b, c: a*np.log10(10*x+b)+c
 
 # Solve for F_pi given epsilon (millicharge) and ALP (unit) mass
-# TODO: Replace this with newer information
-def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
+# TODO: Find a more elegant / robust way to describe this relation
+def fit_Fpi(eps_in, m_in, l1_in, fit_QCD=False, verbosity=0):
+
+    ## Mass-coupling relations for pi-axion / QCD axion
+    # Solve for pi-axion decay constant, given desired photon coupling [GeV]
+    F_pi_from_g_x = lambda g_x, l1=1, eps=1: 2*l1*(eps**2) / g_x
+    g_x_from_F_pi = lambda F_pi, l1=1, eps=1: 2*l1*(eps**2) / F_pi
+    # NOTE: Adapted from Humberto's modification to AxionLimits notebook, but worth replacing with a more robust relation in the future
+    # assuming [GeV]^-1 as units
+    g_x_from_m_x  = lambda m_x, epsilon=1, lambda1=1, theta=1, alpha=(1./137): (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_x**(1/4))
+    # Solve for F_pi, given m_x, assuming above relations [GeV]
+    # NOTE: We still have a slight discrepancy b/w predicted values and the plotted trendline from Humberto's modification to AxionLimits notebook
+    F_pi_from_m_x = lambda m_x, l1=1, eps=1, theta=1, alpha=(1./137): F_pi_from_g_x(g_x_from_m_x(m_x, lambda1=l1, epsilon=eps, theta=theta, alpha=alpha), l1=l1, eps=eps)
+
+    ## Fit parameters to be equivalent to QCD axion case
+    if fit_QCD:
+        # QCD Axion cases
+        KSVZ = 1.92
+        DFSZ = 0.75
+        g_a_from_m_a = lambda m_a, C_ag=KSVZ: 2e-10*C_ag*m_a
+
+        ## Fit parameters to be equivalent to QCD axion case
+        c1 = 0.5; c2 = 0.5
+        # Solve for dark-quark mass, given desired ALP mass [eV]
+        m_Im  = lambda m_a, F_pi=F_pi_from_m_x, eps=1, c1=c1, c2=c2: m_a**2 / (F_pi(m_a, eps=eps)*1e9*(c1+c2))
+        # Solve for dark-quark mass, given desired ALP coupling [eV]
+        m_Ig  = lambda g_a, F_pi=F_pi_from_g_x, eps=1, c1=c1, c2=c2: m_a**2 / (F_pi(g_a, eps=eps)*1e9*(c1+c2))
+        # Solve for model-dependent constants
+        C_ag = lambda l1=1, eps=1, a_e=(1./137): -4*np.pi*(l1/a_e)*eps**2
+        z_ag = lambda m_a, g_a: 2*(m_a)*(1./(g_a * 10e10))
+        
+        # TODO: add functionality for the below to be more dynamic
+        QCD_model = KSVZ
+        
+        m_a_in  = m_in   # target ALP mass
+        if verbosity >= 4:
+            print('Fitting pi-axiverse to QCD axion parameter space')
+        # QCD Axion Parameters
+        m_a = m_a_in
+        g_a = g_a_from_m_a(m_a_in, C_ag=QCD_model)
+        z_in = z_ag(m_a, g_a)
+        C_in = QCD_model
+        
+        # Pi-Axiverse Parameters
+        pin_g = True
+        pin_m = False
+        if pin_g:
+            m_I_fit = m_Ig(g_a, F_pi=F_pi_from_g_x, eps=eps_in)
+            #F_pi_fit = F_pi_from_g_x(g_a_from_m_a(m_a_in, C_ag=C_ag(eps=eps_in, l1=l1_in)), eps=eps_in, l1=l1_in)
+            F_pi_fit = F_pi_from_g_x(g_a, eps=eps_in, l1=l1_in)
+        elif pin_m:
+            m_I_fit = m_Im(m_a_in, F_pi=F_pi_from_m_x, eps=eps_in)
+            F_pi_fit = F_pi_from_m_x(m_a_in, eps=eps_in, l1=l1_in)
+        else:
+            m_I_fit = m_Im(m_a_in, F_pi=F_pi_from_m_x, eps=eps_in)
+            F_pi_fit = F_pi_from_g_x(g_a, eps=eps_in, l1=l1_in)
+        
+        m_piaxi = np.sqrt(((c1 + c2)*m_I_fit)*(F_pi_fit*1e9))
+        
+        #g_piaxi = g_x_from_m_x(m_piaxi, epsilon=eps_in, lambda1=l1_in)
+        #g_piaxi = 2 * l1_in/F_pi_fit * eps_in**2
+        g_piaxi = g_x_from_F_pi(F_pi_fit, eps=eps_in, l1=l1_in)
+        
+        z_piaxi = z_ag(m_piaxi, g_piaxi)
+        C_piaxi = C_ag(eps=eps_in, l1=l1_in)
+        
+        if verbosity >= 7:
+            print('QCD    |    m_a  = %.1e [eV]' % m_a)
+            print('       |    g_a  = %.1e [GeV^-1]' % g_a)
+            print('       |    z_ag = %.1e' % z_in)
+            print('       |    C_ag = %.1e' % C_in)
+            print('pi-axi |    eps  = %.1e   ----->   F_pi = %.1e [GeV]   ----->   m_I = %.1e [eV]' % (eps_in, F_pi_fit, m_I_fit))
+            print('       |    m_pi = %.1e [eV]' % m_piaxi)
+            print('       |    g_pi = %.1e [GeV^-1]' % g_piaxi)
+            print('       |    z_pi = %.1e' % z_piaxi)
+            print('       |    C_pi = %.1e' % C_piaxi)
+    else:
+        F_pi_fit = F_pi_from_m_x(m_in, eps=eps_in, l1=l1_in)
+    
+    # Rescale return value to [eV]
+    return F_pi_fit * 1e9
+
+# TODO/WIP: Boolean check to determine whether given parameters conform to mass-coupling constraints, within [sens] orders of magnitude
+def check_Fpi_fit(eps, m_u, l1, F_in, sens=2., fit_QCD=False, verbosity=0):
+
+    F_fit = fit_Fpi(eps, m_u, l1, fit_QCD, verbosity=0)
+    if verbosity >= 9:
+        if fit_QCD:
+            print('F_pi (QCD):  %.2e' % F_fit)
+        else:
+            print('F_pi (calc): %.2e' % F_fit)
+    F_bool = np.abs(np.log10(F_fit) - np.log10(F_in)) <= sens
+
+    return F_bool
+
+# (Deprecated)
+def fit_Fpi_old(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
     if use_old_fit:
-        # TODO: Fix for epsilon != 1?
         fit_res = fit_crude_epsilon_relation(pts_in=[(0.1,-19.9,eps), (0.5,-18.6,eps), (1,-17.9,eps)], plot_fit=show_plots, verbosity=verbosity)
         F_pi = logfit((m_scale, eps), a=fit_res[0], b=fit_res[1], c=fit_res[2])
     else:
@@ -1835,8 +1930,9 @@ def fit_Fpi(eps, m_scale, show_plots=False, verbosity=0, use_old_fit=False):
 
     return F_pi
 
+# (Deprecated)
 # Fits a log-linear relation as an approximation to the pi-axion mass / F_pi coupling relationship
-# TODO: Replace with more robust epsilon relation
+# Should eventually replace with more robust epsilon relation
 def fit_crude_epsilon_relation(pts_in=[], plot_fit=True, verbosity=0):
     pts_x = [[x,eps] for x,_,eps in pts_in]
     pts_y = [[y,eps] for _,y,eps in pts_in]
