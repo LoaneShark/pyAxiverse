@@ -467,13 +467,16 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                 with PdfPages(os.path.join(output_dir, filename + '_plots.pdf')) as pdf:
                     for fig in plot_figs:
                         pdf.savefig(fig)
+                        plt.close(fig)
             if save_format in img_formats:
                 for i, fig in enumerate(plot_figs):
                     fig.savefig(os.path.join(output_dir, filename + f'_plot_{i}.png'))
+                    plt.close(fig)
             if save_format in nbk_formats:
                 # Display plots in the notebook (TODO)
                 for fig in plot_figs:
                     display(fig)
+                    #plt.close(fig)
             if save_format in web_formats:
                 # Convert notebook to HTML and save (TODO)
                 if True:
@@ -483,6 +486,7 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                     for fig in plot_figs:
                         #display(fig)
                         html_content += str(HTML(str(html_content) + '<img src="data:image/png;base64,{}">'.format(fig)))
+                        plt.close(fig)
                     with open(os.path.join(output_dir, filename + '_plots.html'), 'w') as f:
                         f.write(str(html_content))
         else:
