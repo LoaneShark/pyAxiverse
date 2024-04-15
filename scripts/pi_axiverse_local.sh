@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -n 100
-#SBATCH -N 5
+#SBATCH -N 1
 #SBATCH --time 48:00:00
-#SBATCH --mem 50G
+#SBATCH --mem-per-cpu 15G
 #SBATCH --job-name pi_axiverse_local
 #SBATCH --output pi_axiverse_log-%J.txt
 #SBATCH -p batch
@@ -14,7 +14,10 @@ module load anaconda
 module load texlive
 source /gpfs/runtime/opt/anaconda/latest/etc/profile.d/conda.sh
 conda activate piaxiverse
-if [[ $PIAXI_VERBOSITY > 3 ]]
+
+PIAXI_VERBOSITY=5
+
+if [[ $PIAXI_VERBOSITY -gt 3 ]]
 then
     conda info
 fi
@@ -35,15 +38,16 @@ then
 elif [[ "$INPUT_ARG1" = "SAMPLED" ]]
 then
     PIAXI_DQMC="x x x x x x"
-    PIAXI_JOB_SUFFIX="_sampled"
+    PIAXI_JOB_SUFFIX="_SU6"
 fi
 
 PIAXI_SYS_NAME="${SLURM_JOB_NAME}${PIAXI_JOB_SUFFIX}"
-PIAXI_N_CORES=$SLURM_JOB_NUM_NODES
+PIAXI_N_CORES=$SLURM_JOB_CPUS_PER_NODE
+PIAXI_N_NODES=$SLURM_JOB_NUM_NODES
 PIAXI_COREMEM=$SLURM_MEM_PER_NODE
+PIAXI_JOB_QOS=$SLURM_JOB_QOS
 
 PIAXI_DENSITY="0.4"
-PIAXI_VERBOSITY=5
 PIAXI_N_SAMPLES=3
 
 PIAXI_N_TIMES=300
@@ -52,7 +56,7 @@ PIAXI_MAX_KMODE=200
 PIAXI_KMODE_RES=0.1
 
 PIAXI_N_QMASS=10
-PIAXI_MASS_RANGE="-20 -100"
+PIAXI_MASS_RANGE="-80 -20"
 
 if [[ "$INPUT_ARG1" = "FULL" ]] || [[ "$INPUT_ARG1" = "SAMPLED" ]]
 then
@@ -70,6 +74,6 @@ PIAXI_F_RANGE="10 50"
 PIAXI_N_F=3
 
 PIAXI_N_EPS=10
-PIAXI_EPS_RANGE="-20 0"
+PIAXI_EPS_RANGE="0 -20"
 
-python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --mem_per_core $PIAXI_COREMEM --num_samples $PIAXI_N_SAMPLES --t $PIAXI_MAX_TIME --tN $PIAXI_N_TIMES --use_mass_units $PIAXI_MASS_UNIT --verbosity $PIAXI_VERBOSITY --k $PIAXI_MAX_KMODE --k_res $PIAXI_KMODE_RES --scan_mass $PIAXI_MASS_RANGE --scan_mass_N $PIAXI_N_QMASS --scan_Lambda4 $PIAXI_L4_RANGE --scan_Lambda4_N $PIAXI_N_L4 --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c $PIAXI_DQMC --scan_F $PIAXI_F_RANGE --scan_F_N $PIAXI_N_F --scan_epsilon $PIAXI_EPS_RANGE --scan_epsilon_N $PIAXI_N_EPS --save_output_files --make_plots
+python piaxiverse.py --use_natural_units --use_mass_units --num_cores $PIAXI_N_CORES --num_nodes $PIAXI_N_NODES --job_qos $PIAXI_JOB_QOS --mem_per_core $PIAXI_COREMEM --num_samples $PIAXI_N_SAMPLES --t $PIAXI_MAX_TIME --tN $PIAXI_N_TIMES --use_mass_units $PIAXI_MASS_UNIT --verbosity $PIAXI_VERBOSITY --k $PIAXI_MAX_KMODE --k_res $PIAXI_KMODE_RES --scan_mass $PIAXI_MASS_RANGE --scan_mass_N $PIAXI_N_QMASS --scan_Lambda4 $PIAXI_L4_RANGE --scan_Lambda4_N $PIAXI_N_L4 --config_name $PIAXI_SYS_NAME --rho $PIAXI_DENSITY --dqm_c $PIAXI_DQMC --scan_F $PIAXI_F_RANGE --scan_F_N $PIAXI_N_F --scan_epsilon $PIAXI_EPS_RANGE --scan_epsilon_N $PIAXI_N_EPS --save_output_files --make_plots

@@ -32,7 +32,7 @@ def run_multiple_cases(args):
     L3_values   = [args.L3]
     L4_values   = [args.L4]
     F_values    = [args.F]
-    fit_F       = args.fit_F
+    fit_F       = args.fit_F if args.fit_F is not None else args.fit_QCD
     fit_QCD     = args.fit_QCD
     F_N         = args.scan_F_N
     Lambda_N    = args.scan_Lambda_N
@@ -63,7 +63,7 @@ def run_multiple_cases(args):
     if scan_F is not None:
         F_min, F_max = scan_F
         F_values = get_values(F_min, F_max, F_N)
-        # TODO: Allow this to scan about inferred value from epsilon if said argument is enabled?
+        # TODO: Allow this to scan about inferred value from epsilon?
         fit_F = False
     
     if scan_rho is not None:
@@ -489,7 +489,11 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                         save_params=save_input_params, save_results=save_integrations, save_plots=save_output_plots,
                         save_coefficients=True, P=P, B=B, C=C, D=D, plot_types=['amps', 'nums', 'coeffs', 'resonance', 'alp'])
 
-        plt.close()
+        # Close all plots to preserve memory
+        if make_plots:
+            for plt_key in result_plots.keys():
+                fig = result_plots[plt_key]
+                plt.close(fig)
 
         if verbosity > 1:
             print('Done!')
@@ -796,7 +800,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     parser.add_argument('--int_method',        type=str,  default='RK45',          help='Numerical integration method, to be used by scipy solve_ivp')
     parser.add_argument('--num_samples',       type=int,  default=1,               help='Number of times to rerun a parameter set, except randomly sampled variables')
-    parser.add_argument('--mem_per_core',      type=int,  default=0,               help='Amount of memory available to each parallelized node, in GB')
+    parser.add_argument('--mem_per_core',      type=str,  default=None,            help='Amount of memory available to each parallelized node, in GB')
 
     parser.add_argument('--P', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the P(t) coefficient in the numerics')
     parser.add_argument('--B', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the B(t) coefficient in the numerics')
