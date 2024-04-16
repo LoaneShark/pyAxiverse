@@ -163,7 +163,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
         params['num_cores']    = num_cores if parallelize else 1
         params['parallel']     = parallelize
         params['jupyter']      = jupyter
-        params['mem_per_core'] = params['mem_per_core'] if parallelize and 'mem_per_core' in params and params['mem_per_core'] is not None and params['mem_per_core'] > 0 else None
+        params['mem_per_core'] = params['mem_per_core'] if parallelize and 'mem_per_core' in params and params['mem_per_core'] is not None and (len(params['mem_per_core']) > 1 or (len(params['mem_per_core']) == 0 and int(params['mem_per_core'][0]) > 0)) else None
 
     if verbosity >= 0:
         print(timestr)
@@ -176,7 +176,7 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45'):
     y0 = y0_in
 
     # Debug print statements
-    if verbosity > 7:
+    if verbosity > 8:
         print('  k=%.2f  ' % k)
     if verbosity > 9:
         print('y0:   ', y0)
