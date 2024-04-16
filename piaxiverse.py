@@ -381,6 +381,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     else:
         # Solve the system, in parallel for each k-mode
         os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
+        os.environ['OMP_NUM_THREADS'] = '%d' % 1
         is_parallel = (num_cores > 1)
         show_progress = (verbosity >= 0)
 
