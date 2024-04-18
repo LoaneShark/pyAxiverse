@@ -428,6 +428,16 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             print('n_tot in range [%.2e, %.2e]' % (min(n_tot), max(n_tot)))
             if 'res' in tot_res and verbosity > 2:
                 print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
+        else:
+            # Classify resonance values without plotting them
+            nk_arr = np.array([n_p(k_i, params, solutions, k_values, t, n=n_k_local) for k_i,_ in enumerate(k_values)])
+            nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max = classify_resonance(params, nk_arr, k_span, method=class_method)
+            params['t_res'] = t_res
+            params['res_class'] = tot_class
+            params['res_ratio_f'] = ratio_f
+            params['res_ratio_m'] = ratio_m
+            params['k_class_arr'] = nk_class
+            params['k_ratio_arr'] = nk_ratios
 
         # Plot results (Oscillating coefficient values)
         if make_plots:
