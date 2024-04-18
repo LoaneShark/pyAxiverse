@@ -15,7 +15,7 @@ module load texlive
 source /gpfs/runtime/opt/anaconda/latest/etc/profile.d/conda.sh
 conda activate piaxiverse
 
-PIAXI_VERBOSITY=9
+PIAXI_VERBOSITY=8
 
 if [[ $PIAXI_VERBOSITY -gt 3 ]]
 then
