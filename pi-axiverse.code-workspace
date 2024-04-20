@@ -16,5 +16,12 @@
 		"python.analysis.extraPaths": [
 			"./tools"
 		]
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-toolsai.jupyter",
+			"ms-toolsai.jupyter-keymap",
+			"ms-python.python"
+		]
 	}
 }
