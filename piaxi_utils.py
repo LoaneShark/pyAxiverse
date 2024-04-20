@@ -1113,6 +1113,25 @@ n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: n(k=k_i(i, k_vals=
                                                                 A=A_i(i, solns), Adot=Adot_i(i, solns), Im=lambda k: ImAAdot(k, t=get_times(params, t_in)))
 
 def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
+    """
+    The function `binned_classifier` classifies data based on statistical values and returns the
+    classification label along with related ratios and baseline value.
+    
+    :param k_stat: The `k_stat` parameter in the `binned_classifier` function represents a list of
+    values that are used to classify data into different categories based on certain conditions
+    :param N_bins: The `N_bins` parameter in the `binned_classifier` function represents the total
+    number of bins in the input `k_stat` array. It is used to iterate over the elements of the `k_stat`
+    array and perform calculations based on the values within these bins
+    :param ln_rescon: The `ln_rescon` parameter in the `binned_classifier` function represents the
+    threshold value for determining significant changes in the data. It is used to classify the data
+    into different categories based on whether the change exceeds this threshold, defaults to 2
+    (optional)
+    :param return_dict: The `return_dict` parameter in the `binned_classifier` function determines
+    whether the function should return the classification results as a dictionary or as individual
+    values, defaults to False (optional)
+    :return: The function `binned_classifier` returns either a tuple or a dictionary depending on the
+    value of the `return_dict` parameter.
+    """
     b_baseline = k_stat[0]
     class_label = 'none' if b_baseline < ln_rescon else 'injection'
     b_max_val = 0.
@@ -1151,7 +1170,7 @@ def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
     else:
         return class_label, ratio_final, ratio_max, b_baseline
 
-# TODO: Handle inf and NaN values gracefully
+# TODO: Handle inf and/or NaN values gracefully
 def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
     n_ini = n_in[0]
     n_fin = n_in[-1]
@@ -1178,15 +1197,15 @@ def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
 
     H = lambda x,a,b,c: a * (np.sign(x-b)) + c # Heaviside fitting function
 
-    popt, pcov = curve_fit(H,x_obs,y_obs,p0=(1,0,0),bounds=(0, 1))
+    popt, pcov = curve_fit(H,x_obs,y_obs,p0=(1,0,0),bounds=(0, 1),x_scale='jac')
     if verbosity >= 3:
         print('fit = a: %.2f   b: %.2f   c: %.2f' % (popt[0], popt[1], popt[2]))
         print('pcov = \n %s' % pcov)
 
-    # Use optimized parameters with your function
+    # Plug optimized parameters into desired function
     predicted = H(x_obs,popt[0],popt[1],popt[2]) 
 
-    # Use some metric to quantify fit quality, for now mean-squared error
+    # Use some metric to quantify fit quality (for now mean-squared error)
     lms_err = np.log10(sklearn.metrics.mean_squared_error(y_obs*n_max_norm, predicted*n_max_norm))
     #rms_err = np.sqrt(sklearn.metrics.mean_squared_error(y_obs, predicted))
     if verbosity >= 1:
