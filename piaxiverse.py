@@ -393,16 +393,14 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
         # Solve the equations of motion
         solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress, method=int_method)
         
-        # Classify resonance from results
-        class_method = 'heaviside'
-        n_k_local = n_k
-        n_tot = sum_n_p(n_k_local, params, solutions, k_values, t)
-        tot_res = classify_resonance(params, [n_tot], k_span=(k_values[0], k_values[-1]), method=class_method, verbosity=verbosity)[0]
-
         # Generate plots and optionally show them
         make_plots = args.make_plots
         show_plots = args.show_plots
         result_plots = {}
+
+        # Classify resonance from results
+        class_method = 'heaviside'
+        n_k_local = n_k
 
         # Plot results (Amplitudes)
         k_peak, k_mean = get_peak_k_modes(solutions, k_values, write_to_params=True)
@@ -416,17 +414,33 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             result_plots['amps'] = plt.gcf()
             if show_plots:
                 plt.show()
+            plt.close()
 
         # Plot results (Occupation number)
         if make_plots:
             write_to_params = True
             plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n_k_local, class_method=class_method, write_to_params=write_to_params)
+            
+            n_tot = sum_n_p(n_k_local, params, solutions, k_values, t)
+            if not write_to_params:
+                nk_arr = np.array([n_p(k_i, params, solutions, k_values, t, n=n_k_local) for k_i,_ in enumerate(k_values)])
+                nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max = classify_resonance(params, nk_arr, k_span, method=class_method)
+                params['t_res'] = t_res
+                params['res_class'] = tot_class
+                params['res_ratio_f'] = ratio_f
+                params['res_ratio_m'] = ratio_m
+                params['k_class_arr'] = nk_class
+                params['k_ratio_arr'] = nk_ratios
+            else:
+                tot_class = params['res_class']
+
             result_plots['nums'] = plt.gcf()
             if show_plots:
                 plt.show()
+            plt.close()
 
             print('n_tot in range [%.2e, %.2e]' % (min(n_tot), max(n_tot)))
-            if 'res' in tot_res and verbosity > 2:
+            if 'res' in tot_class and verbosity > 2:
                 print('resonance classification begins at t = %.2f, n = %.2e' % (t_res, n_res))
         else:
             # Classify resonance values without plotting them
@@ -445,6 +459,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             result_plots['coeffs'] = plt.gcf()
             if show_plots:
                 plt.show()
+            plt.close()
 
             if verbosity == 2:
                 print_coefficient_ranges(params, P, B, C, D)
@@ -472,9 +487,10 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             result_plots['resonance'] = plt.gcf()
             if show_plots:
                 plt.show()
+            plt.close()
 
         # Known observable frequency range and bandwidth classification
-        res_freq, res_freq_class = get_frequency_class(k_peak, k_to_Hz_local, tot_res, verbosity=verbosity)
+        res_freq, res_freq_class = get_frequency_class(k_peak, k_to_Hz_local, tot_class, verbosity=verbosity)
         res_band_min, res_band_max, res_band_class = get_resonance_band(k_values, params['k_class_arr'], k_to_Hz_local, verbosity=verbosity)
 
         params['res_freq'] = res_freq
@@ -488,6 +504,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             result_plots['alp'] = plt.gcf()
             if show_plots:
                 plt.show()
+            plt.close()
         
         # Optionally save results of this run to data directory
         save_input_params = True
