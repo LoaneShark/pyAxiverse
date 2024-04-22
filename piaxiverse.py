@@ -217,8 +217,27 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     m_r, m_n, m_c, counts, masks = define_mass_species(qm=qm, qc=qc, F=F, e=e, eps=eps, eps_c=eps_c, xi=xi)
     N_r, N_n, N_c = counts
 
+    # Override certain mass species
+    mask_reals   = args.mask_reals   if args.mask_reals   is not None else False
+    mask_complex = args.mask_complex if args.mask_complex is not None else False
+    mask_charged = args.mask_charged if args.mask_charged is not None else False
+
+    if mask_reals: # Mask all real neutral species (for multi-field axion models)
+        m_r = np.ma.masked_where(True, m_r, copy=True)
+        N_r = 0
+        masks[0] = np.ma.getmaskarray(m_r)
+    if mask_complex: # Mask all complex neutral species (for multi-field axion models))
+        m_n = np.ma.masked_where(True, m_n, copy=True)
+        N_n = 0
+        masks[1] = np.ma.getmaskarray(m_n)
+    if mask_charged: # Mask all complex neutral species (for multi-field axion models)
+        m_c = np.ma.masked_where(True, m_c, copy=True)
+        N_c = 0
+        masks[2] = np.ma.getmaskarray(m_c)
+
     # Populate masses for real, complex, and charged species (given in units of eV)
     m, m_u = init_masses(m_r, m_n, m_c, natural_units=use_natural_units, c=c, verbosity=verbosity)
+
     # Handle unit rescaling logic
     m_unit = m_u      # value of m_u in [eV]
 
@@ -364,7 +383,8 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                 'unitful_m': unitful_masses, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
                 'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
                 'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'em_bg': em_bg,
-                'int_method': int_method, 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D}
+                'int_method': int_method, 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D,
+                'mask_reals': mask_reals, 'mask_complex': mask_complex, 'mask_charged': mask_charged}
 
     # Create unique hash for input parameters (to compare identical runs)
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
@@ -808,6 +828,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--sample_delta', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether local phases are randomly sampled')
     parser.add_argument('--sample_theta', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether global phases are randomly sampled')
+
+    parser.add_argument('--mask_reals',   action=argparse.BooleanOptionalAction,  default=False, help='Mask all real neutral species')
+    parser.add_argument('--mask_complex', action=argparse.BooleanOptionalAction,  default=False, help='Mask all complex neutral species')
+    parser.add_argument('--mask_charged', action=argparse.BooleanOptionalAction,  default=False, help='Mask all charged species')
 
     parser.add_argument('--A_0',        type=np.float64, default=1.0,   help='Photon field initial conditions')
     parser.add_argument('--Adot_0',     type=np.float64, default=1.0,   help='Photon field rate of change initial conditions')
