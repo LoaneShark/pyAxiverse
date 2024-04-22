@@ -2212,8 +2212,11 @@ alpha_sm   = lambda t: 1./137
 alpha_off  = lambda t: 1.
 # (include sum over all surviving species, where lambda(3 or 4) and Lambda(3 or 4) are determined by neutral/charged species)
 # TODO: This is incomplete (only have equation for diagonal terms, missing off-diagonal contributions)
-piaxi_fs = lambda t, lambdas, Lambdas, e, eps, amps, masses, phases, alpha=alpha_sm: \
-    alpha(t) * (1 + (2*(e**2))*(eps**2)*np.sum([(l_i)/(L_i**2) * np.abs(amp_i)**2 * np.cos(m_i*t + d_i)**2 for amp_i, m_i, d_i, l_i, L_i in zip(amps, masses, phases, lambdas, Lambdas)]))
+piaxi_fs = lambda t, lambdas, Lambdas, e, eps, amps, masses, phases, charges, alpha=alpha_sm: \
+    alpha(t) * (1 + (2*(e**2))*(eps**2)*np.sum([(l_i)/(L_i**2) * np.abs(amp_i)*np.abs(amp_j) * np.cos(m_i*t + d_i)*np.cos(m_j*t + d_j) \
+        for amp_i, m_i, d_i, l_i, L_i, c_i in zip(amps, masses, phases, lambdas, Lambdas, charges) for amp_j, m_j, d_j, _, _, c_j in zip(amps, masses, phases, lambdas, Lambdas, charges) \
+            if c_i == c_j]))
+    #alpha(t) * (1 + (2*(e**2))*(eps**2)*np.sum([(l_i)/(L_i**2) * np.abs(amp_i)**2 * np.cos(m_i*t + d_i)**2 for amp_i, m_i, d_i, l_i, L_i in zip(amps, masses, phases, lambdas, Lambdas)]))
 
 def get_fs_corrections(params_in):
     e_in  = params_in['e']
@@ -2231,8 +2234,9 @@ def get_fs_corrections(params_in):
 
     lambdas_in = np.array([l4_in]*Nr_in + [l4_in]*Nn_in + [l3_in]*Nc_in)
     Lambdas_in = np.array([L4_in]*Nr_in + [L4_in]*Nn_in + [L3_in]*Nc_in)
+    charges_in = np.array([0]*Nr_in     + [0]*Nn_in     + [1]*Nc_in)
 
-    alpha_corrected = lambda t: piaxi_fs(t, lambdas=lambdas_in, Lambdas=Lambdas_in, e=e_in, eps=eps_in, amps=amps_in, masses=m_in, phases=d_in)
+    alpha_corrected = lambda t: piaxi_fs(t, lambdas=lambdas_in, Lambdas=Lambdas_in, e=e_in, eps=eps_in, amps=amps_in, masses=m_in, phases=d_in, charges=charges_in)
     return alpha_corrected
 
 def plot_fs_constant(params_in, verbosity=0, return_plot=False):
