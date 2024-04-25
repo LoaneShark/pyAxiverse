@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.special import logsumexp
 import pprint
 import datetime
 import sys
@@ -191,10 +192,52 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45'):
     y = sol.sol(t)
     return y
 
-def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G):
+def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsumexp=False):
     # System of differential equations to be solved (bg = photon background)
+    '''
+    if verbosity >= 9:
+            print('\n'.join(['t = %s    k = %.1f' % (t,k), \
+                             '  P(t): %.2e' % (bg + P(t)), \
+                             '  B(t): %.2e' % B(t), \
+                             '  C(t): %.2e' % C(t, A_pm), \
+                             '  D(t): %.2e' % D(t)]))
+    '''
+    disable_B = params['disable_B']
+    disable_C = params['disable_C']
+    disable_D = params['disable_D']
+    if use_logsumexp: # WIP
+        # Handle edge cases to sidestep log[0] errors when certain coefficients are turned off
+        if disable_B:
+            logBeta    = -np.inf
+            Beta_sign  = 1
+        else:
+            logBeta    = np.log(np.abs(B(t))) - np.log(np.abs(bg + P(t)))
+            Beta_sign  = np.sign(B(t))*np.sign(bg + P(t))
+        if disable_C:
+            logCterm   = -np.inf
+            Cterm_sign = 1
+        else:
+            logCterm   = np.log(np.abs(C(t, A_pm))) - np.log(np.abs(bg + P(t))) + np.log(k)
+            Cterm_sign = np.sign(C(t, A_pm))*np.sign(bg + P(t))
+        if disable_D:
+            logDterm   = -np.inf
+            Dterm_sign = 1
+        else:
+            logDterm   = np.log(np.abs(D(t))) - np.log(np.abs(bg + P(t)))
+            Dterm_sign = np.sign(D(t))*np.sign(bg + P(t))
+        logAlpha, Alpha_sign = logsumexp(a=[logCterm, logDterm, np.log(k**2)],
+                                         b=[Cterm_sign, Dterm_sign, 1], return_sign=True)
+        
+        # Numerically calculate A''[t] in log-space
+        logdy1dt, dy1dt_sign = logsumexp(a=[logBeta + np.log(np.abs(y[1])), logAlpha + np.log(np.abs(y[0]))],
+                                         b=[Beta_sign * np.sign(y[1]), Alpha_sign * np.sign(y[0])], return_sign=True)
+        dy1dt = -dy1dt_sign*np.exp(logdy1dt)
+    else:
+        # Numerically calculate A''[t]
+        dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*np.float64(k0)) + D(t))*y[0]) - (k*np.float64(k0))**2*y[0]
+    
+    # Return A'[t], A''[t]
     dy0dt = y[1]
-    dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*np.float64(k0)) + D(t))*y[0]) - (k*np.float64(k0))**2*y[0]
     return [dy0dt, dy1dt]
 
 def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):

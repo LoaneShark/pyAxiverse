@@ -217,9 +217,16 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     t_0 = 1./m_u if unitful_m else 1.
 
     # Turn off irrelevant constants
-    if N_r <= 0 and N_n <= 0:
-        L4 = -1                   # Turn off Lambda_4 if there are no surviving neutral (real and complex) species
+    disable_P = params_in['disable_P'] if 'disable_P' in params_in else False
+    disable_B = params_in['disable_B'] if 'disable_B' in params_in else False
+    disable_C = params_in['disable_C'] if 'disable_C' in params_in else False
+    disable_D = params_in['disable_D'] if 'disable_D' in params_in else False
+    if N_r <= 0:
+        disable_C = True
+        if N_n <= 0:
+            L4 = -1                   # Turn off Lambda_4 if there are no surviving neutral (real and complex) species
     if N_c <= 0:
+        disable_D = True
         L3 = -1                   # Turn off Lambda_3 if there are no surviving charged species
 
     #rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=unitful_c, unitful_h=unitful_h, unitful_G=unitful_G)
@@ -232,6 +239,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u,
               't_u': t_0, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_u,
+              'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
               'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 'int_method': int_method,
               'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'dimensionful_p': dimensionful_p,
@@ -239,7 +247,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     
     return params
 
-# TODO: Make sure this actually works
+# TODO: Implement parameter space fetcher
 def get_params():
     return params
 
@@ -501,14 +509,15 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
             print(f'Results saved to {output_dir}')
         if verbosity > 0:
             
-            # Append image filenames
-            if save_format in doc_formats:
-                file_list.append(os.path.join(output_dir, filename + '_plots.pdf'))
-            if save_format in img_formats:
-                for i, _ in enumerate(plot_figs):
-                    file_list.append(os.path.join(output_dir, filename + f'_plot_{i}.png'))
-            if save_format in web_formats:
-                file_list.append(os.path.join(output_dir, filename + '_plots.html'))
+            # Append filenames for generated plots
+            if save_plots:
+                if save_format in doc_formats:
+                    file_list.append(os.path.join(output_dir, filename + '_plots.pdf'))
+                if save_format in img_formats:
+                    for i, _ in enumerate(plot_figs):
+                        file_list.append(os.path.join(output_dir, filename + f'_plot_{i}.png'))
+                if save_format in web_formats:
+                    file_list.append(os.path.join(output_dir, filename + '_plots.html'))
 
             # Pretty print the list of files with their sizes
             fsizes = [os.path.getsize(file) for file in file_list]
@@ -543,10 +552,10 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     # List of tuples (filename, absolute path)
     relevant_files = [os.path.split(f) for f in all_files if (os.path.basename(f).startswith(label) or label == 'all') and os.path.basename(f).endswith('.json')] # Assume input params are being saved for now, at least
     
-    all_params = []
+    all_params  = []
     all_results = []
-    all_plots = []
-    all_coeffs = []
+    all_plots   = []
+    all_coeffs  = []
     
     for filepath, filename in relevant_files:
         # Extract base name without extension

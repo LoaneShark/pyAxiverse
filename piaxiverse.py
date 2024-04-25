@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import argparse
 import datetime
+import gc
 from piaxi_utils import *
 from piaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
 from piaxi_numerics import solve_piaxi_system, piaxi_system
@@ -95,6 +96,7 @@ def run_multiple_cases(args):
                                 if args.verbosity >= 7:
                                     print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
                                 run_single_case(args, rho_in=rho, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F, fit_QCD_in=fit_QCD)
+                                #gc.collect()
                                 i += 1
     return None
 
@@ -103,6 +105,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
     use_natural_units = args.use_natural_units    # Toggle whether calculations / results are given in c = h = G = 1 (True) or SI units (False)   || NOTE: full SI/phsyical unit support is still WIP!!
+    use_logsumexp     = args.use_logsumexp        # Toggle whether numerical integrations are performed in log-space
     save_output_files = args.save_output_files    # Toggle whether or not the results from this notebook run are written to a data directory
     int_method        = args.int_method           # Scipy.integrate.solve_ivp() integration method
 
@@ -302,6 +305,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     #phi = lambda t, s, i, m=m, d=d, M=(1./m_unit if unitful_masses and not rescale_m else 1.): (m[s][i]*M)*t + d[s][i]
 
     # Define coefficient functions to clean up differential equation representation
+    # TODO: Support for logsumexp in order to handle numbers getting too big or small to be computed efficiently?
     P = lambda t, l3=l3, L3=L3_sc, l4=l4, L4=L4_sc, eps=eps, amps=amps, m=m, M=m0, d=d, Th=Th, c=c_u, h=h_u, G=G_u, phi=phi, np=np: \
         np.float64( \
             2*l3/(L3**2) * eps**2 * (np.sum([amps[2][i]*amps[2][j] * np.cos(phi(t,2,i))*np.cos(phi(t,2,j)) * np.cos(Th[2][i]-Th[2][j]) \
@@ -345,11 +349,15 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                                          for i in range(len(m[2])) for j in range(len(m[2]))], axis=0)
         )
 
-    # TODO: Add support for supplying custom functions?
+    # TODO: Add support for supplying custom functions via function argument?
     disable_P = not(args.P)
     disable_B = not(args.B)
     disable_C = not(args.C)
     disable_D = not(args.D)
+    if N_r <= 0:
+        disable_C = True
+    if N_c <= 0:
+        disable_D = True
     override_coefficients = True if any([disable_P, disable_B, disable_C, disable_D]) else False
     if override_coefficients:
         if disable_P:
@@ -384,7 +392,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                 'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'h': h, 'c': c, 'G': G, 'seed': rng_seed, 
                 'dimensionful_p': dimensionful_p, 'use_natural_units': use_natural_units, 'use_mass_units': use_mass_units, 'em_bg': em_bg,
                 'int_method': int_method, 'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D,
-                'mask_reals': mask_reals, 'mask_complex': mask_complex, 'mask_charged': mask_charged}
+                'mask_reals': mask_reals, 'mask_complex': mask_complex, 'mask_charged': mask_charged, 'use_logsumexp': use_logsumexp}
 
     # Create unique hash for input parameters (to compare identical runs)
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
@@ -400,15 +408,15 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             print('SKIP: output file already exists for this parameter configuration')
     else:
         # Solve the system, in parallel for each k-mode
-        os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
-        os.environ['OMP_NUM_THREADS'] = '%d' % 1
+        #os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
+        #os.environ['OMP_NUM_THREADS'] = '%d' % 1
         is_parallel = (num_cores > 1)
         show_progress = (verbosity >= 0)
 
         # Initialize parameters
         params = init_params(parameters, t_min=t_span[0], t_max=t_span[1], t_N=t_N, k_min=k_span[0], k_max=k_span[1], k_N=k_N)
         # Define system of equations to solve
-        local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u)
+        local_system = lambda t, y, k, params: piaxi_system(t, y, k, params, P=P, B=B, C=C, D=D, A_pm=A_pm, bg=em_bg, k0=k0, c=c_u, h=h_u, G=G_u, use_logsumexp=use_logsumexp)
 
         # Solve the equations of motion
         solutions, params, time_elapsed = solve_piaxi_system(local_system, params, k_values, parallelize=is_parallel, num_cores=num_cores, verbosity=verbosity, show_progress_bar=show_progress, method=int_method)
@@ -824,7 +832,11 @@ if __name__ == '__main__':
     parser.add_argument('--L3',         type=np.float64, default=1e11,  help='Lambda_3 coupling constant in [GeV]')
     parser.add_argument('--L4',         type=np.float64, default=1e11,  help='Lambda_4 coupling constant in [GeV]')
     parser.add_argument('--m_scale',    type=np.float64, default=1e-20, help='Mass scale of dQCD quarks in [eV]')
-    parser.add_argument('--rho',        type=np.float64, default=0.4,   help='Local DM energy density, in [GeV/cm^3]')
+    parser.add_argument('--rho',        type=np.float64, default=0.4,   help='Local total DM energy density, in [GeV/cm^3]')
+
+    parser.add_argument('--rho_reals',   type=np.float64, default=0.4, help='DM energy density of real species, in [GeV/cm^3]')
+    parser.add_argument('--rho_complex', type=np.float64, default=0.4, help='DM energy density of complex neutral species, in [GeV/cm^3]')
+    parser.add_argument('--rho_charged', type=np.float64, default=0.4, help='DM energy density of charged species, in [GeV/cm^3]')
 
     parser.add_argument('--sample_delta', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether local phases are randomly sampled')
     parser.add_argument('--sample_theta', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether global phases are randomly sampled')
@@ -837,9 +849,10 @@ if __name__ == '__main__':
     parser.add_argument('--Adot_0',     type=np.float64, default=1.0,   help='Photon field rate of change initial conditions')
     parser.add_argument('--A_pm',       type=int,        default=+1,    help='Polarization case (+1 or -1)')
 
-    parser.add_argument('--use_natural_units', action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether c=h=G=1')
-    parser.add_argument('--use_mass_units',    action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
-    parser.add_argument('--make_plots',        action=argparse.BooleanOptionalAction,  default=True, help='Toggle whether plots are made at the end of each run')
+    parser.add_argument('--use_natural_units', action=argparse.BooleanOptionalAction,  default=True,  help='Toggle whether c=h=G=1')
+    parser.add_argument('--use_mass_units',    action=argparse.BooleanOptionalAction,  default=True,  help='Toggle whether calculations are done in units of quark mass (True) or eV (False)')
+    parser.add_argument('--use_logsumexp',     action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether calculations are performed in log-space (Lower precision, higher stability)')
+    parser.add_argument('--make_plots',        action=argparse.BooleanOptionalAction,  default=True,  help='Toggle whether plots are made at the end of each run')
     parser.add_argument('--show_plots',        action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether plots are displayed at the end of each run')
     parser.add_argument('--skip_existing',     action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
 
