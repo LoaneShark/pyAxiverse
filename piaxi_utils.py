@@ -2261,6 +2261,8 @@ def plot_fs_constant(params_in, verbosity=0, return_plot=False):
     fs_t = np.linspace(0, 3./m_ref_in, 100)
     plt.plot(fs_t, [alpha_sm(t) for t in fs_t], label=r'$\alpha_{SM}$')
     plt.plot(fs_t, [alpha_e(t)  for t in fs_t], label=r'$\alpha_{e}(t)$')
+    plt.ylabel('$\alpha$')
+    plt.xlabel('$t$')
     plt.grid()
     plt.legend()
     if return_plot:
@@ -2274,7 +2276,7 @@ g_anomaly  = lambda F_pi, l1=1., eps=1., fs_in=alpha_sm, t=0: fs_in(t)*(eps**2)/
 # Scalar QED interactions and scattering couplings
 g_coupling = lambda Li, li=1., eps=1., fs_in=alpha_off, t=0: fs_in(t)*(eps**2)*li/(2 * Li**2)
 
-def get_coupling_constants(params_in, verbosity=0):
+def get_coupling_constants(params_in, verbosity=0, use_corrected_fs=True):
     l1_in = params_in['l1']
     l2_in = params_in['l2']
     l3_in = params_in['l3']
@@ -2283,18 +2285,18 @@ def get_coupling_constants(params_in, verbosity=0):
     L4_in = params_in['L4']
     eps_in = params_in['eps']
     Fpi_in = params_in['F']
-    alpha_e = get_fs_corrections(params_in)
+    alpha_e = get_fs_corrections(params_in) if use_corrected_fs else alpha_sm
     # Parity-Even
-    g_1 = g_anomaly(F_pi=Fpi_in, l1=l1_in, eps=eps_in)
-    g_2 = g_coupling(Li=1., li=l2_in, eps=eps_in)
-    g_3 = g_coupling(Li=L3_in, li=l3_in, eps=eps_in, fs_in=alpha_e)
-    g_4 = g_coupling(Li=L4_in, li=l4_in, eps=eps_in, fs_in=alpha_e)
+    g_1 = g_anomaly(F_pi=Fpi_in, l1=l1_in, eps=eps_in) if params_in['N_r'] > 0 else None
+    g_2 = g_coupling(Li=1., li=l2_in, eps=eps_in)      if params_in['N_c'] > 0 else None
+    g_3 = g_coupling(Li=L3_in, li=l3_in, eps=eps_in, fs_in=alpha_e) if params_in['N_c'] > 0 else None
+    g_4 = g_coupling(Li=L4_in, li=l4_in, eps=eps_in, fs_in=alpha_e) if params_in['N_r'] + params_in['N_n'] > 0 else None
 
     if verbosity >= 7:
-        print('g_anomaly = %.1e [eV]   |   triangle anomaly' % g_1)
-        print('g_2       = %.1e [eV]   |   scalar QED' % g_2)
-        print('g_3       = %.1e [eV]   |   charged scattering' % g_3)
-        print('g_4       = %.1e [eV]   |   neutral scattering' % g_4)
+        print('g_anomaly = %s   |   triangle anomaly'   % ('%.1e [eV]' % g_1 if g_1 is not None else 'None        '))
+        print('g_2       = %s   |   scalar QED'         % ('%.1e [eV]' % g_2 if g_2 is not None else 'None        '))
+        print('g_3       = %s   |   charged scattering' % ('%.1e [eV]' % g_3 if g_3 is not None else 'None        '))
+        print('g_4       = %s   |   neutral scattering' % ('%.1e [eV]' % g_4 if g_4 is not None else 'None        '))
     
     return g_1, g_2, g_3, g_4
 
