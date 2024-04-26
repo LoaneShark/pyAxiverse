@@ -6,77 +6,9 @@ import datetime
 import sys
 from piaxi_utils import signstr, Alpha, Beta
 
-def set_param_space(params_in):
-    global params
-    global t, t_span, t_num, t_step, t_0
-    global k_values, k_span, k_num, k_step
-    global e, bg
-    global eps
-    global F
-    global L3, L4
-    global l1, l2, l3, l4
-    global A_0, Adot_0, A_pm
-    global m, m_u, m_0, m_q, k_0
-    global N_r, N_n, N_c
-    global p, p_t, p_0, amps
-    global d, Th
-    global qm, qc, dqm, eps_c, xi
-    global use_mass_units, use_natural_units, unitful_m
-    
-    params  = params_in
-    
-    k_span  = params['k_span']
-    k_num   = params['k_num']
-    t_span  = params['t_span']
-    t_num   = params['t_num']
-    
-    eps     = params['eps']
-    F       = params['F']
-    c       = params['c']
-    h       = params['h']
-    G       = params['G']
-    e       = params['e']
-    L3      = params['L3']
-    L4      = params['L4']
-    l1      = params['l1']
-    l2      = params['l2']
-    l3      = params['l3']
-    l4      = params['l4']
-    A_0     = params['A_0']
-    Adot_0  = params['Adot_0']
-    m       = params['m']
-    m_u     = params['m_u']
-    m_0     = params['m_0']
-    m_q     = params['m_q']
-    N_r     = params['N_r']
-    N_n     = params['N_n']
-    N_c     = params['N_c']
-    k_0     = params['k_0']
-    qm      = params['qm']
-    dqm     = params['dqm']
-    qc      = params['qc']
-    eps_c   = params['eps_c']
-    xi      = params['xi']
-    d       = params['d']
-    Th      = params['Th']
-    p       = params['p']
-    amps    = params['amps']
-    p_t     = params['p_t']
-    t_0     = params['t_0']
-    bg      = params['em_bg']
-    
-    t, t_step        = np.linspace(t_span[0], t_span[1], t_num, retstep=True)
-    k_values, k_step = np.linspace(k_span[0], k_span[1], k_num, retstep=True)
-    
-    return params
-
-def get_param_space():
-    return params
-
-k_count_max = 0  # TODO: Make sure this max counter works
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
 def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45', write_to_params=True):
-    global k_count_max
+    k_count_max = 0 # TODO: Make sure this max counter works
     # Determine the environment
     is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
     if is_jupyter and verbosity >= 0:
@@ -101,7 +33,6 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             import tqdm
 
         def update_progress(count, maxval, maxcount=0):
-            global k_count_max
             k_count_max = max(maxcount, k_count_max)
             progress = max(k_count_max, count) / maxval
             bar_length = 50
@@ -241,14 +172,13 @@ def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsume
     return [dy0dt, dy1dt]
 
 def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):
-
     A_0 = np.fromfunction(lambda k: 1./np.sqrt(2.*(k+1)), (k_N,), dtype=np.float64) * A_scale
     Adot_0 = np.fromfunction(lambda k: np.sqrt((k+1)/2.), (k_N,), dtype=np.float64) * Adot_scale
 
     return np.array([A_0, Adot_0], dtype=np.float64).T
 
 # TODO: Verify / implement this
-def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_modes=[]):
+def floquet_exponent(params_in, p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_modes=[]):
     """
     Calculate the Floquet exponents for a system with multiple k-modes.
     
@@ -262,11 +192,10 @@ def floquet_exponent(p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=None, k_mode
     Returns:
     - Floquet exponents for each mode.
     """
-    global params, k_values
     k_modes = k_modes if len(k_modes) > 0 else k_values
     num_modes = len(k_modes)
-    y0  = y0_in  if y0_in  is not None else params['A_0']    if 'A_0'    in params else 0
-    yp0 = yp0_in if yp0_in is not None else params['Adot_0'] if 'Adot_0' in params else 0.1
+    y0  = y0_in  if y0_in  is not None else params_in['A_0']    if 'A_0'    in params_in else 0
+    yp0 = yp0_in if yp0_in is not None else params_in['Adot_0'] if 'Adot_0' in params_in else 0.1
     
     # Convert the second-order differential equations to a system of first-order equations
     def floq_sys(t, Y):

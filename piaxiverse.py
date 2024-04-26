@@ -431,7 +431,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
         n_k_local = n_k
 
         # Plot results (Amplitudes)
-        k_peak, k_mean = get_peak_k_modes(solutions, k_values, write_to_params=True)
+        k_peak, k_mean = get_peak_k_modes(params, solutions, k_values, write_to_params=True)
         if make_plots:
             if verbosity > 0:
                 print('max (peak) k mode: ' + str(k_peak))
@@ -500,7 +500,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                 print('params[\'class\']:\n', params['res_class'])
                 if verbosity > 6:
                     print('params[\'k_class_arr\']:\n', params['k_class_arr'])
-                    print('k_ratio:\n', k_ratio(np.mean, t_sens, A_sens))
+                    print('params[\'k_ratio_arr\']:\n', params['k_ratio_arr'])
 
         # E^2 = p^2c^2 + m^2c^4
         # Assuming k, m are given in units of eV/c and eV/c^2 respectively
@@ -743,7 +743,6 @@ def init_amplitudes(m, p, m_unit=1, mass_units=True, natural_units=True, unitful
 
 # Sample global and local phases from normal distribution, between 0 and 2pi
 def init_phases(masks, rng=None, sample_delta=True, sample_Theta=True, delta_in=None, Theta_in=None, cosine_form=True, verbosity=0, sample_dist='uniform'):
-    #global d, Th
     N_r, N_n, N_c = [len(mask) for mask in masks]
     ## local phases for each species (to be sampled)
     if delta_in == None:

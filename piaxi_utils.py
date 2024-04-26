@@ -33,27 +33,6 @@ c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
 G = G_raw = np.float64(1.0693e-19)  # Newtonian constant   [cm^5 /(eV s^4)]
 e = 0.3                             # Dimensionless electron charge
-# Pointers to global variables
-'''
-params = None
-t = t_span = t_num = t_step = t_sens = None
-k_values = k_span = k_num = k_step = None
-eps = None
-F = None
-L3 = L4 = None
-l1 = l2 = l3 = l4 = None
-A_0 = Adot_0 = A_pm = A_sens = None
-m = m_u = m_0 = m_q = k_0 = t_0 = None
-p = p_t = p_0 = amps = None
-d = Th = None
-qm = qc = dqm = eps_c = xi = None
-seed = res_con = None
-use_natural_units = use_mass_units = None
-unitful_m = unitful_k = unitful_amps = dimensionful_p = None
-rescale_m = rescale_k = rescale_amps = rescale_consts = None
-unitful_c = unitful_h = unitful_G = None
-L3_sc = L4_sc = F_sc = c_u = h_u = G_u = None
-'''
 # Formatting Colors
 colordict = {
     'purple': '#b042f5'
@@ -62,26 +41,6 @@ colordict = {
 ## Set parameters of model for use in numerical integration
 def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, t_min=0, t_N=500,
                 k_max=200, k_min=1, k_N=200):
-    # Define global variables
-    global params
-    global t, t_span, t_num, t_step, t_sens
-    global k_values, k_span, k_num, k_step
-    global e
-    global eps
-    global F
-    global c, h, G
-    global L3, L4
-    global l1, l2, l3, l4
-    global A_0, Adot_0, A_pm, A_sens
-    global m, m_u, m_0, m_q, k_0, t_0
-    global p, p_t, p_0, amps
-    global d, Th
-    global qm, qc, dqm, eps_c, xi
-    global seed, res_con
-    global use_natural_units, use_mass_units
-    global unitful_m, unitful_k, unitful_amps, dimensionful_p
-    global rescale_m, rescale_k, rescale_amps, rescale_consts
-    global unitful_c, unitful_h, unitful_G
     
     # t domain
     t_span = [t_min, t_max]  # Time range
@@ -195,17 +154,17 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
             Th = [np.mod(np.random.normal(mu_Th, sig_Th, len(Th_i)), 2*np.pi) for Th_i in Th]
             
     # rescaling and unit configuration
-    int_method = params_in['int_method']
+    int_method        = params_in['int_method']
     use_natural_units = params_in['use_natural_units']
     use_mass_units    = params_in['use_mass_units']
-    unitful_m      = params_in['unitful_m']
-    rescale_m      = params_in['rescale_m']
-    unitful_k      = params_in['unitful_k']
-    rescale_k      = params_in['rescale_k']
-    unitful_amps   = params_in['unitful_amps']
-    rescale_amps   = params_in['rescale_amps']
-    rescale_consts = params_in['rescale_consts']
-    dimensionful_p = params_in['dimensionful_p']
+    unitful_m         = params_in['unitful_m']
+    rescale_m         = params_in['rescale_m']
+    unitful_k         = params_in['unitful_k']
+    rescale_k         = params_in['rescale_k']
+    unitful_amps      = params_in['unitful_amps']
+    rescale_amps      = params_in['rescale_amps']
+    rescale_consts    = params_in['rescale_consts']
+    dimensionful_p    = params_in['dimensionful_p']
     unitful_c = False if use_natural_units else c != 1
     unitful_h = False if use_natural_units else h != 1
     unitful_G = False if use_natural_units else G != 1
@@ -247,28 +206,6 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     
     return params
 
-# TODO: Implement parameter space fetcher
-def get_params():
-    return params
-
-# TODO: This is currently deprecated / unused -- is it worth fixing up?
-def rescale_params(rescale_m, rescale_k, rescale_amps, rescale_consts, unitful_c=False, unitful_h=False, unitful_G=False, verbosity=0):
-    global params
-    global m, amps, k_values
-    global m_0, k_0
-    global L3, L4, F, c, h, G
-    global L3_sc, L4_sc, F_sc, c_u, h_u, G_u
-    is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)])
-    
-    # Values to use in order to ensure natural / dimensionful units
-    c_u = c if unitful_c else 1.
-    h_u = h if unitful_h else 1.
-    G_u = G if unitful_G else 1.
-
-    # Rescale all eV unit constants to unit mass
-    L3_sc = abs(L3) if not rescale_consts else L3 / m_u
-    L4_sc = abs(L4) if not rescale_consts else L4 / m_u
-    F_sc  = abs(F)  if not rescale_consts else  F / m_u
 
 prune_char = ['[',']','',' ','\n',None,[]]
 str_split  = lambda str_in: str_in.replace('\n','').replace('\\n','').replace(',','').replace('\'','').replace('"','').replace('[','').replace(']','').split(' ')[1:-1]
@@ -370,7 +307,7 @@ class NumpyEncoder(json.JSONEncoder):
     
 # Generate a unique but reproduceable hash for the given parameter set
 def get_parameter_space_hash(params_in, verbosity=0):
-    
+
     phash = hashlib.sha1(json.dumps(params_in, sort_keys=True, ensure_ascii=True, cls=NumpyEncoder).encode()).hexdigest()
 
     if verbosity > 3:
@@ -883,49 +820,52 @@ def get_timescales(m, m0, m_u=1., verbosity=0):
     return T_min, t_min_r, t_min_n, t_min_c
 
 # k_ratio: apply [k_func] to each k mode and then return the ratio of the final vs. initial amplitudes (sensitive to a windowed average specified by [sens])
-k_ratio = lambda func, t_sens, A_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
+# (DEPRECATED) see classify_resonance instead
+k_ratio = lambda func, t_sens, A_sens, k_sens: np.array([k_f/k_i for k_f, k_i in zip(k_sens(func, t_sens), k_sens(func, -t_sens))])
 
 # k_class: softly classify the level of resonance according to the final/initial mode amplitude ratio, governed by [func, t_sens, and A_sens]
 # (DEPRECATED) see classify_resonance instead
 # k_class = lambda func, t_sens, A_sens, res_con: np.array(['damp' if k_r <= 0.9 else 'none' if k_r <= (1. + np.abs(A_sens)) else 'soft' if k_r <= res_con else 'res' for k_r in k_ratio(func, t_sens, A_sens)])
 
 get_times = lambda params_in, times_in: times_in if times_in is not None else np.linspace(params_in['t_span'][0], params_in['t_span'][1], params_in['t_num'])
+get_kvals = lambda params_in, kvals_in: kvals_in if kvals_in is not None else np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
 
 # get indices for time-averaged windows, characterized by sensitivity
 # (e.g. sens = 0.1 means shave off 10% of the time window; sign (+/-) of sens determines which endpoint of the window is returned)
-win_lower  = lambda sens: win_L_N(sens, t_n=t_num)  # anchor left endpoint at 0 (-/+ sens for L/R endpoints)
-win_upper  = lambda sens: win_U_N(sens, t_n=t_num)  # anchor right endpoint at t[N] (-/+ sens for L/R endpoints)
 win_L_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. - sens)*np.sign(sens) + (1. - sens))))  # time window in [0, (1-sens)]
 win_U_N  = lambda sens, t_n: int(t_n*(1./2)*np.abs(((1. + sens)*np.sign(sens) + (1. - sens))))  # time window in [sens, 1]
 
 ## Identify the k mode with the greatest peak amplitude, and the mode with the greatest average amplitude
-def get_peak_k_modes(results_in, k_values_in=None, write_to_params=False):
-    global k_func, k_sens, k_ratio, k_peak, k_mean, tot_res, t_num
-    t_num = len(results_in[0][0])
-    k_values = k_values_in if k_values_in is not None else k_values if k_values is not None else None
+# TODO: Update this logic to be more in line with classify_resonance
+def get_peak_k_modes(params_in, results_in, k_values_in=None, write_to_params=False):
 
+    t_num = len(results_in[0][0])
+    k_values = k_values_in if k_values_in is not None else get_kvals(params_in, k_values_in)
+
+    win_lower  = lambda sens, t_n=t_num: win_L_N(sens, t_n)  # anchor left endpoint at 0 (-/+ sens for L/R endpoints)
+    win_upper  = lambda sens, t_n=t_num: win_U_N(sens, t_n)  # anchor right endpoint at t[N] (-/+ sens for L/R endpoints)
+    
     # k_func : apply [func] on the time-series for each k mode, e.g. max or mean
     k_func = lambda func: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][:])) for k_vi, k_v in enumerate(k_values)])])
-    
+
     # k_sens : apply [k_func] but limit the time-series by [sens], e.g. sens = 0.1 to skip the first 10% in calculating our time-averaged values
     k_sens = lambda func, sens: np.array([k_fval for k_fi, k_fval in enumerate([func(np.abs(results_in[k_vi][0][win_lower(sens):win_upper(sens)])) for k_vi, k_v in enumerate(k_values)])])
 
     # k mode(s) with the largest contributions to overall number density growth
     k_peak = k_values[np.ma.argmax(k_func(max))]
     k_mean = k_values[np.ma.argmax(k_func(np.ma.mean))]
-    
+
     # store max, all-time mean, and late-time mean for each k-mode locally, as well as resonance classifications
     if write_to_params:
-        global params
         # TODO: Update this to new logic
-        params['k_peak_arr']  = k_func(max)
-        params['k_mean_arr']  = k_func(np.mean)
-        params['k_sens_arr']  = k_sens(np.mean, t_sens)
-        #params['k_class_arr'] = k_class(np.mean, t_sens, A_sens, res_con)
+        params_in['k_peak_arr']  = k_func(max)
+        params_in['k_mean_arr']  = k_func(np.mean)
+        params_in['k_sens_arr']  = k_sens(np.mean, params_in['t_sens'])
+        #params_in['k_class_arr'] = k_class(np.mean, t_sens, A_sens, res_con)
 
         # TODO: unify all of the different methods we use to classify resonance
         #tot_res = 'resonance' if sum(k_ratio(np.ma.mean, t_sens, A_sens)) > res_con else 'none'
-        #params['res_class'] = tot_res
+        #params_in['res_class'] = tot_res
     
     return k_peak, k_mean
 
@@ -973,7 +913,7 @@ def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, p
     
 def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
-    k_peak, k_mean = get_peak_k_modes(results_in, k_values)
+    k_peak, k_mean = get_peak_k_modes(params_in, results_in, k_values)
     plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
     if plot_all_k:
         k_samples = [i for i, k_i in enumerate(k_values)]
@@ -986,6 +926,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
     signdict = signtex if tex_fmt else signstr
     fontsize = 16 if tex_fmt else 14
     times = get_times(params_in, times_in)
+    t_step = float(params_in['t_span'][1] - params_in['t_span'][0]) / float(params_in['t_num'])
 
     xdim = 5
     if plot_Adot:
@@ -1335,8 +1276,8 @@ sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(k_i, p_in, sol_in, 
 
 def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, class_method='heaviside', tex_fmt=False, add_colorbars=False, write_to_params=False):
     k_span = (params_in['k_span'][0], params_in['k_span'][1])
-    k_values = np.linspace(k_span[0], k_span[1], params_in['k_num'])
-    k_peak, k_mean = get_peak_k_modes(results_in, k_values)
+    k_values = get_kvals(params_in, None)
+    k_peak, k_mean = get_peak_k_modes(params_in, results_in, k_values)
     fontsize = 16 if tex_fmt else 14
 
     plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
@@ -1489,19 +1430,17 @@ def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polar
     plt.show()
     
 def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True, tex_fmt=False):
-    global k_0
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
-    #k_peak, k_mean = get_peak_k_modes(results_in, k_values)
     fontsize = 16 if tex_fmt else 14
     P = P_in if P_in is not None else P_off
     B = B_in if B_in is not None else B_off
     D = D_in if D_in is not None else D_off
     C = C_in if C_in is not None else C_off
     Cpm = Cpm_in if Cpm_in is not None else params_in['A_pm']
-    k0 = k_unit if k_unit is not None else params_in['k_0'] if 'k_0' in params_in else k_0 if k_0 is not None else 1.
+    k0 = k_unit if k_unit is not None else params_in['k_0'] if 'k_0' in params_in else 1.
     
     if len(k_samples_in) <= 0:
-        k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
+        k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500]]
     else:
         k_samples = k_samples_in
     times = get_times(params_in, times_in)
@@ -1574,9 +1513,8 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     return plt
 
 def get_coefficient_values(params_in, P, B, C, D, times_in=[]):
-    global t
     func_vals = []
-    times = times_in if len(times_in) > 0 else t
+    times = times_in if len(times_in) > 0 else get_times(params_in, times_in)
     for c_func, l_root, sign in zip([P, B, C, C, D], 
                                     ['P(t)', 'B(t)', 'C_{%s}(t)' % signstr[+1], 'C_{%s}(t)' % signstr[-1], 'D(t)'], 
                                     [0, 0, +1, -1, 0]):
@@ -1597,9 +1535,8 @@ def get_coefficient_values(params_in, P, B, C, D, times_in=[]):
     return func_vals
 
 def get_coefficient_ranges(params_in, P, B, C, D, k_samples, times_in=None):
-    global t
     c_ranges = []
-    times = times_in if len(times_in) > 0 else t
+    times = times_in if len(times_in) > 0 else get_times(params_in, times_in)
     
     for c_func, l_root, sign in zip([P, B, C, C, D], 
                                     ['P(t)', 'B(t)', 'C_{%s}(t)' % signstr[+1], 'C_{%s}(t)' % signstr[-1], 'D(t)'], 
@@ -1610,7 +1547,7 @@ def get_coefficient_ranges(params_in, P, B, C, D, k_samples, times_in=None):
             c_t = c_func(times)
 
         if type(c_t) is np.float64:
-            c_t     = np.ma.array(c_t + np.full(len(t), 0.0, dtype=float), mask=True)
+            c_t     = np.ma.array(c_t + np.full(len(times), 0.0, dtype=float), mask=True)
             c_range = (np.nan, np.nan)
         else:
             label   = r'$%s$' % l_root
@@ -1621,9 +1558,9 @@ def get_coefficient_ranges(params_in, P, B, C, D, k_samples, times_in=None):
     return c_ranges
 
 def print_coefficient_ranges(params_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, print_all=False):
-    
+    k_values = get_kvals(params_in, None)
     if len(k_samples_in) <= 0:
-        k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500,k_peak,k_mean]]
+        k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,20,50,75,100,125,150,175,200,500]]
     else:
         k_samples = k_samples_in
     P    = P_in   if P_in   is not None else P_off
@@ -1631,7 +1568,7 @@ def print_coefficient_ranges(params_in, P_in=None, B_in=None, C_in=None, D_in=No
     D    = D_in   if D_in   is not None else D_off
     C    = C_in   if C_in   is not None else C_off
     Cpm  = Cpm_in if Cpm_in is not None else params_in['A_pm']
-    k0   = k_unit if k_unit is not None else k_0
+    k0   = k_unit if k_unit is not None else params_in['k_0']
     times = get_times(params_in, times_in)
     
     for c_range_str in get_coefficient_ranges(params_in, P, B, C, D, k_samples, times):
@@ -1662,7 +1599,7 @@ def plot_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
 
 def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
     k_span = (params_in['k_span'][0], params_in['k_span'][1])
-    k_values = np.linspace(k_span[0], k_span[1], params_in['k_num'])
+    k_values = get_kvals(params_in, None)
     class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'injection': 'orange', 'burst':'purple', 'resonance': 'red'}
     res_con_in = params_in['res_con']
 
@@ -1698,92 +1635,15 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     
     return plt
 
-def plot_ALP_survey_old(params_in, verbosity=0, tex_fmt=False):
-    plt.figure(figsize = (16,12))
-    #plt.suptitle('ALP Survey Results')
 
-    plt.subplot2grid((1,1), (0,0), colspan=1, rowspan=1)
-    xmin, xmax = (1e-12, 1e7)   # Scale limits
-    ymin, ymax = (1e-21, 2e-6)   # Scale limits
-    res_color  = colordict['purple']
-    plot_masses = True
-    show_mass_ranges = False
-
-    ## Interactive mode (WIP)
-    with plt.ion():
-        # Log-scaled axes
-        ax = plt.gca()
-        ax.minorticks_on()
-        ax.set_xlabel(r'$m_a\quad[eV]$',fontsize=30)
-        ax.set_xlim(xmin, xmax)
-        ax.set_xscale('log')
-        ax.set_ylabel(r'$|g_{a\gamma}|\quad[GeV^{-1}]$',fontsize=30)
-        ax.set_ylim(ymin, ymax)
-        ax.set_yscale('log')
-        ax.tick_params(axis='both', which='major', labelsize=15)
-        ax.tick_params(axis='both', which='minor', labelsize=8)
-        ax.set_zorder(3)
-        ax.set_facecolor('none')
-        #ax.grid('on')
-        
-        ## Primary data
-        ax.set_zorder(3)
-        ax.scatter(m_u, GeV/F, s=1000, c=res_color, marker='*')
-        
-        ## Secondary Data
-        ax2 = plt.gcf().add_subplot()
-        ax2.set_xscale('log')
-        ax2.set_xlim(xmin, xmax)
-        ax2.set_yscale('log')
-        ax2.set_ylim(ymin, ymax)
-        ax2.axis('off')
-        ax2.set_zorder(2)
-        # Millicharge line (WIP)
-        #eps_logval = 2*np.log10(10*eps)-19.9
-        eps_logval = lambda ep: (2.615)*np.log10(10*ep + 0.868)-(20.61)
-        eps_scaleval = 2
-        if verbosity > 8:
-            print('10^eps: ', 10**(eps_logval(eps)))
-            print('10^eps * scale: ', 10**(eps_logval(eps)) * eps_scaleval)
-        eps_str = ('$\\varepsilon=%s$' % ('%d' if eps == 1 else '%.1f' if eps > 0.01 else '%.1e')) % eps
-        ax2.plot(np.geomspace(xmin, xmax), np.geomspace((10**(eps_logval(eps)) * eps_scaleval), (10**(eps_logval(eps)+2.15) * eps_scaleval)), c='magenta', linestyle='solid', label=eps_str)
-        # F_pi and Lambda lines (WIP)
-        ax2.hlines(GeV / F, xmin, m_u, colors=res_color, linestyles='dashed', label='$F_{\pi}$')
-        for Lval, Lidx in zip([L3, L4], ['3','4']):
-            if Lval > 0:
-                ax2.hlines(GeV / Lval, xmin, xmax, colors='black', linestyles='dashdot', label='$\Lambda_%s$' % Lidx)
-        # m_i lines/blocks for each species (WIP)
-        if plot_masses:
-            for s_idx, m_s in enumerate(m):
-                s_idx_str = '0' if s_idx == 0 else '\pi' if s_idx == 1 else '\pm' if s_idx == 2 else '\text{ERR}'
-                for m_idx, m_i in enumerate(m_s):
-                    m_plot_data = {'x': m_i,
-                                'label': '$m_{(%s),%s}$' % (s_idx_str, str(m_idx)),
-                                'color': res_color if m_i == m_u else 'black',
-                                'style': 'dashed'}
-                    if len(m_s) == 1 or m_i == m_u or not(show_mass_ranges):  # Plot a vertical line
-                        ax2.vlines(m_plot_data['x'], ymin, ymax, colors=m_plot_data['color'], linestyles=m_plot_data['style'], label=m_plot_data['label'])
-                    if len(m_s) > 1 and m_idx <= 0 and show_mass_ranges:         # Plot a horizontal line
-                        ax2.axvspan(min(m_s), max(m_s), ymin=0, ymax=1, color='black', label='$m_{(%s)}$' % (s_idx_str), alpha=0.5, visible=show_mass_ranges)
-        ax2.legend()
-                        
-        ## Background Image
-        survey_img = image.imread('./tools/survey_img_crop.PNG')
-        im_ax = ax.twinx()
-        im_ax.axis('off')
-        im_ax = im_ax.twiny()
-        im_ax.axis('off')
-        im_ax.imshow(survey_img, extent=[xmin, xmax, ymin, ymax], aspect='auto')
-    
-    return plt
-
+# TODO: Rescale plot axes if current data doesn't fit in default range
 def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     tools_dir = os.path.abspath(os.path.join('./tools'))
     if tools_dir not in sys.path:
         sys.path.append(tools_dir)
 
     # Shade of purple chosen for visibility against existing plot colors
-    res_color  = '#b042f5' if 'res' in params['res_class'] else 'grey'
+    res_color  = '#b042f5' if 'res' in params_in['res_class'] else 'grey'
 
     # Import plotting functions from AxionLimits and set up AxionPhoton plot
     from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
@@ -1796,6 +1656,7 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     F   = params_in['F']
     l1  = params_in['l1']
     eps = params_in['eps']
+    m   = params_in['m']
 
     ## Populate standard AxionPhoton limits plot
     # Plot QCD axion lines and experimental bounds
@@ -2072,7 +1933,6 @@ def get_units_from_params(params_in, verbosity=0):
 
 def get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_amps, rescale_consts, dimensionful_p=False,
               unitful_c=False, unitful_h=False, unitful_G=False, use_mass_units=True, use_natural_units=None, verbosity=0):
-    global units
     is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)]) if use_natural_units is None else use_natural_units
     units = {'c': 1 if not unitful_c else 'cm/s', 'h': 1 if not unitful_h else 'eV/Hz', 'G': 1 if not unitful_G else 'cm^5/(eV s^4)', 
              'm': 'm_u' if not((unitful_m and not rescale_m) or (not unitful_m and rescale_m)) else 'eV/c^2' if unitful_c else 'eV',
@@ -2157,7 +2017,7 @@ def get_frequency_class(k_mode_in, k_to_HZ, res_label, verbosity=0):
         Hz_peak  = k_to_HZ(k_mode_in)
         Hz_class = Hz_label(Hz_peak)[0]
         if verbosity >= 0:
-            print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_peak, Hz_peak, Hz_class))
+            print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_mode_in, Hz_peak, Hz_class))
         if Hz_peak >= FRB_values[0] and Hz_peak <= FRB_values[1]:
             obs_class['FRB'] = True
             if verbosity >= 0:
@@ -2184,7 +2044,7 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
     for i, label in enumerate(k_class_arr):
         if label == 'res' and start_idx is None:
             start_idx = i
-        elif label not in ['res', 'soft'] and start_idx is not None:
+        elif label not in ['res', 'soft', 'burst'] and start_idx is not None:
             start_indices.append(start_idx)
             end_indices.append(i-1)
             start_idx = None
@@ -2193,8 +2053,9 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
         end_indices.append(len(k_class_arr)-1)
 
     # Determine resonance classification
-    res_count  = np.ma.masked_where(k_class_arr != 'res', k_class_arr, copy=True).count()
-    soft_count = np.ma.masked_where(k_class_arr != 'soft', k_class_arr, copy=True).count()
+    res_count   = np.ma.masked_where(k_class_arr != 'res',   k_class_arr, copy=True).count()
+    burst_count = np.ma.masked_where(k_class_arr != 'burst', k_class_arr, copy=True).count()
+    soft_count  = np.ma.masked_where(k_class_arr != 'soft',  k_class_arr, copy=True).count()
     if not start_indices:  # No resonance segments found
         return None, None, None
     elif len(start_indices) == 1:  # Only one resonance segment
@@ -2220,7 +2081,7 @@ def get_resonance_band(k_values_in, k_class_arr, k_to_HZ, class_sens=0.1, verbos
 alpha_sm   = lambda t: 1./137
 alpha_off  = lambda t: 1.
 # (include sum over all surviving species, where lambda(3 or 4) and Lambda(3 or 4) are determined by neutral/charged species)
-# TODO: This is incomplete (only have equation for diagonal terms, missing off-diagonal contributions)
+# TODO/WIP: This is incomplete (only have equation for diagonal terms, missing sign differences in assumed form for off-diagonal contributions)
 piaxi_fs = lambda t, lambdas, Lambdas, e, eps, amps, masses, phases, charges, alpha=alpha_sm: \
     alpha(t) * (1 + (2*(e**2))*(eps**2)*np.sum([(l_i)/(L_i**2) * np.abs(amp_i)*np.abs(amp_j) * np.cos(m_i*t + d_i)*np.cos(m_j*t + d_j) \
         for amp_i, m_i, d_i, l_i, L_i, c_i in zip(amps, masses, phases, lambdas, Lambdas, charges) for amp_j, m_j, d_j, _, _, c_j in zip(amps, masses, phases, lambdas, Lambdas, charges) \
@@ -2261,8 +2122,8 @@ def plot_fs_constant(params_in, verbosity=0, return_plot=False):
     fs_t = np.linspace(0, 3./m_ref_in, 100)
     plt.plot(fs_t, [alpha_sm(t) for t in fs_t], label=r'$\alpha_{SM}$')
     plt.plot(fs_t, [alpha_e(t)  for t in fs_t], label=r'$\alpha_{e}(t)$')
-    plt.ylabel('$\alpha$')
-    plt.xlabel('$t$')
+    plt.ylabel(r'$\alpha$')
+    plt.xlabel(r'$t$')
     plt.grid()
     plt.legend()
     if return_plot:
