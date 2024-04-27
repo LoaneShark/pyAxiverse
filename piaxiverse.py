@@ -96,7 +96,7 @@ def run_multiple_cases(args):
                                 if args.verbosity >= 7:
                                     print('Running %s case: F=%.1e, m=%.1e, eps=%.1e, L3=%.1e, L4=%.1e' % ('first' if i < 1 else 'next', F, mass, eps, L3, L4))
                                 run_single_case(args, rho_in=rho, Fpi_in=F, L3_in=L3, L4_in=L4, m_scale_in=mass, eps_in=eps, fit_F_in=fit_F, fit_QCD_in=fit_QCD)
-                                #gc.collect()
+                                gc.collect()
                                 i += 1
     return None
 
@@ -409,7 +409,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     else:
         # Solve the system, in parallel for each k-mode
         #os.environ['NUMEXPR_MAX_THREADS'] = '%d' % (max(int(num_cores), 1))
-        #os.environ['OMP_NUM_THREADS'] = '%d' % 1
+        os.environ['OMP_NUM_THREADS'] = '%d' % 1
         is_parallel = (num_cores > 1)
         show_progress = (verbosity >= 0)
 
@@ -498,7 +498,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                 print('params:\n', params, '\n')
             if verbosity > 2:
                 print('params[\'class\']:\n', params['res_class'])
-                if verbosity > 6:
+                if verbosity > 7:
                     print('params[\'k_class_arr\']:\n', params['k_class_arr'])
                     print('params[\'k_ratio_arr\']:\n', params['k_ratio_arr'])
 
