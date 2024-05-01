@@ -996,7 +996,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
         plt.plot(times, np.sum(A_d, axis=0), color='g', label=r'total')
         plt.plot(times, A_mean, color='y', label=r'$k$ = %d (mean)' % k_mean)
         plt.plot(times, A_peak, color='orange', label=r'$k$ = %d (peak)' % k_peak)
-        plt.title(r'Evolution of the (total) change in amplitude for $A[%s]$' % signdict[0])
+        plt.title(r'Evolution of the (total) change in amplitude for $A_{%s}$' % signdict[0])
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
         plt.yscale('log')
@@ -1120,12 +1120,39 @@ def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
     else:
         return class_label, ratio_final, ratio_max, b_baseline
 
-# TODO: Handle inf and/or NaN values gracefully
+# Classify resonance based on ability to fit to step-function shape
 def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
+    
     n_ini = n_in[0]
     n_fin = n_in[-1]
     n_max = np.max(n_in)
     n_min = np.min(n_in)
+
+    # TODO/WIP: Handle inf and/or NaN values gracefully
+    if any(np.isinf(n_in)):
+
+        ratio_m = np.inf
+        ratio_f = (n_fin / n_ini) if n_fin != np.inf and n_ini != np.inf else np.inf
+
+        t_res_idx = np.argwhere((n_in / n_ini) >= res_con)[0]
+        t_res = t_in[t_res_idx[0] if len(t_res_idx) > 0 else -1]
+        t_max_idx = np.argwhere(np.isinf(n_in))[0]
+        t_max = t_in[t_max_idx[0] if len(t_max_idx) > 0 else t_max_idx[0]]
+
+        if not(np.isinf(n_max) and np.isinf(n_fin)) and n_max/n_fin > res_con: # if n_max != n_final, assume energy "burst"
+            n_class = 'burst'
+        else: # otherwise, runaway instability
+            n_class = 'resonance'
+
+        if verbosity >= 8:
+            print('ratio_m: ', ratio_m)
+            print('ratio_f: ', ratio_f)
+            print('t_res: ', t_res)
+            print('t_max: ', t_max)
+        
+        return n_class, ratio_f, ratio_m, t_res, t_max
+    
+    # Renormalize values to be ratio relative to initial number density in
     n_norm = n_in/n_ini
     n_max_norm = np.max(n_norm)
 
