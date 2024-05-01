@@ -68,6 +68,10 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     k_N  = len(k_values)
     y0_k = init_photons(k_N, A_scale=A_scale, Adot_scale=Adot_scale)
 
+    # Establish cutoff values for resonance and infinities
+    res_con = params['res_con']
+    inf_con = params['inf_con']
+
     # Solve the differential equation for each k, in parallel
     if parallelize:
         #with mp.Pool(num_cores) as pool:
@@ -80,12 +84,11 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             solutions = pool.starmap(solve_subsystem, pool_inputs)
         '''
         pool = mp.Pool(num_cores)
-        pool_params = [(system_in, params, np.float64(y0), np.float64(k), verbosity, method) for k, y0 in zip(k_values, y0_k)]
+        pool_params = [(system_in, params, np.float64(y0), np.float64(k), verbosity, method, res_con, inf_con) for k, y0 in zip(k_values, y0_k)]
         pool_inputs = tqdm.tqdm(pool_params, total=k_N) if show_progress_bar else pool_params
         solutions = pool.starmap(solve_subsystem, pool_inputs)
         pool.close()
         pool.join()
-        
         
     else:
         t_span = params['t_span']
@@ -96,7 +99,8 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             if verbosity > 7 and show_progress_bar:
                 #print('i = %d,   k[i] = %d' % (i, k))
                 progress_val(i)
-            solutions[i] = solve_subsystem(system_in, params, np.float64(y0_k[i]), np.float64(k), verbosity=0, method=method) # Store the solution
+            solutions[i] = solve_subsystem(system_in, params, np.float64(y0_k[i]), np.float64(k), verbosity=0, \
+                                           method=method, resonance_limit=res_con, precision_limit=inf_con) # Store the solution
     
     # `solutions` contains the solutions for A(t) for each k.
     # e.g. `solutions[i]` is the solution for `k_values[i]`.
@@ -121,7 +125,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     return solutions, params, time_elapsed
 
 # Solve the differential equation for a singular given k
-def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', resonance_limit=1e6):
+def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', resonance_limit=1e6, precision_limit=1e100):
     # Initial conditions
     y0 = y0_in
 
@@ -136,13 +140,13 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', res
     # Define milestone events during integration
     def hit_resonance_limit(t, y, k, params, limit=resonance_limit):
         return limit - y[0]
-    def hit_precision_limit(t, y, k, params, limit=1e100):
+    def hit_precision_limit(t, y, k, params, limit=precision_limit):
         return limit - y[0]
     
     # Integration will end when we hit a terminal event
     hit_precision_limit.terminal = True
-    # We only care about when we first reach resonance, not dipping back below it
-    hit_resonance_limit.direction = +1
+    # (DISABLED) We only care about when we first reach resonance, not dipping back below it
+    # hit_resonance_limit.direction = +1
 
     extra_events = [hit_resonance_limit] if resonance_limit is not None else []
     solve_events = [hit_precision_limit] + extra_events

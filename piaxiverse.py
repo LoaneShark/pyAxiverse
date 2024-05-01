@@ -202,8 +202,10 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     A_0    = args.A_0
     Adot_0 = args.Adot_0
     A_pm   = +1       # specify A± case (+1 or -1)
-    A_sens = 1.0      # sensitivity for classification of resonance conditions
+    A_sens = 1.0      # sensitivity for classification of resonance conditions (TODO: Replace this with new argument values)
     em_bg  = 1.0      # photon background (Default 1)
+
+    res_con 
 
     # Toggle whether mass-energy values should be computed in units of eV (False) or pi-axion mass (True)
     # (by default, k is defined in units of [m_u] whereas m is defined in units of [eV], so their scaling logic is inverted)
@@ -378,12 +380,12 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     #t = t[1:]
 
     # Classification sensitivity threshold
-    res_con = 1000
-    #res_con = max(100,1./A_sens)
+    res_con = args.resonance_limit if args.resonance_limit is not None and args.resonance_limit >= 0 else np.inf
+    inf_con = args.precision_limit if args.precision_limit is not None and args.precision_limit >= 0 else np.inf
 
     # Collect all simulation configuration parameters
     parameters = {'e': e, 'F': F, 'p_t': p_t, 'eps': eps, 'L3': L3, 'L4': L4, 'l1': l1, 'l2': l2, 'l3': l3, 'l4': l4, 'res_con': res_con,
-                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 'A_sens': A_sens, 'k_step': k_step,
+                'A_0': A_0, 'Adot_0': Adot_0, 'A_pm': A_pm, 'A_sens': A_sens, 'k_step': k_step, 'inf_con': inf_con,
                 't_sens': t_sens, 't_step': t_step, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_min,
                 'qm': qm, 'qc': qc, 'dqm': dqm, 'eps_c': eps_c, 'xi': xi, 'm_0': m0, 'm_u': m_unit, 'm_scale': m_scale, 'p_unit': p_unit,
                 'm_r': m[0], 'm_n': m[1], 'm_c': m[2], 'p_r': p[0], 'p_n': p[1], 'p_c': p[2], 'Th_r': Th[0], 'Th_n': Th[1], 'Th_c': Th[2],
@@ -877,6 +879,9 @@ if __name__ == '__main__':
     parser.add_argument('--make_plots',        action=argparse.BooleanOptionalAction,  default=True,  help='Toggle whether plots are made at the end of each run')
     parser.add_argument('--show_plots',        action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether plots are displayed at the end of each run')
     parser.add_argument('--skip_existing',     action=argparse.BooleanOptionalAction,  default=False, help='Toggle whether phashes that exist in output dir should be skipped (False to force rerun/overwrite)')
+
+    parser.add_argument('--resonance_limit',   type=np.float64, default=1e6,     help='Relative amplitude growth threshold for resonance classification')
+    parser.add_argument('--precision_limit',   type=np.float64, default=1e100,   help='Upper bound on max allowable order of magnitude for an amplitude in numerical calculations')
 
     parser.add_argument('--verbosity',         type=int,  default=0,               help='From 0-9, set the level of detail in console printouts. (-1 to suppress all messages)')
     parser.add_argument('--save_output_files', action=argparse.BooleanOptionalAction, default=True, help='Toggle whether or not to save the results from this run')

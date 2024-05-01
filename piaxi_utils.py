@@ -39,6 +39,7 @@ colordict = {
 }
 
 ## Set parameters of model for use in numerical integration
+# TODO: Remove dependence on this function
 def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10, t_min=0, t_N=500,
                 k_max=200, k_min=1, k_N=200):
     
@@ -54,6 +55,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     k_0 = params_in['k_0']
     # resonance condition threshold
     res_con = params_in['res_con']
+    inf_con = params_in['inf_con']
     seed = params_in['seed']
 
     # Set constants of model (otherwise default)
@@ -197,7 +199,7 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
               'm': m, 'm_r': m_r, 'm_n': m_n, 'm_c': m_c, 'p': p, 'p_r': p_r, 'p_n': p_n, 'p_c': p_c, 'm_0': m_0, 'm_q': m_q,
               'mu_d': mu_d, 'sig_d': sig_d, 'mu_Th': mu_Th, 'sig_Th': sig_Th, 'k_span': k_span, 'k_num': k_num, 'k_0': k_0,
               't_span': t_span, 't_num': t_num, 'A_sens': A_sens, 't_sens': t_sens, 'res_con': res_con, 'm_u': m_u,
-              't_u': t_0, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_u,
+              't_u': t_0, 'T_n': T_n, 'T_r': T_r, 'T_c': T_c, 'T_u': T_u, 'inf_con': inf_con,
               'disable_P': disable_P, 'disable_B': disable_B, 'disable_C': disable_C, 'disable_D': disable_D,
               'unitful_m': unitful_m, 'rescale_m': rescale_m, 'unitful_amps': unitful_amps, 'rescale_amps': rescale_amps, 
               'unitful_k': unitful_k, 'rescale_k': rescale_k, 'rescale_consts': rescale_consts, 'seed': seed, 'int_method': int_method,
@@ -735,7 +737,7 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
     k_sens_arr = np.array(k_sens_in.split() if type(k_sens_in) is str else k_sens_in, dtype=np.float64)
     k_mean_in  = params.get('k_mean_arr', None)
     k_mean_arr = np.array(k_mean_in.split() if type(k_mean_in) is str else k_mean_in, dtype=np.float64)
-    k_peak_in = params.get('k_peak_arr', None)
+    k_peak_in  = params.get('k_peak_arr', None)
     k_peak_arr = np.array(k_peak_in.split() if type(k_peak_in) is str else k_peak_in, dtype=np.float64)
 
     # Define which k values should be plotted
@@ -911,7 +913,7 @@ def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, p
     plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars)
     plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None, precision_limit=1e100):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(params_in, results_in, k_values)
     plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
@@ -971,9 +973,11 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
     plt.yscale('log')
     plt.grid()
 
+    amp_sq = lambda i, A_in, t_in: np.exp(2*np.log(np.abs(results_in[i][A_in][t_in]))) if results_in[i][A_in][t_in] < precision_limit else np.inf
+
     #plt.subplot(2,1,2)
     plt.subplot2grid((ydim,xdim), (1,0), colspan=3)
-    plt.plot(times, [sum([np.abs(results_in[i][0][t_i])**2 for i in range(len(k_values))]) for t_i in range(len(times))])
+    plt.plot(times, [sum([amp_sq(i, 0, t_i) for i in range(len(k_values))]) for t_i in range(len(times))])
     if add_colorbars:
         # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
         cbar2 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
@@ -988,18 +992,18 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
         #plt.subplot(2,1,2)
         res_in_arr = np.array(results_in)
         A_dims = (res_in_arr.shape[0], res_in_arr.shape[-1])
-        A_d = np.reshape(np.delete(res_in_arr, 1, axis=1), A_dims)
-        A_mean = np.reshape(A_d[list(k_values).index(k_mean)], (1, A_dims[1]))[0]
-        A_peak = np.reshape(A_d[list(k_values).index(k_peak)], (1, A_dims[1]))[0]
+        A_der  = np.reshape(np.delete(res_in_arr, 1, axis=1), A_dims)
+        A_mean = np.reshape(A_der[list(k_values).index(k_mean)], (1, A_dims[1]))[0]
+        A_peak = np.reshape(A_der[list(k_values).index(k_peak)], (1, A_dims[1]))[0]
         # Plot Amplitude rate of change
         plt.subplot2grid((ydim,xdim), (2,0), colspan=3)
-        plt.plot(times, np.sum(A_d, axis=0), color='g', label=r'total')
+        plt.plot(times, np.sum(A_der, axis=0), color='g', label=r'total')
         plt.plot(times, A_mean, color='y', label=r'$k$ = %d (mean)' % k_mean)
         plt.plot(times, A_peak, color='orange', label=r'$k$ = %d (peak)' % k_peak)
         plt.title(r'Evolution of the (total) change in amplitude for $A_{%s}$' % signdict[0])
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
         plt.ylabel(r'$\dot{A}_{%s}$' % signdict[0])
-        plt.yscale('log')
+        plt.yscale('symlog')
         if add_colorbars:
             # Add and then remove a blank colorbar so that all plots are lined up with those that use colorbar legends
             cbar3 = plt.colorbar(s_m_cbar, alpha=0, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1), drawedges=False, ticks=[])
@@ -1010,7 +1014,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
             avg = lambda a_in, m, dt=t_step, N=len(k_values): np.array([np.convolve(a_in[ki], np.ones(N)/N, mode=m) for ki in a_in])
             plot_avg_modes = ['full', 'same', 'valid']
             for mode in plot_avg_modes:
-                A_d_avg = avg(A_d, mode)
+                A_d_avg = avg(A_der, mode)
                 avg_times = np.linspace(times[0], times[-1], num=A_d_avg.shape[-1])
                 plt.plot(avg_times, A_d_avg, label=r'avg (%s)' % mode)
         if plot_RMS:
@@ -1018,11 +1022,11 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
             rms = lambda a_in, t_in=times: np.sqrt(np.trapz(a_in**2, t_in)/(t_in[-1] - t_in[0]))
             a_rms = lambda a_in, t_in=times, N=len(k_values): np.array([[rms(a_in[ki,:ti], t_in[:ti]) if ti > 1 else np.abs(a_in[ki,ti]) for ti, td in enumerate(t_in)] for ki in np.arange(N)])
             # Calculate RMS for A_dot using two different methods
-            a_rms_1 = a_rms(np.reshape(np.sum(A_d, axis=0), (1, A_dims[1])), N=1)[0]
-            a_rms_2 = np.sum(a_rms(A_d), axis=0)
+            a_rms_1 = a_rms(np.reshape(np.sum(A_der, axis=0), (1, A_dims[1])), N=1)[0]
+            a_rms_2 = np.sum(a_rms(A_der), axis=0)
             # Calculate for k_peak and k_mean
-            a_rms_peak  = a_rms(np.reshape(A_d[list(k_values).index(k_mean)], (1, A_dims[1])), N=1)[0]
-            a_rms_mean  = a_rms(np.reshape(A_d[list(k_values).index(k_peak)], (1, A_dims[1])), N=1)[0]
+            a_rms_peak  = a_rms(np.reshape(A_der[list(k_values).index(k_mean)], (1, A_dims[1])), N=1)[0]
+            a_rms_mean  = a_rms(np.reshape(A_der[list(k_values).index(k_peak)], (1, A_dims[1])), N=1)[0]
 
             plt.plot(times, a_rms_1, color='black', linestyle='-', label=r'total (1)')
             plt.plot(times, a_rms_2, color='black', linestyle=':', label=r'total (2)')
@@ -1048,6 +1052,11 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
     
     return plt
 
+# Set all values greater than cutoff to be np.inf
+def A_limit(A_in, limit=1e100):
+    A_in[A_in > limit] = np.inf
+    return A_in
+
 # Amplitude getter functions for occupation number function
 A_i     = lambda i, solns: solns[i][0]
 Adot_i  = lambda i, solns: solns[i][1]
@@ -1056,11 +1065,14 @@ k_i     = lambda i, k_vals=None: k_vals[i]
 ImAAdot = lambda k, t: -(1/2)
 k_vals_p = lambda params: np.linspace(params['k_span'][0], params['k_span'][1], params['k_num'])
 
-# Particle number for k_mode value (TODO: Verify units in below equation)
-n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot) - 2*k*Im(k))
+# Particle number for k_mode value (TODO: Verify unitful scaling in below equation)
+n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot)**2 - 2*k*Im(k))
 # Wrapper function for the above, using only params and results as inputs
-n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)), 
-                                                                A=A_i(i, solns), Adot=Adot_i(i, solns), Im=lambda k: ImAAdot(k, t=get_times(params, t_in)))
+n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: \
+    n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)),
+      A=A_limit(A_i(i, solns), params['inf_con']), 
+      Adot=A_limit(Adot_i(i, solns), params['inf_con']),
+      Im=lambda k: ImAAdot(k, t=get_times(params, t_in)))
 
 def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
     """
@@ -1352,40 +1364,15 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.grid()
 
     n_tot = sum_n_p(numf, params_in, results_in, k_values, times)
-
-    '''
-    use_legacy_classification = False
-    if use_legacy_classification:
-        res_con = params_in['res_con']
-        if scale_n:
-            n_tot /= abs(n_tot[0])
-            #n_tot += max(0, np.sign(n_tot[0]))  # TODO: Address this placeholder fix for negative n
-
-        # This is to handle the fact that sometimes we have a large initial spike that quickly flattens out
-        #   (Don't classify this as resonance)
-        win_sens = params_in['t_sens']
-        t_num = len(times)
-        #t_sens_range = times[0:win_min(win_sens)]
-        t_idx_a   = np.ma.argmax(np.array(n_tot) > res_con)
-        t_res_a   = times[t_idx_a]
-        n_res_a   = n_tot[t_idx_a]
-        t_idx_lim = win_U_N(-win_sens, t_n=t_num)
-        t_idx_b   = t_idx_a if t_idx_a >= t_idx_lim and t_idx_a < t_num else np.ma.argmax(np.array(n_tot/n_res_a) > res_con)
-        t_res   = times[t_idx_b]
-        n_res   = n_tot[t_idx_b]
-        # TODO: Find an acceptable metric for resonance vs. energy injection vs. no resonance
-        #       - Also, unify all of the different methods we use to classify resonance
-        tot_res = 'resonance' if sum(k_ratio(np.ma.mean, win_sens, params_in['A_sens'])) > res_con else 'soft' if (t_idx_a < t_idx_lim and t_idx_a > 0) else 'none'
-    '''
     
     nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf) for k_i,_ in enumerate(k_values)])
     k_class_arr, tot_class, k_ratio_arr, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, class_method)
     t_res = t_res[0] if type(t_res) is list else t_res
-    print('tot_class:', tot_class)
-    print('ratio_f:', ratio_f)
-    print('ratio_m:', ratio_m)
-    print('t_res:', t_res)
-    print('t_max:', t_max)
+    print('tot_class: %s', tot_class)
+    print('ratio_f: %.2e', ratio_f)
+    print('ratio_m: %.2e', ratio_m)
+    print('t_res: %.3f', t_res)
+    print('t_max: %.3f', t_max)
 
     if write_to_params:
         params_in['t_res'] = t_res
@@ -1404,7 +1391,7 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.subplot2grid((2,5), (1,0), colspan=3)
     #fig,ax = plt.subplots()
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
-    # TODO: Fix how the plot is drawn/labeled
+
     plt.plot(np.ma.masked_greater(times, min(t_res, t_max)), n_tot, label='none', color='grey')
     plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot, label='energy injection', color='orange')
     plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='red')
@@ -1520,7 +1507,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
 
         plt.grid()
         plt.xlabel(r'Time $[%s]$' % units_in['t'])
-        plt.yscale('log')
+        plt.yscale('symlog')
         plt.title(r'$\ddot{A}_{k,\pm} + \beta(t)\dot{A}_{k,\pm} + \alpha_{k}(t)A_{k,\pm} = 0$', fontsize=16)
         plt.legend()
 
@@ -1648,7 +1635,7 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     #axT.set_xlabel(r'$f_{\gamma}$ [Hz]')
     axT.set_xlabel(r'$\nu$ [Hz]')
     plt.ylabel(r'Growth in $n_k$')
-    plt.yscale('log')
+    plt.yscale('log') if np.any(np.isfinite(nk_ratios[:,0])) or np.any(np.isfinite(nk_ratios[:,1])) else plt.yscale('symlog')
     plt.grid()
 
     plt.subplot2grid((2,4), (0,2), colspan=2, rowspan=2)
