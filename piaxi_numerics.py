@@ -11,7 +11,7 @@ from piaxi_utils import signstr, Alpha, Beta, get_kvals, get_times
 
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
 def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45', write_to_params=True):
-    k_count_max = 0 # TODO: Make sure this max counter works
+    k_count_max = 0 # TODO: Make sure this max counter works and/or is still needed
     # Determine the environment
     is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
     if is_jupyter and verbosity >= 0:
@@ -24,12 +24,9 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
 
     if is_jupyter:
         import multiprocess as mp
-        #mp.context._force_start_method('spawn')
         from IPython.display import clear_output
     else:
         import pathos.multiprocessing as mp
-        #import pathos.helpers
-        #pathos.helpers.mp.context._force_start_method('spawn')
     
     # Progress bar display subroutine
     if show_progress_bar:
@@ -38,6 +35,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
         else:
             import tqdm
 
+        # Worker function for pretty printing a progress bar
         def update_progress(count, maxval, maxcount=0):
             k_count_max = max(maxcount, k_count_max)
             progress = max(k_count_max, count) / maxval
@@ -48,7 +46,6 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             print(text, end="\r")
             sys.stdout.flush()
         
-        # Worker function for pretty printing a progress bar
         progress_val = lambda i, n=len(k_values), i_max=k_count_max: update_progress(i + 1, n, maxcount=i_max)
 
     # Start timing
@@ -74,15 +71,6 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
 
     # Solve the differential equation for each k, in parallel
     if parallelize:
-        #with mp.Pool(num_cores) as pool:
-        #mp.context._force_start_method('spawn')
-        '''
-        with mp.Pool(num_cores) as pool:
-            #solutions = np.array(p.map(solve_subsystem, k_values))
-            pool_params = [(system_in, params, np.float64(y0), np.float64(k), verbosity, method) for k, y0 in zip(k_values, y0_k)]
-            pool_inputs = tqdm.tqdm(pool_params, total=k_N) if show_progress_bar else pool_params
-            solutions = pool.starmap(solve_subsystem, pool_inputs)
-        '''
         pool = mp.Pool(num_cores)
         pool_params = [(system_in, params, np.float64(y0), np.float64(k), verbosity, method, res_con, inf_con) for k, y0 in zip(k_values, y0_k)]
         pool_inputs = tqdm.tqdm(pool_params, total=k_N) if show_progress_bar else pool_params
