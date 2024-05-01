@@ -676,43 +676,66 @@ def init_masses(m_r: np.ma, m_n: np.ma, m_c: np.ma, natural_units=True, c=1, ver
 
     return m, m_unit
 
+# Initialize local DM densities for each species
 def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
-    ## local DM densities for each species, assume equal mix for now.
-    # TODO: More granular / nontrivial distribution of densities? Spacial dependence? Sampling?
-    
-    if normalized_subdens:
-        p_loc = p_t/3.
-    else:
-        p_loc = p_t
+    # TODO: Support for more granular / nontrivial distribution of densities? 
+    #       Spatial dependence to the distribution? Random sampling?
 
-    ## TODO: Accept more specific density profiles (WIP)
-    if densities_in is not None:
-        if all([len(dens_in) <= 1 for dens_in in densities_in]):
-            p_r  = np.ma.masked_where(masks[0], np.full(densities_in[0], dtype=float), copy=True)
-            p_n  = np.ma.masked_where(masks[1], np.full(densities_in[1], dtype=float), copy=True)
-            p_c  = np.ma.masked_where(masks[2], np.full(densities_in[2], dtype=float), copy=True)
-            np.ma.set_fill_value(p_r, 0.0)
-            np.ma.set_fill_value(p_n, 0.0)
-            np.ma.set_fill_value(p_c, 0.0)
+    if densities_in is None or len(densities_in) <= 0 or all([len(dens_in) <= 0 for dens_in in densities_in]):
+        ## Assume even distributions if no explicit densities are specified
+        p_r  = np.ma.masked_where(masks[0], np.full_like(masks[0], 1.0, dtype=float), copy=True)
+        N_r  = p_r.count()
+        p_n  = np.ma.masked_where(masks[1], np.full_like(masks[1], 1.0, dtype=float), copy=True)
+        N_n  = p_n.count()
+        p_c  = np.ma.masked_where(masks[2], np.full_like(masks[2], 1.0, dtype=float), copy=True)
+        N_c  = p_c.count()
+        
+        N_t = np.sum([N_r, N_n, N_c])            # N_total (across all classifications)
+        N_f = len(np.nonzero([N_r, N_n, N_c]))   # number of nonzero classifications
 
-            p = np.array([p_r.compressed()*p_loc, p_n.compressed()*p_loc, p_c.compressed()*p_loc], dtype=object, copy=True)
+        # Toggle how the sub-classifications of existing species sum to rho_total
+        if normalized_subdens:
+            p_sub = p_t / N_f if N_f > 0 else 0.
+
+            # (for surviving species only) normalize such that:
+            # rho_real = rho_neutral = rho_charged = (1/3)*rho_total
+            norm_dens_r = p_sub / N_r if N_r > 0 else 0.
+            norm_dens_n = p_sub / N_n if N_n > 0 else 0.
+            norm_dens_c = p_sub / N_c if N_c > 0 else 0.
         else:
-            p_r = np.array(densities_in[0])
-            p_n = np.array(densities_in[1])
-            p_c = np.array(densities_in[2])
-            
-            p = np.array([p_r*p_loc, p_n*p_loc, p_c*p_loc], dtype=object)
-    else:
-        N_r, N_n, N_c = [len(mask) for mask in masks]
-        p_r  = np.ma.masked_where(masks[0], np.full(N_r, 1./max(1., N_r), dtype=float), copy=True)
-        p_n  = np.ma.masked_where(masks[1], np.full(N_n, 1./max(1., N_n), dtype=float), copy=True)
-        p_c  = np.ma.masked_where(masks[2], np.full(N_c, 1./max(1., N_c), dtype=float), copy=True)
+            p_sub = p_t / N_t if N_t > 0 else 0.
+
+            # (for surviving species only) normalize such that:
+            # sum[rho_i] = rho_total, with all species equally weighted
+            norm_dens_r = p_sub
+            norm_dens_n = p_sub
+            norm_dens_c = p_sub
+
         np.ma.set_fill_value(p_r, 0.0)
         np.ma.set_fill_value(p_n, 0.0)
         np.ma.set_fill_value(p_c, 0.0)
 
-        p = np.array([p_r.compressed()*p_loc, p_n.compressed()*p_loc, p_c.compressed()*p_loc], dtype=object, copy=True)
+        p = np.array([p_r.compressed()*norm_dens_r, p_n.compressed()*norm_dens_n, p_c.compressed()*norm_dens_c], dtype=object, copy=True)
 
+    else:
+        ## TODO: Improve on this method of autofilling by real/complex/charged species, etc.
+        if all([len(dens_in) <= 1 for dens_in in densities_in]):
+            p_r  = np.ma.masked_where(masks[0], np.full_like(masks[0], densities_in[0], dtype=float), copy=True)
+            p_n  = np.ma.masked_where(masks[1], np.full_like(masks[1], densities_in[1], dtype=float), copy=True)
+            p_c  = np.ma.masked_where(masks[2], np.full_like(masks[2], densities_in[2], dtype=float), copy=True)
+
+            np.ma.set_fill_value(p_r, 0.0)
+            np.ma.set_fill_value(p_n, 0.0)
+            np.ma.set_fill_value(p_c, 0.0)
+
+            p = np.array([p_r.compressed(), p_n.compressed(), p_c.compressed()], dtype=object, copy=True)
+        # Override to manually provided densities, if any are provided
+        else:
+            p_r = np.ma.masked_where(masks[0], np.array(densities_in[0]), copy=True)
+            p_n = np.ma.masked_where(masks[1], np.array(densities_in[1]), copy=True)
+            p_c = np.ma.masked_where(masks[2], np.array(densities_in[2]), copy=True)
+            
+            p = np.array([p_r, p_n, p_c], dtype=object)
     return p
 
 ## Define (initial) pi-axion dark matter mass-amplitudes for each species, optional units of [eV/c]
