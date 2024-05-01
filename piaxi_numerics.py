@@ -1,3 +1,4 @@
+from math import log
 from multiprocessing import context
 import numpy as np
 from scipy.integrate import solve_ivp
@@ -5,6 +6,7 @@ from scipy.special import logsumexp
 import pprint
 import datetime
 import sys
+import warnings
 from piaxi_utils import signstr, Alpha, Beta, get_kvals, get_times
 
 # Solve the system over all desired k_values. Specify whether multiprocessing should be used.
@@ -119,56 +121,82 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     return solutions, params, time_elapsed
 
 # Solve the differential equation for a singular given k
-def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45'):
+def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', resonance_limit=1e6):
     # Initial conditions
     y0 = y0_in
 
     # Debug print statements
     if verbosity > 8:
-        print('  k=%.2f  ' % k)
-    if verbosity > 9:
-        print('y0:   ', y0)
+        print('\n  k=%.2f %s' % (k, '   | y0:   %.2e' % y0 if verbosity > 9 else ''))
     
     # Time domain
     t_span = params['t_span']
     t = np.linspace(t_span[0], t_span[1], params['t_num'])
 
-    sol = solve_ivp(system_in, t_span, y0, args=(k, params), dense_output=True, method=method)
+    # Define milestone events during integration
+    def hit_resonance_limit(t, y, k, params, limit=resonance_limit):
+        return limit - y[0]
+    def hit_precision_limit(t, y, k, params, limit=1e100):
+        return limit - y[0]
+    
+    # Integration will end when we hit a terminal event
+    hit_precision_limit.terminal = True
+    # We only care about when we first reach resonance, not dipping back below it
+    hit_resonance_limit.direction = +1
+
+    extra_events = [hit_resonance_limit] if resonance_limit is not None else []
+    solve_events = [hit_precision_limit] + extra_events
+
+    sol = solve_ivp(system_in, t_span, y0, args=(k, params), dense_output=True, method=method, events=solve_events)
+
+    # Store the termination reason in params
+    status = sol.status
+    params['int_status'] = status
+    if status != 0:
+        if status == 1 and verbosity >= 8:
+            print('A termination event was detected')
+        if status == -1 and verbosity >= 7:
+            print('Integration step failed')
+    
+    # TODO: Extract important timestamps
+    t_events = sol.t_events
+    y_events = sol.y_events
     
     # Evaluate the solution at the times in the array
+    #t = sol.t
     y = sol.sol(t)
     return y
 
 def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsumexp=False):
     # System of differential equations to be solved (bg = photon background)
     '''
-    if verbosity >= 9:
-            print('\n'.join(['t = %s    k = %.1f' % (t,k), \
-                             '  P(t): %.2e' % (bg + P(t)), \
-                             '  B(t): %.2e' % B(t), \
-                             '  C(t): %.2e' % C(t, A_pm), \
-                             '  D(t): %.2e' % D(t)]))
+    print('\n'.join(['t = %s    k = %.1f' % (t,k), \
+                        '  P(t): %.2e' % (bg + P(t)), \
+                        '  B(t): %.2e' % B(t), \
+                        '  C(t): %.2e' % C(t, A_pm), \
+                        '  D(t): %.2e' % D(t)]))
     '''
+    
     disable_B = params['disable_B']
     disable_C = params['disable_C']
     disable_D = params['disable_D']
     if use_logsumexp: # WIP
         # Handle edge cases to sidestep log[0] errors when certain coefficients are turned off
         if disable_B:
-            logBeta    = -np.inf
-            Beta_sign  = 1
+            logBeta    = 0
+            Beta_sign  = 0
         else:
             logBeta    = np.log(np.abs(B(t))) - np.log(np.abs(bg + P(t)))
             Beta_sign  = np.sign(B(t))*np.sign(bg + P(t))
         if disable_C:
-            logCterm   = -np.inf
-            Cterm_sign = 1
+            logCterm   = 0
+            Cterm_sign = 0
         else:
             logCterm   = np.log(np.abs(C(t, A_pm))) - np.log(np.abs(bg + P(t))) + np.log(k)
             Cterm_sign = np.sign(C(t, A_pm))*np.sign(bg + P(t))
         if disable_D:
-            logDterm   = -np.inf
-            Dterm_sign = 1
+            logDterm   = 0
+            Dterm_sign = 0
         else:
             logDterm   = np.log(np.abs(D(t))) - np.log(np.abs(bg + P(t)))
             Dterm_sign = np.sign(D(t))*np.sign(bg + P(t))
@@ -178,7 +206,19 @@ def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsume
         # Numerically calculate A''[t] in log-space
         logdy1dt, dy1dt_sign = logsumexp(a=[logBeta + np.log(np.abs(y[1])), logAlpha + np.log(np.abs(y[0]))],
                                          b=[Beta_sign * np.sign(y[1]), Alpha_sign * np.sign(y[0])], return_sign=True)
-        dy1dt = -dy1dt_sign*np.exp(logdy1dt)
+        
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            try:
+                dy1dt = -dy1dt_sign*np.exp(np.float64(logdy1dt))
+            except RuntimeWarning as e:
+                print('RuntimeWarning: %s \n   -->   when logdy1dt= %.1f' % (e, logdy1dt))
+                if logdy1dt >= 100:
+                    dy1dt = -dy1dt_sign*np.inf
+                elif logdy1dt <= -100:
+                    dy1dt = 0
+                else:
+                    dy1dt = np.nan
     else:
         # Numerically calculate A''[t]
         dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*np.float64(k0)) + D(t))*y[0]) - (k*np.float64(k0))**2*y[0]
