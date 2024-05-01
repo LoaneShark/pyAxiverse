@@ -205,8 +205,6 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     A_sens = 1.0      # sensitivity for classification of resonance conditions (TODO: Replace this with new argument values)
     em_bg  = 1.0      # photon background (Default 1)
 
-    res_con 
-
     # Toggle whether mass-energy values should be computed in units of eV (False) or pi-axion mass (True)
     # (by default, k is defined in units of [m_u] whereas m is defined in units of [eV], so their scaling logic is inverted)
     unitful_amps   = unitful_m = True
