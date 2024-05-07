@@ -134,14 +134,12 @@ def init_params(params_in: dict, sample_delta=True, sample_theta=True, t_max=10,
     d_r    = params_in['d_r'] if 'd_r' in params_in else np.array([np.zeros(int(N_r))])
     d_n    = params_in['d_n'] if 'd_n' in params_in else np.array([np.zeros(int(N_n))])
     d_c    = params_in['d_c'] if 'd_c' in params_in else np.array([np.zeros(int(N_c))])
-    #d    = params_in['d'] if 'd' in params_in else np.array([np.zeros(float(N_r)), np.zeros(float(N_n)), np.zeros(float(N_c))], dtype=object)
     d      = params_in['d']   if 'd' in params_in else np.array([d_r, d_n, d_c], dtype=object)
 
-    # global phase for neutral complex species in (0, 2pi)
+    # global phase for complex species in (0, 2pi)
     Th_r    = params_in['Th_r'] if 'Th_r' in params_in else np.array([np.zeros(int(N_r))])
     Th_n    = params_in['Th_n'] if 'Th_n' in params_in else np.array([np.zeros(int(N_n))])
     Th_c    = params_in['Th_c'] if 'Th_c' in params_in else np.array([np.zeros(int(N_c))])
-    #Th    = params_in['Th'] if 'Th' in params_in else np.array([np.zeros(float(N_r)), np.zeros(float(N_n)), np.zeros(float(N_c))], dtype=object)
     Th      = params_in['Th']   if 'Th' in params_in else np.array([Th_r, Th_n, Th_c], dtype=object)
     
     # Sample phases from normal distribution, sampled within range (0, 2pi)
@@ -910,8 +908,8 @@ def get_colorbar_params(k_values_in):
 
 # Plot the amplitudes (results of integration)
 def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False):
-    plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars)
-    plt.show()
+    amp_plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars)
+    amp_plt.show()
     
 def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None, precision_limit=1e100):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
@@ -945,7 +943,7 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
         c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar = get_colorbar_params(k_values)
 
     for k_idx, k_sample in enumerate(k_samples):
-        k_s = int(k_sample-1)
+        k_s = int(k_sample)
         #print(results_in[k_s, 0])
 
         if abs_amps is None:
@@ -1307,8 +1305,8 @@ def classify_resonance(params_in, nk_arr, k_span, method='heaviside', verbosity=
 
 # Plot occupation number results
 def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, class_method='heaviside', tex_fmt=False, add_colorbars=False):
-    plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, class_method, tex_fmt, add_colorbars)
-    plt.show()
+    num_plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, class_method, tex_fmt, add_colorbars)
+    num_plt.show()
 
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
 sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(k_i, p_in, sol_in, k_v, times, n=n_in) for k_i in range(len(k_v))], axis=0)
@@ -1343,18 +1341,20 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
 
     for s_idx, k_sample in enumerate(k_samples):
         k_s = int(k_sample)
-        k_nums = n_p(k_s, params_in, results_in, k_values, times, n=numf)
+        nk_raw = n_p(k_s, params_in, results_in, k_values, times, n=numf)
+        nk_plt = np.ma.masked_greater(nk_raw, params_in['inf_con'])
 
         if add_colorbars:
-            plt.plot(times, k_nums, label='k='+str(k_values[k_s]), linewidth=1, color=c_m(cm_norm_plt(cm_vals[s_idx])))
+            plt.plot(times, nk_plt, label='k='+str(k_values[k_s]), linewidth=1, color=c_m(cm_norm_plt(cm_vals[s_idx])))
         else:
-            plt.plot(times, k_nums, label='k='+str(k_values[k_s]))
+            plt.plot(times, nk_plt, label='k='+str(k_values[k_s]))
     
     plt.title(r'Occupation number per k mode', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
-    #plt.xlim(0,0.2)
+    plt.xlim(-1, times[-1]+1)
     plt.ylabel(r'$n[k]$')
-    plt.yscale('log'); #plt.ylim(bottom = 0.1)
+    plt.yscale('log')
+    #plt.ylim(bottom = 0.1)
     if add_colorbars:
         cbar1 = plt.colorbar(s_m_cbar, label=r'$k$', cmap=c_m, norm=cm_norm_cbar, drawedges=False, location='right', fraction=0.02, pad=0, anchor=(0.0,0.1))
         cbar1.set_ticks(cbar_ticks)
@@ -1364,15 +1364,16 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.grid()
 
     n_tot = sum_n_p(numf, params_in, results_in, k_values, times)
+    n_tot_plt = np.ma.masked_where(np.isinf(n_tot), n_tot)
     
     nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf) for k_i,_ in enumerate(k_values)])
     k_class_arr, tot_class, k_ratio_arr, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, class_method)
     t_res = t_res[0] if type(t_res) is list else t_res
-    print('tot_class: %s', tot_class)
-    print('ratio_f: %.2e', ratio_f)
-    print('ratio_m: %.2e', ratio_m)
-    print('t_res: %.3f', t_res)
-    print('t_max: %.3f', t_max)
+    print('tot_class: %s' % tot_class)
+    print('ratio_f: %.2e' % ratio_f)
+    print('ratio_m: %.2e' % ratio_m)
+    print('t_res: %.3f' % t_res)
+    print('t_max: %.3f' % t_max)
 
     if write_to_params:
         params_in['t_res'] = t_res
@@ -1392,12 +1393,12 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     #fig,ax = plt.subplots()
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
 
-    plt.plot(np.ma.masked_greater(times, min(t_res, t_max)), n_tot, label='none', color='grey')
-    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot, label='energy injection', color='orange')
-    plt.plot(np.ma.masked_less(times, t_res), n_tot, label='resonance', color='red')
+    plt.plot(np.ma.masked_greater(times, min(t_res, t_max)), n_tot_plt, label='none', color='grey')
+    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot_plt, label='energy injection', color='orange')
+    plt.plot(np.ma.masked_less(times, t_res), n_tot_plt, label='resonance', color='red')
     plt.title(r'Occupation Number (total)', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
-    #plt.xlim(0,0.1)
+    plt.xlim(-1, times[-1]+1)
     plt.ylabel(r'$n/n_0$' if scale_n else r'$n$')
     plt.yscale('log')
     if add_colorbars:
@@ -1440,8 +1441,8 @@ Beta  = lambda t, B, P: B(t) / (1. + P(t))
 
 # Plot time-dependent coefficient values of the model
 def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True, tex_fmt=False):
-    plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all, tex_fmt)
-    plt.show()
+    coeff_plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all, tex_fmt)
+    coeff_plt.show()
     
 def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True, tex_fmt=False):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
@@ -1608,13 +1609,13 @@ k_to_Hz = lambda ki, k0, h, c: ki * ((k0*c) / (2*np.pi*h))
 Hz_to_k = lambda fi, k0, h, c: fi * ((h*2*np.pi) / (k0*c))
 
 def plot_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
-    plt = make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in, class_method, tex_fmt)
-    plt.show()
+    res_plt = make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in, class_method, tex_fmt)
+    res_plt.show()
 
 def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
     k_span = (params_in['k_span'][0], params_in['k_span'][1])
     k_values = get_kvals(params_in, None)
-    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'injection': 'orange', 'burst':'purple', 'resonance': 'red'}
+    class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'burst':'purple', 'resonance': 'red'}
     res_con_in = params_in['res_con']
 
     t_sens = params_in['t_sens']
@@ -1631,9 +1632,8 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     plt.scatter(k_values, nk_ratios[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
     plt.scatter(k_values, nk_ratios[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
     plt.xlabel(r'$k$')
-    axT = ax.secondary_xaxis('top', functions=(fwd_fn, inv_fn))
-    #axT.set_xlabel(r'$f_{\gamma}$ [Hz]')
-    axT.set_xlabel(r'$\nu$ [Hz]')
+    plt.xlim(left=-1, right=params_in['k_span'][1] + 1)
+    
     plt.ylabel(r'Growth in $n_k$')
     plt.yscale('log') if np.any(np.isfinite(nk_ratios[:,0])) or np.any(np.isfinite(nk_ratios[:,1])) else plt.yscale('symlog')
     plt.grid()
@@ -1649,9 +1649,19 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     
     return plt
 
+## Mass-coupling relations for pi-axion / QCD axion
+# Solve for pi-axion decay constant, given desired photon coupling [GeV]
+F_pi_from_g_x = lambda g_x, l1=1, eps=1: 2*l1*(eps**2) / g_x
+g_x_from_F_pi = lambda F_pi, l1=1, eps=1: 2*l1*(eps**2) / F_pi
+# NOTE: Adapted from Humberto's modification to AxionLimits notebook, but worth replacing with a more robust relation in the future
+# assuming [GeV]^-1 as units
+g_x_from_m_x  = lambda m_x, epsilon=1, lambda1=1, theta=1, alpha=(1./137): (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_x**(1/4))
+# Solve for F_pi, given m_x, assuming above relations [GeV]
+# NOTE: We still have a slight discrepancy b/w predicted values and the plotted trendline from Humberto's modification to AxionLimits notebook
+F_pi_from_m_x = lambda m_x, l1=1, eps=1, theta=1, alpha=(1./137): F_pi_from_g_x(g_x_from_m_x(m_x, lambda1=l1, epsilon=eps, theta=theta, alpha=alpha), l1=l1, eps=eps)
 
 # TODO: Rescale plot axes if current data doesn't fit in default range
-def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
+def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, fit_coupling=False):
     tools_dir = os.path.abspath(os.path.join('./tools'))
     if tools_dir not in sys.path:
         sys.path.append(tools_dir)
@@ -1659,18 +1669,33 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     # Shade of purple chosen for visibility against existing plot colors
     res_color  = '#b042f5' if 'res' in params_in['res_class'] else 'grey'
 
-    # Import plotting functions from AxionLimits and set up AxionPhoton plot
-    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
-    fig,ax = FigSetup(Shape='Rectangular',ylab='$|g_{a\gamma\gamma}|$ [GeV$^{-1}$]',mathpazo=True)
-
     # Current values for model parameters
-    xmin, xmax = ax.get_xlim()
-    ymin, ymax = ax.get_ylim()
     m_u = params_in['m_u']
     F   = params_in['F']
     l1  = params_in['l1']
     eps = params_in['eps']
     m   = params_in['m']
+    GeV = 1e9
+
+    if fit_coupling:
+        # fit the coupling from the mass, ignoring provided F_pi
+        g_in = g_x_from_m_x(m_u, epsilon=eps, lambda1=l1)
+    else:
+        # use model's F_pi as decay constant
+        g_in = g_x_from_F_pi(F_pi=F/GeV)
+
+    m_min = np.max([np.min([np.min(m_i) for m_i in m if len(m_i) > 0]), 1.0e-22])
+    m_max = np.min([np.max([np.max(m_i) for m_i in m if len(m_i) > 0]), 1.0e1])
+    g_min = np.max([g_in, 1.0e-28])
+    g_max = np.min([g_in, 1.0e-5])
+
+    # Import plotting functions from AxionLimits and set up AxionPhoton plot
+    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
+    fig,ax = FigSetup(Shape='Rectangular', ylab='$|g_{\pi\gamma\gamma}|$ [GeV$^{-1}$]', mathpazo=True,
+                      m_min=m_min, m_max=m_max, g_min=g_min, g_max=g_max)
+
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
 
     ## Populate standard AxionPhoton limits plot
     # Plot QCD axion lines and experimental bounds
@@ -1688,14 +1713,15 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     AxionPhoton.NeutronStars(ax)
     AxionPhoton.AxionStarExplosions(ax)
 
-    # TODO: Verify we are using the appropriate equation to calculate the g_pi-m_pi relation
+    ## TODO: Verify we are using the appropriate equation to calculate the g_pi-m_pi relation
+    # Reference Lines
     AxionPhoton.piAxion(ax,epsilon=1,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
     AxionPhoton.piAxion(ax,epsilon=0.5,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
     AxionPhoton.piAxion(ax,epsilon=0.01,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
-
+    # This case
     AxionPhoton.piAxion(ax,epsilon=eps,lambda1=l1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='GnBu',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
 
@@ -1709,9 +1735,12 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     ax1.axis('off')
     ax1.set_zorder(3)
     #g_u = GeV/F
-    g_u = lambda eps=eps, l1=l1, F=F, GeV=1e9: 2*l1*(eps**2) / (F/GeV)
-    ax1.scatter(m_u, g_u(), s=2000, c='white', marker='*')
-    ax1.scatter(m_u, g_u(), s=1000, c=res_color, marker='*')
+    if fit_coupling:
+        g_u = g_x_from_m_x(m_u, epsilon=eps, lambda1=l1)
+    else:
+        g_u = g_x_from_F_pi(F_pi=F/GeV, eps=eps, l1=l1)
+    ax1.scatter(m_u, g_u, s=2000, c='white', marker='*')
+    ax1.scatter(m_u, g_u, s=1000, c=res_color, marker='*')
 
     # Secondary Data
     ax2 = plt.gcf().add_subplot()
@@ -1721,8 +1750,13 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, ):
     ax2.set_ylim(ymin, ymax)
     ax2.axis('off')
     ax2.set_zorder(2)
-    for m_v in m[0]:
-        ax2.scatter(m_v, g_u(), s=1000, c='grey', marker='*')
+    if len(m[0] > 1):
+        for m_v in m[0][1:]:
+            if fit_coupling:
+                g_v = g_x_from_m_x(m_v, epsilon=eps, lambda1=l1)
+            else:
+                g_v = g_x_from_F_pi(F_pi=F/GeV, eps=eps, l1=l1)
+            ax2.scatter(m_v, g_v, s=1000, c='grey', marker='*')
     
     return plt
 
@@ -1731,17 +1765,6 @@ logfit = lambda x, a, b, c: a*np.log10(10*x+b)+c
 # Solve for F_pi given epsilon (millicharge) and ALP (unit) mass
 # TODO: Find a more elegant / robust way to describe this relation
 def fit_Fpi(eps_in, m_in, l1_in, fit_QCD=False, verbosity=0):
-
-    ## Mass-coupling relations for pi-axion / QCD axion
-    # Solve for pi-axion decay constant, given desired photon coupling [GeV]
-    F_pi_from_g_x = lambda g_x, l1=1, eps=1: 2*l1*(eps**2) / g_x
-    g_x_from_F_pi = lambda F_pi, l1=1, eps=1: 2*l1*(eps**2) / F_pi
-    # NOTE: Adapted from Humberto's modification to AxionLimits notebook, but worth replacing with a more robust relation in the future
-    # assuming [GeV]^-1 as units
-    g_x_from_m_x  = lambda m_x, epsilon=1, lambda1=1, theta=1, alpha=(1./137): (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_x**(1/4))
-    # Solve for F_pi, given m_x, assuming above relations [GeV]
-    # NOTE: We still have a slight discrepancy b/w predicted values and the plotted trendline from Humberto's modification to AxionLimits notebook
-    F_pi_from_m_x = lambda m_x, l1=1, eps=1, theta=1, alpha=(1./137): F_pi_from_g_x(g_x_from_m_x(m_x, lambda1=l1, epsilon=eps, theta=theta, alpha=alpha), l1=l1, eps=eps)
 
     ## Fit parameters to be equivalent to QCD axion case
     if fit_QCD:
