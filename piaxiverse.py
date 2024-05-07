@@ -438,16 +438,16 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                 print('max (mean) k mode: ' + str(k_mean))
 
             # Plot the solution
-            plt = make_amplitudes_plot(params, units, solutions)
-            result_plots['amps'] = plt.gcf()
+            amp_plt = make_amplitudes_plot(params, units, solutions)
+            result_plots['amps'] = amp_plt.gcf()
             if show_plots:
-                plt.show()
-            plt.close()
+                amp_plt.show()
+            amp_plt.close()
 
         # Plot results (Occupation number)
         if make_plots:
             write_to_params = True
-            plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n_k_local, class_method=class_method, write_to_params=write_to_params)
+            num_plt, params, t_res, n_res = make_occupation_num_plots(params, units, solutions, numf_in=n_k_local, class_method=class_method, write_to_params=write_to_params)
             
             n_tot = sum_n_p(n_k_local, params, solutions, k_values, t)
             if not write_to_params:
@@ -459,13 +459,14 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
                 params['res_ratio_m'] = ratio_m
                 params['k_class_arr'] = nk_class
                 params['k_ratio_arr'] = nk_ratios
+                del nk_arr, nk_ratios, nk_class
             else:
                 tot_class = params['res_class']
 
-            result_plots['nums'] = plt.gcf()
+            result_plots['nums'] = num_plt.gcf()
             if show_plots:
-                plt.show()
-            plt.close()
+                num_plt.show()
+            num_plt.close()
 
             print('n_tot in range [%.2e, %.2e]' % (min(n_tot), max(n_tot)))
             if 'res' in tot_class and verbosity > 2:
@@ -480,14 +481,15 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
             params['res_ratio_m'] = ratio_m
             params['k_class_arr'] = nk_class
             params['k_ratio_arr'] = nk_ratios
+            del nk_arr, nk_ratios, nk_class
 
         # Plot results (Oscillating coefficient values)
         if make_plots:
-            plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
-            result_plots['coeffs'] = plt.gcf()
+            coeff_plt = make_coefficients_plot(params, units, P, B, C, D, A_pm, k0)
+            result_plots['coeffs'] = coeff_plt.gcf()
             if show_plots:
-                plt.show()
-            plt.close()
+                coeff_plt.show()
+            coeff_plt.close()
 
             if verbosity == 2:
                 print_coefficient_ranges(params, P, B, C, D)
@@ -511,28 +513,29 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
-            plt = make_resonance_spectrum(params, units, solutions, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
-            result_plots['resonance'] = plt.gcf()
+            res_plt = make_resonance_spectrum(params, units, solutions, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
+            result_plots['resonance'] = res_plt.gcf()
             if show_plots:
-                plt.show()
-            plt.close()
+                res_plt.show()
+            res_plt.close()
 
         # Known observable frequency range and bandwidth classification
-        res_freq, res_freq_class = get_frequency_class(k_peak, k_to_Hz_local, tot_class, verbosity=verbosity)
+        res_freq_label, res_freq_class = get_frequency_class(k_peak, k_to_Hz_local, tot_class, verbosity=verbosity)
         res_band_min, res_band_max, res_band_class = get_resonance_band(k_values, params['k_class_arr'], k_to_Hz_local, verbosity=verbosity)
 
-        params['res_freq'] = res_freq
+        params['res_freq'] = k_to_Hz_local(k_peak)
+        params['res_freq_label'] = res_freq_label
         params['res_band'] = [res_band_min, res_band_max]
         params['res_freq_class'] = res_freq_class
         params['res_band_class'] = res_band_class
 
         if make_plots:
-            plt = plot_ALP_survey(params, verbosity=verbosity)
+            alp_plt = plot_ALP_survey(params, verbosity=verbosity)
 
-            result_plots['alp'] = plt.gcf()
+            result_plots['alp'] = alp_plt.gcf()
             if show_plots:
-                plt.show()
-            plt.close()
+                alp_plt.show()
+            alp_plt.close()
         
         # Optionally save results of this run to data directory
         save_input_params = True
@@ -553,6 +556,10 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
 
         if verbosity > 1:
             print('Done!')
+        if make_plots:
+            del amp_plt, num_plt, coeff_plt, res_plt, alp_plt, result_plots
+        del params, parameters, solutions, m, p, d, Th, amps, k_values, t, units, m_r, m_n, m_c
+        del P, B, C, D, k_to_Hz_local, Hz_to_k_local, n_k_local, local_system
 
 trim_masked_arrays = lambda arr: np.array([np.array(arr_i, dtype=float) if len(arr_i) > 0 else np.array([], dtype=float) for arr_i in arr], dtype=object)
 
@@ -767,6 +774,7 @@ def init_amplitudes(m, p, m_unit=1, mass_units=True, natural_units=True, unitful
 # Sample global and local phases from normal distribution, between 0 and 2pi
 def init_phases(masks, rng=None, sample_delta=True, sample_Theta=True, delta_in=None, Theta_in=None, cosine_form=True, verbosity=0, sample_dist='uniform'):
     N_r, N_n, N_c = [len(mask) for mask in masks]
+
     ## local phases for each species (to be sampled)
     if delta_in == None:
         d_raw = np.array([np.ma.masked_where(masks[0], np.zeros(N_r, dtype=float)).compressed(),
@@ -776,7 +784,7 @@ def init_phases(masks, rng=None, sample_delta=True, sample_Theta=True, delta_in=
         d_raw = delta_in
     d = d_raw
 
-    ## global phase for neutral complex species (to be sampled)
+    ## global phase for complex species (to be sampled)
     if Theta_in == None:
         Th_raw = np.array([np.ma.masked_where(masks[0], np.zeros(N_r, dtype=float)).compressed(),
                            np.ma.masked_where(masks[1], np.zeros(N_n, dtype=float)).compressed(),
@@ -817,10 +825,10 @@ def sample_phases(rng, d_in, Th_in, sample_delta=True, sample_Theta=True, mean_d
         d = d_in
     if sample_Theta:
         if distribution == 'uniform':
-            Th  = np.array([np.mod(rng.uniform(0, 2*np.pi, len(Th_i)) + shift_val, 2*np.pi) for Th_i in Th_in], dtype=object)
+            Th  = np.array([np.mod(rng.uniform(0, 2*np.pi, len(Th_i)) + shift_val, 2*np.pi) for i, Th_i in enumerate(Th_in)], dtype=object)
         elif distribution == 'normal':
             #Th = np.array([np.ma.masked_where(mask[i], np.mod(rng.normal(mu_theta, sig_theta, len(mask)) + shift_val, 2*np.pi)).compressed() for i,mask in enumerate(masks)], dtype=object)
-            Th = np.array([np.mod(rng.normal(mu_theta, sig_theta, len(Th_i)) + shift_val, 2*np.pi) for Th_i in Th_in], dtype=object)
+            Th = np.array([np.mod(rng.normal(mu_theta, sig_theta, len(Th_i)) + shift_val, 2*np.pi) for i, Th_i in enumerate(Th_in)], dtype=object)
         else:
             Th = Th_in
     else:

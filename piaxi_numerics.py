@@ -9,19 +9,8 @@ import sys
 import warnings
 from piaxi_utils import signstr, Alpha, Beta, get_kvals, get_times
 
-# Solve the system over all desired k_values. Specify whether multiprocessing should be used.
-def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45', write_to_params=True):
-    k_count_max = 0 # TODO: Make sure this max counter works and/or is still needed
-    # Determine the environment
-    is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
-    if is_jupyter and verbosity >= 0:
-            print('Jupyter?       ', is_jupyter)
-    elif verbosity >= 6:
-            print('Jupyter?       ', is_jupyter)
-    if verbosity >= 3:
-        print('Parallel?      ', parallelize, ' (N = %d)' % num_cores if parallelize and verbosity >= 8 else '')
-        print('Integrating using %s' % method)
-
+# (UNUSED / WIP)
+def import_multiprocessing(is_jupyter=False, show_progress_bar=True):
     if is_jupyter:
         import multiprocess as mp
         from IPython.display import clear_output
@@ -34,6 +23,36 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
             from tqdm import notebook as tqdm
         else:
             import tqdm
+    return mp, tqdm
+
+# Solve the system over all desired k_values. Specify whether multiprocessing should be used.
+def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=None, num_cores=4, verbosity=0, show_progress_bar=False, method='RK45', write_to_params=True):
+    k_count_max = 0 # TODO: Make sure this max counter works and/or is still needed
+    # Determine the environment
+    is_jupyter = jupyter if jupyter is not None else 'ipykernel' in sys.modules
+
+    # Import libraries if needed
+    if not('mp' in sys.modules):
+        if is_jupyter:
+            import multiprocess as mp
+            from IPython.display import clear_output
+        else:
+            import pathos.multiprocessing as mp
+        
+        # Progress bar display subroutine
+        if show_progress_bar:
+            if is_jupyter:
+                from tqdm import notebook as tqdm
+            else:
+                import tqdm
+    
+    if is_jupyter and verbosity >= 0:
+            print('Jupyter?       ', is_jupyter)
+    elif verbosity >= 6:
+            print('Jupyter?       ', is_jupyter)
+    if verbosity >= 3:
+        print('Parallel?      ', parallelize, ' (N = %d)' % num_cores if parallelize and verbosity >= 8 else '')
+        print('Integrating using %s' % method)
 
         # Worker function for pretty printing a progress bar
         def update_progress(count, maxval, maxcount=0):
