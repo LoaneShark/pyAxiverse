@@ -1608,11 +1608,11 @@ k_to_Hz = lambda ki, k0, h, c: ki * ((k0*c) / (2*np.pi*h))
 #Hz_to_k = lambda fi, mi=0, m_0=m0, e=e: 1/(e*k0) * np.sqrt((h * fi)**2 - ((mi*m_0 * e))**2)
 Hz_to_k = lambda fi, k0, h, c: fi * ((h*2*np.pi) / (k0*c))
 
-def plot_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
-    res_plt = make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in, class_method, tex_fmt)
+def plot_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False, plot_max=False):
+    res_plt = make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in, class_method, tex_fmt, plot_max)
     res_plt.show()
 
-def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False):
+def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, numf_in=None, class_method='heaviside', tex_fmt=False, plot_max=False):
     k_span = (params_in['k_span'][0], params_in['k_span'][1])
     k_values = get_kvals(params_in, None)
     class_colors = {'none': 'lightgrey', 'damp': 'darkgrey', 'burst':'purple', 'resonance': 'red'}
@@ -1630,7 +1630,8 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
 
     ax = plt.subplot2grid((2,4), (0,0), colspan=2, rowspan=2)
     plt.scatter(k_values, nk_ratios[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
-    plt.scatter(k_values, nk_ratios[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
+    if plot_max:
+        plt.scatter(k_values, nk_ratios[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
     plt.xlabel(r'$k$')
     plt.xlim(left=-1, right=params_in['k_span'][1] + 1)
     
