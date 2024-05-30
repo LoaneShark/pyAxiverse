@@ -27,7 +27,7 @@ signtex = {1: '+', -1: '-', 0: '\pm'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v3.2.6'
+version='v3.2.7'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
@@ -505,11 +505,6 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         else:
             with open(params_filename, 'r') as f:
                 params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
-        # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
-        if 'config_name' not in params:
-            params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
-        if 'units' not in params:
-            params['units'] = get_units_from_params(params)
         all_params.append(params)
         
         # Load results
@@ -551,11 +546,6 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     params_filename = os.path.join(output_dir, filename + '.json')
     with open(params_filename, 'r') as f:
         params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
-    # TODO: Temp fix, remove both 'if' statements below if version is > v3.2.5
-    if 'config_name' not in params:
-        params['config_name'] = str(os.path.basename(os.path.dirname(params_filename)))
-    if 'units' not in params:
-        params['units'] = get_units_from_params(params)
 
     # Load results
     results_filename = os.path.join(output_dir, filename + '.npy')
