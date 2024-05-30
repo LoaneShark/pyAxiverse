@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH -n 100
 #SBATCH -N 1
-#SBATCH --time 48:00:00
-#SBATCH --mem 300G
-#SBATCH --job-name pi_axiverse_star
+#SBATCH --time 2:00:00
+#SBATCH --mem 200G
+#SBATCH --job-name pi_axiverse
 #SBATCH --output pi_axiverse_log-%J.txt
 #SBATCH -p batch
 
@@ -38,6 +38,11 @@ PIAXI_K_RES=1                 # k_mode step-size
 
 # Initial Conditions
 INPUT_DENSITY="1e20"          # Local DM energy density [GeV/cm^3]
+INPUT_FPI_AXI="1e10"          # Pi-Axion decay constant [GeV]
+INPUT_QMSCALE="1e-80"         # Dark QCD quark mass scale [eV]
+INPUT_LAMBDA3="1e0"           # Charged species FF coupling [GeV]
+INPUT_LAMBDA4="1e10"          # Neutral species FF coupling [GeV]
+INPUT_EPSILON="1e0"           # Unitless millicharge from dark photon interactions
 
 
 
@@ -51,7 +56,7 @@ then
     conda info
 fi
 
-SCAN_ALL=1
+SCAN_ALL=0
 if (( $SCAN_ALL ))
 then
     N_SAMPLES=3
@@ -197,7 +202,7 @@ then
     PIAXI_N_F=5
     PIAXI_F_ARGS="--scan_F ${PIAXI_F_RANGE} --scan_F_N ${PIAXI_N_F} ${PIAXI_FIT}"
 else
-    PIAXI_F="1e10"
+    PIAXI_F="${INPUT_FPI_AXI}"
     PIAXI_F_ARGS="--F ${PIAXI_F} ${PIAXI_FIT}"
 fi
 
@@ -208,7 +213,7 @@ then
     PIAXI_MASS_RANGE="-80 -20"
     PIAXI_M_ARGS="--scan_mass ${PIAXI_MASS_RANGE} --scan_mass_N ${PIAXI_N_QMASS}"
 else
-    PIAXI_MASS="1e-80"
+    PIAXI_MASS="${INPUT_QMSCALE}"
     PIAXI_M_ARGS="--m_scale ${PIAXI_MASS}"
 fi
 
@@ -230,8 +235,8 @@ then
     L4_ARGS="--scan_Lambda4 ${PIAXI_L4_RANGE} --scan_Lambda4_N ${PIAXI_N_L4}"
     PIAXI_L_ARGS="${L3_ARGS} ${L4_ARGS}"
 else
-    PIAXI_L3="1e0"
-    PIAXI_L4="1e10"
+    PIAXI_L3="${INPUT_LAMBDA3}"
+    PIAXI_L4="${INPUT_LAMBDA4}"
     PIAXI_L_ARGS="--L3 ${PIAXI_L3} --L4 ${PIAXI_L4}"
 fi
 
@@ -242,7 +247,7 @@ then
     PIAXI_EPS_RANGE="0 -20"
     PIAXI_EPS_ARGS="--scan_epsilon ${PIAXI_EPS_RANGE} --scan_epsilon_N ${PIAXI_N_EPS}"
 else
-    PIAXI_EPS="1e0"
+    PIAXI_EPS="${INPUT_EPSILON}"
     PIAXI_EPS_ARGS="--eps ${PIAXI_EPS}"
 fi
 
