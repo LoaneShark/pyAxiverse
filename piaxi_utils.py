@@ -1622,7 +1622,7 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     plt.scatter(k_values, nk_ratios[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
     if plot_max:
         plt.scatter(k_values, nk_ratios[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
-    plt.xlabel(r'$k$')
+    plt.xlabel(r'$k$%s' % (' [$m_u$]' if params_in['use_mass_units'] else ''))
     plt.xlim(left=-1, right=params_in['k_span'][1] + 1)
     
     plt.ylabel(r'Growth in $n_k$')
@@ -1675,10 +1675,10 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, fit_coupling=False):
         # use model's F_pi as decay constant
         g_in = g_x_from_F_pi(F_pi=F/GeV)
 
-    m_min = np.max([np.min([np.min(m_i) for m_i in m if len(m_i) > 0]), 1.0e-22])
-    m_max = np.min([np.max([np.max(m_i) for m_i in m if len(m_i) > 0]), 1.0e1])
-    g_min = np.max([g_in, 1.0e-28])
-    g_max = np.min([g_in, 1.0e-5])
+    m_min = np.min([np.max([np.min([np.min(m_i * 0.5e-1) for m_i in m if len(m_i) > 0]), 1.0e-22]), 1.0e-12])
+    m_max = np.max([np.min([np.max([np.max(m_i * 0.5e+1) for m_i in m if len(m_i) > 0]), 1.0e5]), 1.0e-1])
+    g_min = np.min([np.max([g_in * 0.5e-1, 1.0e-30]), 1.0e-20])
+    g_max = np.max([np.min([g_in * 0.5e+1, 1.0e-4]), 1.0e-9])
 
     # Import plotting functions from AxionLimits and set up AxionPhoton plot
     from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
@@ -2045,7 +2045,7 @@ def get_frequency_class(k_mode_in, k_to_HZ, res_label, verbosity=0):
         Hz_peak  = k_to_HZ(k_mode_in)
         Hz_class = Hz_label(Hz_peak)[0]
         if verbosity >= 0:
-            print('peak resonance at k = %d corresponds to photon frequency at %.2e Hz (%s)' % (k_mode_in, Hz_peak, Hz_class))
+            print('peak resonance at k = %.1f corresponds to photon frequency at %.2e Hz (%s)' % (k_mode_in, Hz_peak, Hz_class))
         if Hz_peak >= FRB_values[0] and Hz_peak <= FRB_values[1]:
             obs_class['FRB'] = True
             if verbosity >= 0:
