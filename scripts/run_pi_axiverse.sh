@@ -4,7 +4,7 @@
 #SBATCH --time 2:00:00
 #SBATCH --mem 200G
 #SBATCH --job-name pi_axiverse
-#SBATCH --output pi_axiverse_log-%J.txt
+#SBATCH --output ./logs/pi_axiverse_log-%J.txt
 #SBATCH -p batch
 
 ## set NUMEXPR_MAX_THREADS
