@@ -1647,6 +1647,7 @@ g_x_from_F_pi = lambda F_pi, l1=1, eps=1: 2*l1*(eps**2) / F_pi
 # NOTE: Adapted from Humberto's modification to AxionLimits notebook, but worth replacing with a more robust relation in the future
 # assuming [GeV]^-1 as units
 g_x_from_m_x  = lambda m_x, epsilon=1, lambda1=1, theta=1, alpha=(1./137): (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_x**(1/4))
+m_x_from_g_x  = lambda g_x, epsilon=1, lambda1=1, theta=1, alpha=(1./137): ((g_x)/((8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)))**4
 # Solve for F_pi, given m_x, assuming above relations [GeV]
 # NOTE: We still have a slight discrepancy b/w predicted values and the plotted trendline from Humberto's modification to AxionLimits notebook
 F_pi_from_m_x = lambda m_x, l1=1, eps=1, theta=1, alpha=(1./137): F_pi_from_g_x(g_x_from_m_x(m_x, lambda1=l1, epsilon=eps, theta=theta, alpha=alpha), l1=l1, eps=eps)
@@ -2190,3 +2191,94 @@ def get_coupling_constants(params_in, verbosity=0, use_corrected_fs=True):
     return g_1, g_2, g_3, g_4
 
 cosmo_stability = lambda m_in, F_pi, eps: 1e-34 * (eps**4) * (m_in/(1e-5))**3 * (1e21/F_pi)**2
+
+# Helper functions to calculate phase differences
+def calc_local_phase_diffs(d, include_diags=False, verbosity=0):
+    N_r = len(d[0])
+    N_n = len(d[1])
+    N_c = len(d[2])
+    # real neutral, complex neutral, and charged species local phase differences
+    d_r_diffs = [np.abs(d[0][i]-d[0][j]) for i in range(N_r) for j in range(i, N_r) if i != j]
+    d_n_diffs = [np.abs(d[1][i]-d[1][j]) for i in range(N_n) for j in range(i, N_n) if i != j]
+    d_c_diffs = [np.abs(d[2][i]-d[2][j]) for i in range(N_c) for j in range(i, N_c) if i != j]
+    if include_diags:
+        d_r_diffs += [0.0] * N_r
+        d_n_diffs += [0.0] * N_n
+        d_c_diffs += [0.0] * N_c
+
+    # real, neutral (total), and charged species local phase differences
+    d_real    = d_r_diffs
+    d_neutral = (d_r_diffs + d_n_diffs + [np.abs(d[0][i]-d[1][j]) for i in range(N_r) for j in range(N_n)]) if N_r > 0 else d_n_diffs
+    d_charged = d_c_diffs
+    d_total   = d_r_diffs + d_n_diffs + d_c_diffs # TODO: Fix this
+
+    # mean, variance, max, and min for each category
+    mean_d_r = np.mean(d_real)    if N_r > 1 else None
+    var_d_r  = np.var(d_real)     if N_r > 1 else None
+    max_d_r  = np.max(d_real)     if N_r > 1 else None
+    min_d_r  = np.min(d_real)     if N_r > 1 else None
+    mean_d_n = np.mean(d_neutral) if N_r + N_n > 1 else None
+    var_d_n  = np.var(d_neutral)  if N_r + N_n > 1 else None
+    max_d_n  = np.max(d_neutral)  if N_r + N_n > 1 else None
+    min_d_n  = np.min(d_neutral)  if N_r + N_n > 1 else None
+    mean_d_c = np.mean(d_charged) if N_c > 1 else None
+    var_d_c  = np.var(d_charged)  if N_c > 1 else None
+    max_d_c  = np.max(d_charged)  if N_c > 1 else None
+    min_d_c  = np.min(d_charged)  if N_c > 1 else None
+    # and for all local phases in general
+    mean_d_tot = np.mean(d_total) if (N_r + N_n + N_c) > 1 else None
+    var_d_tot  = np.var(d_total)  if (N_r + N_n + N_c) > 1 else None
+    max_d_tot  = np.max(d_total)  if (N_r + N_n + N_c) > 1 else None
+    min_d_tot  = np.min(d_total)  if (N_r + N_n + N_c) > 1 else None
+    
+    if verbosity >= 3:
+        print('mean and variance: |δ_i - δ_j|')
+        print('  reals       | %s%s%s' % (('mean: %.2f π' % (mean_d_r/np.pi) if mean_d_r is not None else mean_d_r), ('       var: %.2f π' % (var_d_r/np.pi) if var_d_r is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_d_r/np.pi), (max_d_r/np.pi)) if var_d_r is not None else '')))
+        print('  neutrals    | %s%s%s' % (('mean: %.2f π' % (mean_d_n/np.pi) if mean_d_n is not None else mean_d_n), ('       var: %.2f π' % (var_d_n/np.pi) if var_d_n is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_d_n/np.pi), (max_d_n/np.pi)) if var_d_n is not None else '')))
+        print('  charged     | %s%s%s' % (('mean: %.2f π' % (mean_d_c/np.pi) if mean_d_c is not None else mean_d_c), ('       var: %.2f π' % (var_d_c/np.pi) if var_d_c is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_d_c/np.pi), (max_d_c/np.pi)) if var_d_c is not None else '')))
+        print('  total (WIP) | %s%s%s' % (('mean: %.2f π' % (mean_d_tot/np.pi) if mean_d_tot is not None else mean_d_tot), ('       var: %.2f π' % (var_d_tot/np.pi) if var_d_tot is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_d_tot/np.pi), (max_d_tot/np.pi)) if var_d_tot is not None else '')))
+
+    return (mean_d_r, var_d_r, min_d_r, max_d_r), (mean_d_n, var_d_n, min_d_n, max_d_n), (mean_d_c, var_d_c, min_d_c, max_d_c), (mean_d_tot, var_d_tot, min_d_tot, max_d_tot)
+
+def calc_global_phase_diffs(Th, include_diags=False, verbosity=0):
+    N_r = len(Th[0])
+    N_n = len(Th[1])
+    N_c = len(Th[2])
+    # complex neutral and charged species global phases
+    Th_n_diffs = [np.abs(Th[1][i]-Th[1][j]) for i in range(N_n) for j in range(i, N_n) if i != j]
+    Th_c_diffs = [np.abs(Th[2][i]-Th[2][j]) for i in range(N_c) for j in range(i, N_c) if i != j]
+    if include_diags:
+        Th_n_diffs += [0.0] * N_n
+        Th_c_diffs += [0.0] * N_c
+
+    Th_neutral = Th_n_diffs
+    Th_charged = Th_c_diffs
+    Th_total   = Th_n_diffs + Th_c_diffs  # TODO: Fix this
+    
+    mean_Th_n = np.mean(Th_neutral) if N_n > 1 else None
+    var_Th_n  = np.var(Th_neutral)  if N_n > 1 else None
+    max_Th_n  = np.max(Th_neutral)  if N_n > 1 else None
+    min_Th_n  = np.min(Th_neutral)  if N_n > 1 else None
+    mean_Th_c = np.mean(Th_charged) if N_c > 1 else None
+    var_Th_c  = np.var(Th_charged)  if N_c > 1 else None
+    max_Th_c  = np.max(Th_charged)  if N_c > 1 else None
+    min_Th_c  = np.min(Th_charged)  if N_c > 1 else None
+    mean_Th_tot = np.mean(Th_total) if N_n + N_c > 1 else None
+    var_Th_tot  = np.var(Th_total)  if N_n + N_c > 1 else None
+    max_Th_tot  = np.max(Th_total)  if N_n + N_c > 1 else None
+    min_Th_tot  = np.min(Th_total)  if N_n + N_c > 1 else None
+
+    if verbosity >= 3:
+        print('mean and variance: |θ_i - θ_j|')
+        print('  neutrals    | %s%s%s' % (('mean: %.2f π' % (mean_Th_n/np.pi) if mean_Th_n is not None else mean_Th_n), ('       var: %.2f π' % (var_Th_n/np.pi) if var_Th_n is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_Th_n/np.pi), (max_Th_n/np.pi)) if var_Th_n is not None else '')))
+        print('  charged     | %s%s%s' % (('mean: %.2f π' % (mean_Th_c/np.pi) if mean_Th_c is not None else mean_Th_c), ('       var: %.2f π' % (var_Th_c/np.pi) if var_Th_c is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_Th_c/np.pi), (max_Th_c/np.pi)) if var_Th_c is not None else '')))
+        print('  total (WIP) | %s%s%s' % (('mean: %.2f π' % (mean_Th_tot/np.pi) if mean_Th_tot is not None else mean_Th_tot), ('       var: %.2f π' % (var_Th_tot/np.pi) if var_Th_tot is not None else ''),
+                                       ('       range: [%.2f , %.2f] π' % ((min_Th_tot/np.pi), (max_Th_tot/np.pi)) if var_Th_tot is not None else '')))
+
+    return (None, None, None, None), (mean_Th_n, var_Th_n, min_Th_n, max_Th_n), (mean_Th_c, var_Th_c, min_Th_c, max_Th_c), (mean_Th_tot, var_Th_tot, min_Th_tot, max_Th_tot)
