@@ -16,8 +16,8 @@ source /oscar/runtime/software/external/miniconda3/23.11.0/etc/profile.d/conda.s
 conda activate piaxiverse
 
 INPUT_ARGFILE="${1}"
-INPUT_STARTLINE="${2:1}"
-INPUT_ENDLINE="${3:100}"
+INPUT_STARTLINE="${2:-1}"
+INPUT_ENDLINE="${3:-100}"
 INPUT_VERBOSITY="${4:-1}"
 
 # Verbose printouts for debugging conda environment
@@ -35,10 +35,11 @@ PIAXI_JOB_QOS="${SLURM_JOB_QOS}"
 
 PIAXI_SLURM_ARGS="--num_cores ${PIAXI_N_CORES} --num_nodes ${PIAXI_N_NODES} --job_qos ${PIAXI_JOB_QOS} --mem_per_core ${PIAXI_COREMEM}"
 
-for i in ${"${INPUT_STARTLINE}"..."${INPUT_ENDLINE}"}
+for i in $(seq $INPUT_STARTLINE $INPUT_ENDLINE)
 do
-    PIAXI_COMMAND=$(sed -n "${SLURM_ARRAY_TASK_ID}p" < ${INPUT_ARGFILE})
-    echo "LINE ${i}: ${PIAXI_COMMAND}"
+    #PIAXI_COMMAND=$(sed -n "${SLURM_ARRAY_TASK_ID}p" < ${INPUT_ARGFILE})
+    PIAXI_COMMAND=$(sed -n "${i}p" < ${INPUT_ARGFILE})
+    echo "LINE ${i}:  ${PIAXI_COMMAND}"
 
     eval "${PIAXI_COMMAND} ${PIAXI_SLURM_ARGS}"
 done
