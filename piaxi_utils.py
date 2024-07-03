@@ -2162,11 +2162,11 @@ def plot_fs_constant(params_in, verbosity=0, return_plot=False):
 
 ## Coupling Constants
 # Parity-Odd Interaction (triangle anomaly)
-g_anomaly  = lambda F_pi, l1=1., eps=1., fs_in=alpha_sm, t=0: fs_in(t)*(eps**2)/(2 * F_pi) * l1
+g_anomaly  = lambda F_pi, l1=1., eps=1., fs_in=alpha_sm, t=0: fs_in(t)*(eps**2)*(2*l1)/(F_pi)
 # Scalar QED interactions and scattering couplings
-g_coupling = lambda Li, li=1., eps=1., fs_in=alpha_off, t=0: fs_in(t)*(eps**2)*li/(2 * Li**2)
+g_coupling = lambda Li, li=1., eps=1., fs_in=alpha_off, t=0:  fs_in(t)*(eps**2)*(2*li)/(Li**2)
 
-def get_coupling_constants(params_in, verbosity=0, use_corrected_fs=True):
+def get_coupling_constants(params_in, verbosity=0, use_corrected_fs=False):
     l1_in = params_in['l1']
     l2_in = params_in['l2']
     l3_in = params_in['l3']
