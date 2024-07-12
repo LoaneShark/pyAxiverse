@@ -6,11 +6,17 @@ import gc
 from piaxi_utils import *
 from piaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
 from piaxi_numerics import solve_piaxi_system, piaxi_system
+from astropy import constants
 
 ## Parameters of model
 manual_set = False       # Toggle override mass definitions
 unitful_masses = True    # Toggle whether masses are defined in units of [eV] vs. units of mass-ratio [m_unit] (Currently always True)
 unitful_k = False        # Toggle whether k values are defined unitfully [eV] vs. units of mass-ratio [m_unit] (Default: False)
+
+## Fundamental constants
+c = constants.c
+h = constants.h
+G = constants.G
 
 # main loop
 def main(args):
@@ -102,6 +108,7 @@ def run_multiple_cases(args):
 
 def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_scale_in=None, eps_in=None, fit_F_in=None, fit_QCD_in=None):
     ## INPUT PARAMETERS
+    from astropy import units
     verbosity         = args.verbosity            # Set debug print statement verbosity level (0 = Standard, -1 = Off)
     use_mass_units    = args.use_mass_units       # Toggle whether calculations / results are given in units of pi-axion mass (True) or eV (False)
     use_natural_units = args.use_natural_units    # Toggle whether calculations / results are given in c = h = G = 1 (True) or SI units (False)   || NOTE: full SI/phsyical unit support is still WIP!!
@@ -129,9 +136,9 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
 
     ## CONSTANTS OF MODEL
     # Unitful fundamental constants
-    c_raw = c = np.float64(2.998e10)    # Speed of light in a vacuum [cm/s]
-    h_raw = h = np.float64(4.136e-15)   # Planck's constant [eV/Hz]
-    G_raw = G = np.float64(1.0693e-19)  # Newtonian constant [cm^5 /(eV s^4)]
+    c_raw = c.to(units.cm/units.s)      # Speed of light in a vacuum [2.998e10 cm/s]
+    h_raw = h.to(units.eV/units.Hz)     # Planck's constant [4.136e-15 eV/Hz]
+    G_raw = G.to(units.cm**5/(units.eV*units.s**4))      # Newtonian constant [1.0693e-19 cm^5 /(eV s^4)]
     unitful_c = unitful_h = unitful_G = not(use_natural_units)
 
     # values to use in calculations in order to ensure correct units
@@ -140,10 +147,10 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     G_u = G if unitful_G else 1.
 
     # Tuneable constants
-    e    = 0.3         # dimensionless electron charge
+    e    = 0.3                                           # dimensionless electron charge
     F    = Fpi_in if Fpi_in is not None else args.F      # pi-axion decay constant (GeV) >= 10^11
     p_t  = rho_in if rho_in is not None else args.rho    # total local DM density (GeV/cm^3)
-    ## --> TODO: Could/Should we support spatially dependent distributions?
+    ## --> TODO: Could/Should we model spatially dependent distributions directly?
     eps  = eps_in if eps_in is not None else args.eps    # millicharge, vary to enable/disable charged species (<= 10e-25 ~ ON, >= 10e-15 ~ OFF)
     L3   = L3_in  if L3_in  is not None else args.L3     # Coupling constant Lambda_3
     L4   = L4_in  if L4_in  is not None else args.L4     # Coupling constant Lambda_4
@@ -151,16 +158,17 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     
     # Unit scaling:
     m_scale = m_scale_in if m_scale_in is not None else args.m_scale     # dark quark mass scale (eV) <= 10-20
+    m_scale *= units.eV
     dimensionful_p = not(use_natural_units)
     #p_unit = 1.906e-12
-    p_unit = (c_raw*h_raw)**3 if not(dimensionful_p) else (c_u*h_u)**3   # convert densities from units of [1/cm^3] to [eV^3]
-    GeV  = 1e9     # GeV -> eV
-    #GeV = 1
-    F   *= GeV
-    p_t *= GeV
-    p_t *= p_unit  # 1/cm^3 -> (eV/hc)^3
-    L3  *= GeV
-    L4  *= GeV
+    #p_unit = (c_raw*h_raw)**3 if not(dimensionful_p) else (c_u*h_u)**3   # convert densities from units of [1/cm^3] to [eV^3]
+    p_t *= (units.GeV/(units.cm)**3)
+    p_t *= (h*c)**(3)    # 1/cm^3 -> (eV/hc)^3
+    p_t  = p_t.to(units.eV**4)
+    
+    F   *= units.GeV
+    L3  *= units.GeV
+    L4  *= units.GeV
 
     ## Dark SM Parameters
     sample_qmass = False # TODO
@@ -177,7 +185,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     qc = np.array([rng.uniform(0.7, 1.3) if qc_val is None else qc_val for qc_val in qc_in], dtype=float).reshape((6,))
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
-    dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
+    dqm = units.Quantity([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
 
     # Scaling parameters
     xi     = np.array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])  # Charged species scaling paramters
@@ -205,6 +213,7 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     A_sens = 1.0      # sensitivity for classification of resonance conditions (TODO: Replace this with new argument values)
     em_bg  = 1.0      # photon background (Default 1)
 
+    # TODO: Check this.
     # Toggle whether mass-energy values should be computed in units of eV (False) or pi-axion mass (True)
     # (by default, k is defined in units of [m_u] whereas m is defined in units of [eV], so their scaling logic is inverted)
     unitful_amps   = unitful_m = True
@@ -570,9 +579,10 @@ t0_f = lambda m_in, h_in, rescale_m, unitful_m: h_in/m_in if unitful_m else h_in
 
 ## Pi-axion Species Mass Definitions
 def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
-    m_r = np.array([0., 0., 0., 0., 0.], dtype=float)                   # real neutral
-    m_n = np.array([0., 0., 0., 0., 0., 0.], dtype=float)               # complex neutral
-    m_c = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype=float)   # charged
+    from astropy import units
+    m_r = np.array([0., 0., 0., 0., 0.])                   # real neutral
+    m_n = np.array([0., 0., 0., 0., 0., 0.])               # complex neutral
+    m_c = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0.])   # charged
     # Pi-axion Species Labels
     s_l = np.array([np.full_like(m_r, '', dtype=str), np.full_like(m_n, '', dtype=str), np.full_like(m_c, '', dtype=str)], dtype=object)
     
@@ -580,69 +590,72 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     eps_bound = 1e-10
 
     ## Real Neutral Masses
+    m_r = units.Quantity(m_r, units.eV)
     # pi_3
-    m_r[0]    = np.sqrt(((qc[0] + qc[1])*qm[0])*F) if 0. not in [qc[0], qc[1]] else 0.
+    m_r[0]    = np.sqrt(((qc[0] + qc[1])*qm[0])*F).to(units.eV) if 0. not in [qc[0], qc[1]] else 0.
     s_l[0][0] = '$\pi_{3}$'
     # pi_8
-    m_r[1]    = np.sqrt(((qc[0] + qc[1])*qm[0] + qc[2]*qm[1])*F) if 0. not in [qc[0], qc[1], qc[2]] else 0.
+    m_r[1]    = np.sqrt(((qc[0] + qc[1])*qm[0] + qc[2]*qm[1])*F).to(units.eV) if 0. not in [qc[0], qc[1], qc[2]] else 0.
     s_l[0][1] = '$\pi_{8}$'
     # pi_29
-    m_r[2]    = np.sqrt(((qc[3]*qm[1]) + (qc[4]*qm[2]))*F) if 0. not in [qc[3], qc[4]] else 0.
+    m_r[2]    = np.sqrt(((qc[3]*qm[1]) + (qc[4]*qm[2]))*F).to(units.eV) if 0. not in [qc[3], qc[4]] else 0.
     s_l[0][2] = '$\pi_{29}$'
     # pi_34
-    m_r[3]    = np.sqrt(((qc[3]*qm[1]) + ((qc[4] + qc[5])*qm[2]))*F) if 0. not in [qc[3], qc[4], qc[5]] else 0.
+    m_r[3]    = np.sqrt(((qc[3]*qm[1]) + ((qc[4] + qc[5])*qm[2]))*F).to(units.eV) if 0. not in [qc[3], qc[4], qc[5]] else 0.
     s_l[0][3] = '$\pi_{34}$'
     # pi_35
-    m_r[4]    = np.sqrt(((qc[0]+qc[1])*qm[0] + (qc[2]+qc[3])*qm[1] + (qc[4]+qc[5])*qm[2])*F) if 0. not in [qc[0], qc[1], qc[2], qc[3], qc[4], qc[5]] else 0.
+    m_r[4]    = np.sqrt(((qc[0]+qc[1])*qm[0] + (qc[2]+qc[3])*qm[1] + (qc[4]+qc[5])*qm[2])*F).to(units.eV) if 0. not in [qc[0], qc[1], qc[2], qc[3], qc[4], qc[5]] else 0.
     s_l[0][4] = '$\pi_{35}$'
 
     ## Complex Neutral Masses
+    m_n = units.Quantity(m_n, units.eV)
     # pi_6  +/- i*pi_7
-    m_n[0]    = np.sqrt((qc[1]*qm[0] + qc[2]*qm[1]) * F) if 0. not in [qc[1], qc[2]] else 0.
+    m_n[0]    = np.sqrt((qc[1]*qm[0] + qc[2]*qm[1]) * F).to(units.eV) if 0. not in [qc[1], qc[2]] else 0.
     s_l[1][0] = '$\pi_{6} \pm i\pi_{7}$'
     # pi_9  +/- i*pi_10
-    m_n[1]    = np.sqrt((qc[0]*qm[0] + qc[3]*qm[1]) * F) if 0. not in [qc[0], qc[3]] else 0.
+    m_n[1]    = np.sqrt((qc[0]*qm[0] + qc[3]*qm[1]) * F).to(units.eV) if 0. not in [qc[0], qc[3]] else 0.
     s_l[1][1] = '$\pi_{9} \pm i\pi_{10}$'
     # pi_17 +/- i*pi_18
-    m_n[2]    = np.sqrt((qc[1]*qm[0] + qc[4]*qm[2]) * F) if 0. not in [qc[1], qc[4]] else 0.
+    m_n[2]    = np.sqrt((qc[1]*qm[0] + qc[4]*qm[2]) * F).to(units.eV) if 0. not in [qc[1], qc[4]] else 0.
     s_l[1][2] = '$\pi_{17} \pm i\pi_{18}$'
     # pi_19 +/- i*pi_20
-    m_n[3]    = np.sqrt((qc[2]*qm[1] + qc[4]*qm[2]) * F) if 0. not in [qc[2], qc[4]] else 0.
+    m_n[3]    = np.sqrt((qc[2]*qm[1] + qc[4]*qm[2]) * F).to(units.eV) if 0. not in [qc[2], qc[4]] else 0.
     s_l[1][3] = '$\pi_{19} \pm i\pi_{20}$'
     # pi_21 +/- i*pi_22
-    m_n[4]    = np.sqrt((qc[0]*qm[0] + qc[5]*qm[2]) * F) if 0. not in [qc[0], qc[5]] else 0.
+    m_n[4]    = np.sqrt((qc[0]*qm[0] + qc[5]*qm[2]) * F).to(units.eV) if 0. not in [qc[0], qc[5]] else 0.
     s_l[1][4] = '$\pi_{21} \pm i\pi_{22}$'
     # pi_30 +/- i*pi_31
-    m_n[5]    = np.sqrt((qc[3]*qm[1] + qc[5]*qm[2]) * F) if 0. not in [qc[3], qc[5]] else 0.
+    m_n[5]    = np.sqrt((qc[3]*qm[1] + qc[5]*qm[2]) * F).to(units.eV) if 0. not in [qc[3], qc[5]] else 0.
     s_l[1][5] = '$\pi_{30} \pm i\pi_{31}$'
 
     ## Charged Masses
+    m_c = units.Quantity(m_c, units.eV)
     # pi_1  +/- i*pi_2
-    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*eps_c[0]*F)**2) if 0. not in [qc[0], qc[1]] and abs(eps) <= eps_bound else 0.
+    m_c[0]    = np.sqrt((qc[0]*qm[0] + qc[1]*qm[0])*F + 2*xi[0]*(e*eps*eps_c[0]*F)**2).to(units.eV) if 0. not in [qc[0], qc[1]] and abs(eps) <= eps_bound else 0.
     s_l[2][0] = '$\pi_{1} \pm i\pi_{2}$'
     # pi_4  +/- i*pi_5
-    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*eps_c[1]*F)**2) if 0. not in [qc[0], qc[2]] and abs(eps) <= eps_bound else 0.
+    m_c[1]    = np.sqrt((qc[0]*qm[0] + qc[2]*qm[1])*F + 2*xi[1]*(e*eps*eps_c[1]*F)**2).to(units.eV) if 0. not in [qc[0], qc[2]] and abs(eps) <= eps_bound else 0.
     s_l[2][1] = '$\pi_{4} \pm i\pi_{5}$'
     # pi_15 +/- i*pi_16
-    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*eps_c[2]*F)**2) if 0. not in [qc[0], qc[4]] and abs(eps) <= eps_bound else 0.
+    m_c[2]    = np.sqrt((qc[0]*qm[0] + qc[4]*qm[2])*F + 2*xi[2]*(e*eps*eps_c[2]*F)**2).to(units.eV) if 0. not in [qc[0], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][2] = '$\pi_{15} \pm i\pi_{16}$'
     # pi_11 +/- i*pi_12
-    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*eps_c[3]*F)**2) if 0. not in [qc[1], qc[3]] and abs(eps) <= eps_bound else 0.
+    m_c[3]    = np.sqrt((qc[1]*qm[0] + qc[3]*qm[2])*F + 2*xi[3]*(e*eps*eps_c[3]*F)**2).to(units.eV) if 0. not in [qc[1], qc[3]] and abs(eps) <= eps_bound else 0.
     s_l[2][3] = '$\pi_{11} \pm i\pi_{12}$'
     # pi_23 +/- i*pi_24
-    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*eps_c[4]*F)**2) if 0. not in [qc[1], qc[5]] and abs(eps) <= eps_bound else 0.
+    m_c[4]    = np.sqrt((qc[1]*qm[0] + qc[5]*qm[2])*F + 2*xi[4]*(e*eps*eps_c[4]*F)**2).to(units.eV) if 0. not in [qc[1], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][4] = '$\pi_{23} \pm i\pi_{24}$'
     # pi_13 +/- i*pi_14
-    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*eps_c[5]*F)**2) if 0. not in [qc[2], qc[3]] and abs(eps) <= eps_bound else 0.
+    m_c[5]    = np.sqrt((qc[2]*qm[1] + qc[3]*qm[1])*F + 2*xi[5]*(e*eps*eps_c[5]*F)**2).to(units.eV) if 0. not in [qc[2], qc[3]] and abs(eps) <= eps_bound else 0.
     s_l[2][5] = '$\pi_{13} \pm i\pi_{14}$'
     # pi_25 +/- i*pi_26
-    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*eps_c[6]*F)**2) if 0. not in [qc[2], qc[5]] and abs(eps) <= eps_bound else 0.
+    m_c[6]    = np.sqrt((qc[2]*qm[1] + qc[5]*qm[2])*F + 2*xi[6]*(e*eps*eps_c[6]*F)**2).to(units.eV) if 0. not in [qc[2], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][6] = '$\pi_{25} \pm i\pi_{26}$'
     # pi_27 +/- i*pi_28
-    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*eps_c[7]*F)**2) if 0. not in [qc[3], qc[4]] and abs(eps) <= eps_bound else 0.
+    m_c[7]    = np.sqrt((qc[3]*qm[1] + qc[4]*qm[2])*F + 2*xi[7]*(e*eps*eps_c[7]*F)**2).to(units.eV) if 0. not in [qc[3], qc[4]] and abs(eps) <= eps_bound else 0.
     s_l[2][7] = '$\pi_{27} \pm i\pi_{28}$'
     # pi_32 +/- i*pi_33
-    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*eps_c[8]*F)**2) if 0. not in [qc[4], qc[5]] and abs(eps) <= eps_bound else 0.
+    m_c[8]    = np.sqrt((qc[4]*qm[2] + qc[5]*qm[2])*F + 2*xi[8]*(e*eps*eps_c[8]*F)**2).to(units.eV) if 0. not in [qc[4], qc[5]] and abs(eps) <= eps_bound else 0.
     s_l[2][8] = '$\pi_{32} \pm i\pi_{33}$'
 
     # Mask zero-valued / disabled species in arrays
@@ -661,17 +674,20 @@ def define_mass_species(qc, qm, F, e, eps, eps_c, xi):
     return m_r, m_n, m_c, counts, masks
 
 def init_masses(m_r: np.ma, m_n: np.ma, m_c: np.ma, natural_units=True, c=1, verbosity=0):
-
+    from astropy import units
     #m_unit = np.min([np.min(m_i) for m_i in (m_r.compressed(), m_n.compressed(), m_c.compressed()) if len(m_i) > 0])
 
     m = np.array([m_r.compressed(), m_n.compressed(), m_c.compressed()], dtype=object, copy=True)
     m_unit = np.min([np.min(m_i) for m_i in m if len(m_i) > 0])
     m_raw = m
 
+    '''
     m *= (1. if unitful_masses else 1./m_unit) # Ensure m is provided in desired units
     if unitful_masses and not natural_units: 
         m      *= (1./c**2) # WIP
         m_unit *= (1./c**2)
+    '''
+    m.to(units.eV)
 
     if verbosity > 2:
         print('m_unit:  ', m_unit)
@@ -747,11 +763,13 @@ def init_densities(masks, p_t, normalized_subdens=True, densities_in=None):
 
 ## Define (initial) pi-axion dark matter mass-amplitudes for each species, optional units of [eV/c]
 def init_amplitudes(m, p, m_unit=1, mass_units=True, natural_units=True, unitful_amps=unitful_masses, rescale_amps=False, h=1, c=1, verbosity=0):
+    from astropy import units
     amps = np.array([np.array([np.sqrt(2 * p[s][i]) / m[s][i] if np.abs(m[s][i]) > 0. else 0. for i in range(len(m[s]))]) for s in range(len(m))], dtype=object, copy=True)
     amps_raw = np.copy(amps)
 
     #rescale_amps = mass_units if unitful_amps else not(mass_units)
     # normalize/rescale amplitudes by dividing by amp of pi_0?
+    '''
     amps_to_units = np.sqrt((h/c)**3) # (TODO: WIP, double check these units)
     if rescale_amps:
         if unitful_amps:
@@ -763,6 +781,9 @@ def init_amplitudes(m, p, m_unit=1, mass_units=True, natural_units=True, unitful
     else:
         if unitful_amps and not(natural_units):
             amps *= amps_to_units
+    '''
+    if natural_units:
+        amps = amps.to(units.eV)
 
     if verbosity > 3:
         print('amps (raw):\n', amps_raw)
