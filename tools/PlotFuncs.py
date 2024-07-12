@@ -1627,7 +1627,7 @@ class AxionPhoton():
             AxionPhoton.DANCE(ax,text_on=text_on)
             AxionPhoton.aLIGO(ax,text_on=text_on)
             AxionPhoton.WISPLC(ax,text_on=text_on)
-            AxionPhoton.LAMPOST(ax)
+            AxionPhoton.LAMPOST(ax,text_on=text_on)
 
             AxionPhoton.ADMX(ax,text_on=False,col='darkred')
             AxionPhoton.CAPP(ax,text_on=False,col='darkred')
@@ -1635,7 +1635,8 @@ class AxionPhoton():
             AxionPhoton.HAYSTAC(ax,text_on=False,col='darkred')
             AxionPhoton.RBF_UF(ax,text_on=False,col='darkred')
             AxionPhoton.QUAX(ax,text_on=False,col='darkred')
-            plt.text(0.5e-5,0.45e-12,r'{\bf Haloscopes}',color='w',rotation=90,fontsize=15)
+            if text_on:
+                plt.text(0.5e-5,0.45e-12,r'{\bf Haloscopes}',color='w',rotation=90,fontsize=15)
         else:
             AxionPhoton.RBF_UF(ax,fs=fs-2,text_on=text_on)
             AxionPhoton.CAPP(ax,fs=fs-4,text_on=text_on)
@@ -1809,6 +1810,18 @@ class AxionPhoton():
 
         if text_on:
             plt.text(text_shift[0]*4e-20,text_shift[1]*0.7e-15,r'{\bf Twisted Anyon Cavity}',fontsize=fs,color=text_col,rotation=rotation,ha='center',va='top',clip_on=True,path_effects=path_effects)
+        return
+
+    def ULAs(ax, projection=False, text_on=True):
+        AxionPhoton.SuperMAG(ax,text_on=text_on)
+        AxionPhoton.BICEPKECK(ax,text_on=text_on)
+        AxionPhoton.POLARBEAR(ax,text_on=text_on)
+        AxionPhoton.MOJAVE(ax,text_on=text_on)
+        AxionPhoton.SPT(ax,text_on=text_on)
+        AxionPhoton.PPTA_QUIJOTE(ax,text_on=text_on)
+        if projection:
+            AxionPhoton.PPA(ax,text_on=text_on)
+            AxionPhoton.TwistedAnyonCavity(ax,text_on=text_on)
         return
 
 #==============================================================================#
