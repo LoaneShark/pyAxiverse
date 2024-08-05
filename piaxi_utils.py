@@ -464,7 +464,7 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
                 fname = file.split('/')[-1]
                 print(f'  {fname:{flen}}  | {sizeof_fmt(fsize)}')
 
-def load_multiple_results(output_dir, label, load_images=False, save_format='pdf', nested=False, include_debug=True, load_method='json'):
+def load_multiple_results(output_dir, label, load_images=False, save_format='pdf', nested=False, include_debug=True, combined_folder=False, load_method='json'):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -487,7 +487,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         all_files  = [os.path.join(file_dir, file_name) for file_name in os.listdir(file_dir) if not('debug' in file_name) or include_debug]
     
     # List of tuples (filename, absolute path)
-    relevant_files = [os.path.split(f) for f in all_files if (os.path.basename(f).startswith(label) or label == 'all') and os.path.basename(f).endswith('.json')] # Assume input params are being saved for now, at least
+    relevant_files = [os.path.split(f) for f in all_files if (os.path.basename(f).startswith(label) or (label == 'all' or combined_folder)) and os.path.basename(f).endswith('.json')] # Assume input params are being saved for now, at least
     
     all_params  = []
     all_results = []
@@ -505,6 +505,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
         else:
             with open(params_filename, 'r') as f:
                 params = json.loads(f.read(), object_hook=NumpyEncoder.decode)
+        params['file_name'] = base_name
         all_params.append(params)
         
         # Load results
@@ -572,7 +573,7 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
 def load_all(output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=False):
     return load_case(input_str='all', output_root=output_root, version=version, load_images=load_images, save_format=save_format, include_debug=include_debug)
 
-def load_case(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=True):
+def load_case(input_str, output_root='~/scratch', version=version, load_images=False, save_format='pdf', include_debug=True, combined_folder=False):
     """
     Load all results for a given class of configuration parameters given a full path to the output directory or just the simulation label.
     
@@ -595,7 +596,7 @@ def load_case(input_str, output_root='~/scratch', version=version, load_images=F
         output_dir  = os.path.join(output_root, version)
         result_name = input_str
     
-    return load_multiple_results(output_dir, result_name, load_images, save_format, nested=(input_str=='all'), include_debug=include_debug)
+    return load_multiple_results(output_dir, result_name, load_images, save_format, nested=(input_str=='all'), include_debug=include_debug, combined_folder=combined_folder)
 
 def load_single(input_str, label=None, phash=None, output_root='~/scratch', version=version, save_format='pdf', load_plots=False, verbosity=0):
     """
@@ -729,9 +730,9 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
     k_peak_arr = np.array(k_peak_in.split() if type(k_peak_in) is str else k_peak_in, dtype=np.float64)
 
     # Define which k values should be plotted
-    k_peak = np.max(k_sens_arr) # peak (running avg) value per k-mode
-    k_mean = np.max(k_mean_arr) # mean value per k-mode
-    k_rmax = np.max(k_peak_arr) # (raw) peak value per k-mode
+    k_peak = np.argmax(k_sens_arr) # peak (running avg) value per k-mode
+    k_mean = np.argmax(k_mean_arr) # mean value per k-mode
+    k_rmax = np.argmax(k_peak_arr) # (raw) peak value per k-mode
     logscale_k = False
     k_values = np.linspace(k_span[0], k_span[1], k_num)
     k_samples = params.get('k_samples', [])
