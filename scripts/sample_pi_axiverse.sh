@@ -35,6 +35,17 @@ PIAXI_JOB_QOS="${SLURM_JOB_QOS}"
 
 PIAXI_SLURM_ARGS="--num_cores ${PIAXI_N_CORES} --num_nodes ${PIAXI_N_NODES} --job_qos ${PIAXI_JOB_QOS} --mem_per_core ${PIAXI_COREMEM}"
 
+if [[ "${PIAXI_VERBOSITY}" -gt "0" ]]
+then
+    echo "RANGE: ${INPUT_STARTLINE} ${INPUT_ENDLINE}"
+    echo "ARGFILE: ${INPUT_ARGFILE}"
+fi
+
+if [[ "${PIAXI_VERBOSITY}" -gt "6" ]]
+then
+    echo "PIAXI_SLURM_ARGS: ${PIAXI_SLURM_ARGS}"
+fi
+
 for i in $(seq $INPUT_STARTLINE $INPUT_ENDLINE)
 do
     #PIAXI_COMMAND=$(sed -n "${SLURM_ARRAY_TASK_ID}p" < ${INPUT_ARGFILE})
