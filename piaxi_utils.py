@@ -1051,11 +1051,13 @@ A_i     = lambda i, solns: solns[i][0]
 Adot_i  = lambda i, solns: solns[i][1]
 k_i     = lambda i, k_vals=None: k_vals[i]
 #ImAAdot = lambda k, t: (1/2)*np.abs(np.cos(2*k*t))
-ImAAdot = lambda k, t: -(1/2)
+#ImAAdot = lambda k, t: -(1/2)
+ImAAdot = lambda k, t: (1/(4*k))  # Temp workaround to ensure this is -(1/2) at t=0
 k_vals_p = lambda params: np.linspace(params['k_span'][0], params['k_span'][1], params['k_num'])
 
 # Particle number for k_mode value (TODO: Verify unitful scaling in below equation)
-n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot)**2 - 2*k*Im(k))
+#n_k = lambda k, A, Adot, Im: (k**2 * np.abs(A)**2 + np.abs(Adot)**2 - 2*k*Im(k))
+n_k = lambda k, A, Adot, Im: ((k/2)*(np.abs(A)**2 + (np.abs(Adot)**2 / k**2)) - (1/2))
 # Wrapper function for the above, using only params and results as inputs
 n_p = lambda i, params, solns, k_vals=None, t_in=None, n=n_k: \
     n(k=k_i(i, k_vals=k_vals if k_vals is not None else k_vals_p(params)),
@@ -1123,9 +1125,12 @@ def binned_classifier(k_stat, N_bins, ln_rescon=2, return_dict=False):
 
 # Classify resonance based on ability to fit to step-function shape
 def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
+
+    # WIP: We can safely neglect/round up values less than 1 (to avoid div by 0 errors)
+    n_in[n_in < 1] = 1.0
     
     n_ini = n_in[0]
-    n_fin = n_in[-1]
+    n_fin = np.max(n_in[-1])
     n_max = np.max(n_in)
     n_min = np.min(n_in)
 
@@ -1133,7 +1138,7 @@ def heaviside_classifier(t_in, n_in, res_con=1000, err_thresh=1, verbosity=0):
     if any(np.isinf(n_in)):
 
         ratio_m = np.inf
-        ratio_f = (n_fin / n_ini) if n_fin != np.inf and n_ini != np.inf else np.inf
+        ratio_f = (n_fin / max(abs(n_ini), 1)) if n_fin != np.inf and n_ini != np.inf else np.inf
 
         t_res_idx = np.argwhere((n_in / n_ini) >= res_con)[0]
         t_res = t_in[t_res_idx[0] if len(t_res_idx) > 0 else -1]

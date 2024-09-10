@@ -82,7 +82,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     A_scale    = params['A_0']
     Adot_scale = params['Adot_0']
     k_N  = len(k_values)
-    y0_k = init_photons(k_N, A_scale=A_scale, Adot_scale=Adot_scale)
+    y0_k = init_photons(k_values, A_scale=A_scale, Adot_scale=Adot_scale)
 
     # Establish cutoff values for resonance and infinities
     res_con = params['res_con']
@@ -238,9 +238,9 @@ def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsume
     dy0dt = y[1]
     return [dy0dt, dy1dt]
 
-def init_photons(k_N, A_scale=1.0, Adot_scale=1.0):
-    A_0 = np.fromfunction(lambda k: 1./np.sqrt(2.*(k+1)), (k_N,), dtype=np.float64) * A_scale
-    Adot_0 = np.fromfunction(lambda k: np.sqrt((k+1)/2.), (k_N,), dtype=np.float64) * Adot_scale
+def init_photons(k_values, A_scale=1.0, Adot_scale=1.0):
+    A_0 = np.array([1./np.sqrt(2.*(k_val)) for k_val in k_values], dtype=np.float64) * A_scale
+    Adot_0 = np.array([np.sqrt((k_val)/2.) for k_val in k_values], dtype=np.float64) * Adot_scale
 
     return np.array([A_0, Adot_0], dtype=np.float64).T
 
