@@ -27,7 +27,7 @@ signtex = {1: '+', -1: '-', 0: '\pm'}
 GeV = 1e9
 default_output_directory='~/scratch'
 scratch_output_directory='~/scratch'
-version='v3.2.7'
+version='v3.2.8'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
 h = h_raw = np.float64(4.136e-15)   # Planck's constant    [eV/Hz]
