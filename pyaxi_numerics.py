@@ -7,7 +7,7 @@ import pprint
 import datetime
 import sys
 import warnings
-from piaxi_utils import signstr, Alpha, Beta, get_kvals, get_times
+from pyaxi_utils import signstr, Alpha, Beta, get_kvals, get_times
 
 # (UNUSED / WIP)
 def import_multiprocessing(is_jupyter=False, show_progress_bar=True):

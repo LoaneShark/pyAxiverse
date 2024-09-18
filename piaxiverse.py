@@ -3,9 +3,9 @@ import pandas as pd
 import argparse
 import datetime
 import gc
-from piaxi_utils import *
-from piaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
-from piaxi_numerics import solve_piaxi_system, piaxi_system
+#from pyaxi_utils import *
+from pyaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
+from pyaxi_numerics import solve_piaxi_system, piaxi_system
 
 ## Parameters of model
 manual_set = False       # Toggle override mass definitions
