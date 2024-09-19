@@ -661,10 +661,11 @@ def load_single(input_str, label=None, phash=None, output_root='~/scratch', vers
     
     return load_single_result(output_dir, filename, load_plots, save_format)
 
-# TODO: Merge logic in loading file function to here
+# TODO: Make logic in loading file refer to this function
 def parse_filename(filename):
     """
     Parse the given filename to extract the simulation result name and parameter space hash.
+    Basic structure of a filename is {config_label}_{parameter_space_hash}{file_extension}
     
     Parameters:
     - filename (str): The filename to parse.
