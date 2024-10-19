@@ -3,8 +3,8 @@ import pandas as pd
 import argparse
 import datetime
 import gc
-#from pyaxi_utils import *
-from pyaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
+from pyaxi_utils import *
+#from pyaxi_utils import version, default_output_directory, k_to_Hz, Hz_to_k
 from pyaxi_numerics import solve_piaxi_system, piaxi_system
 
 ## Parameters of model
@@ -114,7 +114,8 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     num_cores         = args.num_cores            # Number of parallel threads available
     num_nodes         = args.num_nodes            # Number of nodes across which to spread threads
     job_qos           = args.job_qos              # Quality of Service for the submitted batch job
-    mem_per_core      = args.mem_per_core         # Amount of memory available for each node
+    job_partition     = args.job_partition        # Compute time partition or job queue name for the submitted batch job
+    mem_per_node      = args.mem_per_node         # Amount of memory available for each node
     data_path         = args.data_path            # Path to directory where output files will be saved
     skip_existing     = args.skip_existing
     slurm_nc_parse = lambda v: int(v.replace(')','').replace('(','').split('x')[0]) * int((1. if len(v.replace(')','').replace('(','').split('x')) <= 1 else v.replace(')','').replace('(','').split('x')[1]))
@@ -398,10 +399,11 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     phash = get_parameter_space_hash(parameters, verbosity=verbosity)
 
     # Save system performance related input parameters (not to be hashed because these don't affect the final state, only performance time)
-    parameters['num_cores']    = num_cores
-    parameters['num_nodes']    = num_nodes
-    parameters['job_qos']      = job_qos
-    parameters['mem_per_core'] = mem_per_core
+    parameters['num_cores']     = num_cores
+    parameters['num_nodes']     = num_nodes
+    parameters['job_qos']       = job_qos
+    parameters['job_partition'] = job_partition
+    parameters['mem_per_node']  = mem_per_node
 
     if skip_existing and if_output_exists(output_dir, phash):
         if verbosity >= 1:
@@ -895,10 +897,11 @@ if __name__ == '__main__':
     parser.add_argument('--num_cores',         type=str,  default='1',             help='Number of parallel processing threads to use, as a list if more than one node')
     parser.add_argument('--num_nodes',         type=int,  default=1,               help='Number of nodes available across which to spread processes.')
     parser.add_argument('--job_qos',           type=str,  default='unknown',       help='QoS for submitted job, to compare runtime metrics across distributed systems')
+    parser.add_argument('--job_partition',     type=str,  default='unknown',       help='Cluster partition/queue type for submitted job, to compare runtime metrics across distributed systems')
     parser.add_argument('--data_path',         type=str,  default=default_outdir,  help='Path to output directory where files should be saved')
     parser.add_argument('--int_method',        type=str,  default='RK45',          help='Numerical integration method, to be used by scipy solve_ivp')
     parser.add_argument('--num_samples',       type=int,  default=1,               help='Number of times to rerun a parameter set, except randomly sampled variables')
-    parser.add_argument('--mem_per_core',      type=str,  default=None,            help='Amount of memory available to each parallelized node, in GB')
+    parser.add_argument('--mem_per_node',      type=str,  default=None,            help='Amount of memory available to each parallelized node, in GB')
 
     parser.add_argument('--P', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the P(t) coefficient in the numerics')
     parser.add_argument('--B', action=argparse.BooleanOptionalAction, default=True, help='Turn on/off the B(t) coefficient in the numerics')
