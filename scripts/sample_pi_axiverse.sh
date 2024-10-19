@@ -1,19 +1,20 @@
 #!/bin/bash
-#SBATCH -n 100
-#SBATCH -N 1
-#SBATCH --time 48:00:00
-#SBATCH --mem 200G
+#SBATCH --nodes 64
+#SBATCH --time 04:00:00
+#SBATCH --mem 100G
 #SBATCH --job-name pi_axiverse_array
 #SBATCH --output ./logs/pi_axiverse_log-%J.txt
-#SBATCH -p batch
+#SBATCH -p secondary                   # GravityTheory, physics, secondary, or test
+#SBATCH --ntasks-per-node=1            # Number of tasks per node (1 per node for parallel execution)
+
 
 ## set NUMEXPR_MAX_THREADS
 #export NUMEXPR_MAX_THREADS=416
 
-module load miniconda3/23.11.0s
+module load anaconda3
 module load texlive
-source /oscar/runtime/software/external/miniconda3/23.11.0/etc/profile.d/conda.sh
-conda activate piaxiverse
+source /usr/local/anaconda/5.2.0/python3/etc/profile.d/conda.sh
+conda activate pyaxiverse
 
 INPUT_ARGFILE="${1}"
 INPUT_STARTLINE="${2:-1}"
@@ -30,10 +31,18 @@ fi
 # Performance variables and SLURM environment configuration
 PIAXI_N_CORES="${SLURM_JOB_CPUS_PER_NODE}"
 PIAXI_N_NODES="${SLURM_JOB_NUM_NODES}"
-PIAXI_COREMEM="${SLURM_MEM_PER_NODE}"
+PIAXI_NODEMEM="${SLURM_MEM_PER_NODE}"
 PIAXI_JOB_QOS="${SLURM_JOB_QOS}"
+PIAXI_JOB_PARTITION="${SLURM_JOB_PARTITION}"
 
-PIAXI_SLURM_ARGS="--num_cores ${PIAXI_N_CORES} --num_nodes ${PIAXI_N_NODES} --job_qos ${PIAXI_JOB_QOS} --mem_per_core ${PIAXI_COREMEM}"
+if [[ -z "${PIAXI_NODEMEM}" ]]
+then
+    PIAXI_MEM_ARG=""
+else
+    PIAXI_MEM_ARG="--mem_per_node ${PIAXI_NODEMEM}"
+fi
+
+PIAXI_SLURM_ARGS="--num_cores ${PIAXI_N_CORES} --num_nodes ${PIAXI_N_NODES} --job_qos ${PIAXI_JOB_QOS} --job_partition ${PIAXI_JOB_PARTITION} ${PIAXI_MEM_ARG}"
 
 if [[ "${PIAXI_VERBOSITY}" -gt "0" ]]
 then

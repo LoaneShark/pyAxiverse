@@ -1,11 +1,12 @@
 #!/bin/bash
-#SBATCH -n 100
-#SBATCH -N 1
-#SBATCH --time 2:00:00
+#SBATCH --nodes 308
+#SBATCH --time 04:00:00
 #SBATCH --mem 200G
 #SBATCH --job-name pi_axiverse
 #SBATCH --output ./logs/pi_axiverse_log-%J.txt
-#SBATCH -p batch
+#SBATCH -p secondary                     # GravityTheory, physics, secondary, or test
+#SBATCH --ntasks-per-node=1              # Number of tasks per node (1 per node for parallel execution)
+#SBATCH --cpus-per-task=all              # Use all available CPUs per node
 
 ## set NUMEXPR_MAX_THREADS
 #export NUMEXPR_MAX_THREADS=416
@@ -13,8 +14,7 @@
 module load miniconda3/23.11.0s
 module load texlive
 source /oscar/runtime/software/external/miniconda3/23.11.0/etc/profile.d/conda.sh
-conda activate piaxiverse
-
+conda activate pyaxiverse
 
 #----------------------------------------------------------------------------
 #    INPUTS AND SETTINGS
@@ -177,6 +177,7 @@ PIAXI_N_CORES="${SLURM_JOB_CPUS_PER_NODE}"
 PIAXI_N_NODES="${SLURM_JOB_NUM_NODES}"
 PIAXI_COREMEM="${SLURM_MEM_PER_NODE}"
 PIAXI_JOB_QOS="${SLURM_JOB_QOS}"
+CPUS_ON_NODE=$(nproc)
 
 
 
