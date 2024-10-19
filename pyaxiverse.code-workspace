@@ -5,13 +5,13 @@
 		}
 	],
 	"settings": {
-		"python.envFile": "/users/sloane1/.conda/environments.txt",
 		"python.terminal.activateEnvInCurrentTerminal": true,
 		"python.autoComplete.extraPaths": [
 
 		],
 		"python.analysis.extraPaths": [
-			"./tools"
+			"./tools",
+			"./tools/AxionLimits"
 		]
 	},
 	"extensions": {
