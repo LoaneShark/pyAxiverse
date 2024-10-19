@@ -531,7 +531,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     
     return all_params, all_results, all_plots, all_coeffs
 
-def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'):
+def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, save_format='pdf'):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -554,7 +554,7 @@ def load_single_result(output_dir, filename, load_plots=False, save_format='pdf'
     
     # Load coefficient functions
     coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
-    if os.path.exists(coeffs_filename):
+    if os.path.exists(coeffs_filename) and load_funcs:
         coeffs_dict = dict(load_coefficient_functions(coeffs_filename))
     else:
         coeffs_dict = None
@@ -665,7 +665,8 @@ def load_single(input_str, label=None, phash=None, output_root='~/scratch', vers
 def parse_filename(filename):
     """
     Parse the given filename to extract the simulation result name and parameter space hash.
-    Basic structure of a filename is {config_label}_{parameter_space_hash}{file_extension}
+    Basic structure of a filename is:
+            {path_to_directory}/{config_label}_{parameter_space_hash}{file_extension}
     
     Parameters:
     - filename (str): The filename to parse.
@@ -1659,11 +1660,15 @@ m_x_from_g_x  = lambda g_x, epsilon=1, lambda1=1, theta=1, alpha=(1./137): ((g_x
 # NOTE: We still have a slight discrepancy b/w predicted values and the plotted trendline from Humberto's modification to AxionLimits notebook
 F_pi_from_m_x = lambda m_x, l1=1, eps=1, theta=1, alpha=(1./137): F_pi_from_g_x(g_x_from_m_x(m_x, lambda1=l1, epsilon=eps, theta=theta, alpha=alpha), l1=l1, eps=eps)
 
-# TODO: Rescale plot axes if current data doesn't fit in default range
+# Requires AxionLimits git
 def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, fit_coupling=False):
-    tools_dir = os.path.abspath(os.path.join('./tools'))
+    tools_dir = os.path.abspath(os.path.join('./tools/AxionLimits'))
     if tools_dir not in sys.path:
         sys.path.append(tools_dir)
+
+    # Import plotting functions from AxionLimits
+    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
+    from scipy.stats import norm
 
     # Shade of purple chosen for visibility against existing plot colors
     res_color  = '#b042f5' if 'res' in params_in['res_class'] else 'grey'
@@ -1688,18 +1693,65 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, fit_coupling=False):
     g_min = np.min([np.max([g_in * 0.5e-1, 1.0e-30]), 1.0e-20])
     g_max = np.max([np.min([g_in * 0.5e+1, 1.0e-4]), 1.0e-9])
 
-    # Import plotting functions from AxionLimits and set up AxionPhoton plot
-    from PlotFuncs import FigSetup, AxionPhoton, MySaveFig, BlackHoleSpins, FilledLimit, line_background
+    # Create AxionPhoton experimental limits plot
     fig,ax = FigSetup(Shape='Rectangular', ylab='$|g_{\pi\gamma\gamma}|$ [GeV$^{-1}$]', mathpazo=True,
                       m_min=m_min, m_max=m_max, g_min=g_min, g_max=g_max)
 
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
 
+    class PiAxionPhoton(AxionPhoton):
+        def piAxion(ax, epsilon, lambda1, theta, label_mass, C_logwidth=10,
+                    cmap='Blues', fs=18, rot=10.0, C_center=1, C_width=1.2, vmax=0.9):
+
+            ## QCD Axion band:
+            g_min, g_max = ax.get_ylim()
+            m_min, m_max = ax.get_xlim()
+
+            # Mass-coupling relation
+            def g_x(lambda1,theta,epsilon,m_a):
+                #return (4.38299e-20)*(eps**2)*(10)*(m_a**(1/9))/(0.1**2)
+                alpha=1/137
+                H0 = 1e-33
+                Mpl = 2.435e18
+                h2Omega_r = 2.47e-5
+                h2Omega_pi = 0.12
+                #F_pi = ((6*(h2Omega_pi)/(5*(9*h2Omega_r)**(3/4)))*((H0/100)**(-1/2))*(H0**(1/2))*(Mpl**2)*(theta**(-2))*(m_a**(-1/4)))**(4/9)
+
+                #return (alpha)*(F_pi**(-1))*(epsilon**2)*(lambda1)
+                
+                return (8.7e-12)*(alpha)*(epsilon**2)*(theta)*(lambda1)*(m_a**(1/4))
+
+            # TODO: Why is this function seemingly inverted in the log-trend (1/g) compared to the above, despite being sourced from the same equations?
+            # NOTE: Currently not used until the above is addressed
+            def g_x_alt(lambda1,m_I,epsilon,m_a):
+                return 2*lambda1*(epsilon**2)/(m_a**2/m_I)
+
+            # Plot Band
+            n = 200
+            g = np.logspace(np.log10(g_min),np.log10(g_max),n)
+            m = np.logspace(np.log10(m_min),np.log10(m_max),n)
+            piAx = np.zeros(shape=(n,n))
+            for i in range(0,n):
+                piAx[:,i] = norm.pdf(np.log10(g)-np.log10(g_x(lambda1,theta,epsilon,m[i])),0.0,C_width)
+            cols = cm.get_cmap(cmap)
+
+            cols.set_under('w') # Set lowest color to white
+            vmin = np.amax(piAx)/(C_logwidth/4.6)
+            #plt.contourf(m, g, piAx, 50,cmap=cols,vmin=vmin,vmax=vmax,zorder=1)
+
+            trans_angle = plt.gca().transData.transform_angles(np.array((rot,)),np.array([[0, 0]]))[0]
+
+            label_text = r'$\varepsilon=$' + str(epsilon)
+            plt.plot(m,g_x(lambda1,theta,epsilon,m),'-',linewidth=2,color=cols(1.0),zorder=0)
+            plt.text(label_mass,g_x(lambda1,theta,epsilon,label_mass)*1.05,label_text,fontsize=fs,rotation=rot,color=cols(1.0),
+                            ha='left',va='bottom',rotation_mode='anchor',clip_on=True)
+            return
+
     ## Populate standard AxionPhoton limits plot
     # Plot QCD axion lines and experimental bounds
     AxionPhoton.QCDAxion(ax,C_center=abs(5/3-1.92)*(44/3-1.92)/2,C_width=0.7,vmax=1.1,)
-    AxionPhoton.Cosmology(ax)
+    #AxionPhoton.Cosmology(ax)
     AxionPhoton.StellarBounds(ax)
     AxionPhoton.SolarBasin(ax)
     AxionPhoton.Haloscopes(ax,projection=True,BASE_arrow_on=False)
@@ -1711,17 +1763,18 @@ def plot_ALP_survey(params_in, verbosity=0, tex_fmt=True, fit_coupling=False):
     AxionPhoton.ALPdecay(ax,projection=True)
     AxionPhoton.NeutronStars(ax)
     AxionPhoton.AxionStarExplosions(ax)
+    AxionPhoton.DarkMatterDecay(ax, projection=True)
 
     ## TODO: Verify we are using the appropriate equation to calculate the g_pi-m_pi relation
     # Reference Lines
-    AxionPhoton.piAxion(ax,epsilon=1,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+    PiAxionPhoton.piAxion(ax,epsilon=1,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
-    AxionPhoton.piAxion(ax,epsilon=0.5,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+    PiAxionPhoton.piAxion(ax,epsilon=0.5,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
-    AxionPhoton.piAxion(ax,epsilon=0.01,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
+    PiAxionPhoton.piAxion(ax,epsilon=0.01,lambda1=1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='Greys',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
     # This case
-    AxionPhoton.piAxion(ax,epsilon=eps,lambda1=l1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='GnBu',fs=18,rot = 6.0,
+    PiAxionPhoton.piAxion(ax,epsilon=eps,lambda1=l1,theta=1,label_mass=1e-2,C_logwidth=10,cmap='GnBu',fs=18,rot = 6.0,
                     C_center=1,C_width=1.2,vmax=0.9)
 
     ## Plot star marker for this specific parameter configuration
