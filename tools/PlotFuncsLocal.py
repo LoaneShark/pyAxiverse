@@ -424,8 +424,8 @@ class AxionPhoton():
             zo = 0
         y2 = ax.get_ylim()[1]
         dat = loadtxt(lmtdir+'AxionPhoton/HAYSTAC.txt')
-        dat2 = loadtxt(lmtdir+'AxionPhoton/HAYSTAC_2020.txt')
-        dat3 = loadtxt(lmtdir+'AxionPhoton/HAYSTAC_2022.txt')
+        dat2 = loadtxt(lmtdir+'AxionPhoton/HAYSTAC_PhaseI.txt')
+        dat3 = loadtxt(lmtdir+'AxionPhoton/HAYSTAC_PhaseII_ab.txt')
 
         if rs1==0:
             plt.plot([dat[0,0],dat[0,0]],[dat[0,1]/(rs1*2e-10*dat[0,0]+rs2),y2/(rs1*2e-10*dat[0,0]+rs2)],color=col,zorder=zo,lw=2)
