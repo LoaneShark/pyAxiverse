@@ -6,6 +6,10 @@ scratch
 output_data
 tools/AxionLimits/
 logs/*
+data/*
+
+# VSCode Workspace
+*.code-workspace
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
