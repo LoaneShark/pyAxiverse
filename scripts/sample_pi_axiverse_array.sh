@@ -7,6 +7,8 @@
 #SBATCH --cpus-per-task=24               # [128+]         [24+]    [16+]      [128]                [32]
 #SBATCH --time 04:00:00                  # [30d]          [7d]     [4h]       [3d]                 [1h]
 #SBATCH --mem 0                          # [1031G+]       [193G+]  [193G+]    [515G]               [16G]
+
+# vvv (Rejoin with the above to have this line count) vvv
 #SBATCH --ntasks-per-node=1
 
 ## set NUMEXPR_MAX_THREADS
@@ -22,15 +24,23 @@ INPUT_ARGFILE="${1}"
 #INPUT_STARTLINE="${2:-1}"
 #INPUT_ENDLINE="${3:-100}"
 INPUT_VERBOSITY="${2:-1}"
-INPUT_OFFSET=${3}
-INPUT_NUM=${4:1000}
+INPUT_OFFSET=${3:-0}
+INPUT_NUM=${4:-1000}
 
 # Use OFFSET arg to determine starting value and iterate through for this chunk
 # (Workaround because SLURM MaxArraySize is 1000)
-JOB_ARRAY_START=${INPUT_OFFSET+1}
-JOB_ARRAY_END=${INPUT_OFFSET+INPUT_NUM}
-JOB_ARRAY_VALUES=({${JOB_ARRAY_START}..${JOB_ARRAY_END}})
-JOB_ARRAY_INDEX=${JOB_ARRAY_VALUES[$SLURM_ARRAY_TASK_ID]}
+#echo "INPUT_OFFSET: ${INPUT_OFFSET}"
+#echo "INPUT_NUM: ${INPUT_NUM}"
+JOB_ARRAY_START=$(expr $INPUT_OFFSET + 1)
+#echo "JOB_ARRAY_START: ${JOB_ARRAY_START}"
+JOB_ARRAY_END=$(expr $INPUT_OFFSET + $INPUT_NUM)
+#echo "JOB_ARRAY_END: ${JOB_ARRAY_END}"
+JOB_ARRAY_VALUES=($(seq $JOB_ARRAY_START $JOB_ARRAY_END))
+#echo "SLURM_ARRAY_TASK_ID: ${SLURM_ARRAY_TASK_ID}"
+JOB_ARRAY_INDEX=$(expr $SLURM_ARRAY_TASK_ID - 1)
+#echo "JOB_ARRAY_INDEX: ${JOB_ARRAY_INDEX}"
+INPUT_ARGFILE_LINE=${JOB_ARRAY_VALUES[$JOB_ARRAY_INDEX]}
+#echo "INPUT_ARGFILE_LINE: ${INPUT_ARGFILE_LINE}"
 
 # Verbose printouts for debugging conda environment
 PIAXI_VERBOSITY="${INPUT_VERBOSITY}"
@@ -57,8 +67,12 @@ PIAXI_SLURM_ARGS="--num_cores '${PIAXI_N_CORES}' --num_nodes ${PIAXI_N_NODES} --
 
 if [[ "${PIAXI_VERBOSITY}" -gt "0" ]]
 then
-    #echo "RANGE: ${INPUT_STARTLINE} ${INPUT_ENDLINE}"
     echo "ARGFILE: ${INPUT_ARGFILE}"
+    if [[ "${PIAXI_VERBOSITY}" -gt "6" ]]
+    then
+        echo "LINE: ${INPUT_ARGFILE_LINE}"
+        echo "RANGE: ${JOB_ARRAY_START} ${JOB_ARRAY_END}"
+    fi
 fi
 
 if [[ "${PIAXI_VERBOSITY}" -gt "6" ]]
@@ -68,9 +82,9 @@ fi
 
 #for i in $(seq $INPUT_STARTLINE $INPUT_ENDLINE)
 #do
-PIAXI_COMMAND=$(sed -n "${JOB_ARRAY_INDEX}p" < ${INPUT_ARGFILE})
+PIAXI_COMMAND=$(sed -n "${INPUT_ARGFILE_LINE}p" < ${INPUT_ARGFILE})
 #PIAXI_COMMAND=$(sed -n "${i}p" < ${INPUT_ARGFILE})
-echo "LINE ${i}:  ${PIAXI_COMMAND}"
+echo "LINE ${INPUT_ARGFILE_LINE}:  ${PIAXI_COMMAND}"
 
 eval "${PIAXI_COMMAND} ${PIAXI_SLURM_ARGS}"
 #done
