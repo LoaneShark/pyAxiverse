@@ -1,12 +1,13 @@
 #!/bin/bash
 #SBATCH -a 1-1000%100      # max: 22680
 #SBATCH --job-name pi_axiverse_array
-#SBATCH --output ./logs/%x/log-%J-%a.txt
+#SBATCH --output ./logs/%x/log-%j-%a.txt
 #SBATCH -p secondary                     # GravityTheory, physics, secondary, IllinoisComputes, or test
 #SBATCH --nodes 1                        # [3]            [9]      [308]      [22]                 [2]
 #SBATCH --cpus-per-task=24               # [128+]         [24+]    [16+]      [128]                [32]
 #SBATCH --time 04:00:00                  # [30d]          [7d]     [4h]       [3d]                 [1h]
 #SBATCH --mem 0                          # [1031G+]       [193G+]  [193G+]    [515G]               [16G]
+#SBATCH --qos normal
 
 # vvv (Rejoin with the above to have this line count) vvv
 #SBATCH --ntasks-per-node=1
