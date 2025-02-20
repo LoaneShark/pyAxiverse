@@ -341,7 +341,7 @@ def save_coefficient_functions(functions, filename):
     with open(filename, 'wb') as f:
         dill.dump(functions, f)
 
-def load_coefficient_functions(filename):
+def load_coefficient_functions(filename, encoding=None):
     """
     Load functions from a file using dill.
     
@@ -531,7 +531,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     
     return all_params, all_results, all_plots, all_coeffs
 
-def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, save_format='pdf'):
+def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, save_format='pdf', encoding=None):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -545,12 +545,12 @@ def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, 
     
     # Load parameters
     params_filename = os.path.join(output_dir, filename + '.json')
-    with open(params_filename, 'r') as f:
+    with open(params_filename, 'r', encoding=encoding) as f:
         params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
 
     # Load results
     results_filename = os.path.join(output_dir, filename + '.npy')
-    results = np.array(np.load(results_filename),dtype=np.float64)
+    results = np.array(np.load(results_filename, allow_pickle=True), dtype=np.float64)
     
     # Load coefficient functions
     coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
@@ -2308,6 +2308,10 @@ def calc_global_phase_diffs(Th, include_diags=False, verbosity=0):
     N_r = len(Th[0])
     N_n = len(Th[1])
     N_c = len(Th[2])
+    if verbosity >= 5:
+        print(f'N_r: {N_r}')
+        print(f'N_n: {N_n}')
+        print(f'N_c: {N_c}')
     # complex neutral and charged species global phases
     Th_n_diffs = [np.abs(Th[1][i]-Th[1][j]) for i in range(N_n) for j in range(i, N_n) if i != j]
     Th_c_diffs = [np.abs(Th[2][i]-Th[2][j]) for i in range(N_c) for j in range(i, N_c) if i != j]

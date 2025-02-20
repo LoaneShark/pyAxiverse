@@ -16,10 +16,10 @@
 #export NUMEXPR_MAX_THREADS=416
 
 module load anaconda3
-module load texlive
+#module load texlive
 #source /oscar/runtime/software/external/miniconda3/23.11.0/etc/profile.d/conda.sh
-source /usr/local/anaconda/5.2.0/python3/etc/profile.d/conda.sh
-conda activate pyaxiverse
+#source /usr/local/anaconda/5.2.0/python3/etc/profile.d/conda.sh
+source activate pyaxiverse
 
 INPUT_ARGFILE="${1}"
 #INPUT_STARTLINE="${2:-1}"
