@@ -9,6 +9,7 @@ logs/*
 data/*
 ARGFILES
 ARCHIVE
+tools/astro_data.yaml
 
 # VSCode Workspace
 *.code-workspace
