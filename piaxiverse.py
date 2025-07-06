@@ -167,15 +167,22 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
     sample_qmass = False # TODO
     sample_qcons = args.dqm_c is None or args.dqm_c == 'None'
 
-    # SM quark masses for all 3 generations
-    qm = m_scale*np.array([1., 2., 40.]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
+    # Assume SM-like separations for scaling of quark mass generations
+    qm = np.array([qm_val for qm_val in map(lambda mx: None if mx in ['None','x'] else m_scale*float(mx), args.dqm_I)]) if not sample_qmass else m_scale*np.array([0., 0., 0.]) # TODO
 
     # dSM quark scaling constants (up, down, strange, charm, bottom, top) sampled from uniform distribution [0.7, 1.3]
     #print(args.dqm_c)
     qc_in = np.full(6, None) if sample_qcons else map(lambda cx: None if cx in ['None','x'] else cx, args.dqm_c)
-    #print(qc_in)
+    qs_in = np.array([np.float32(qc_scale) for qc_scale in args.dqm_s])
+
+    print('qm_in: ', [qm_val for qm_val in map(lambda mx: 'x' if mx in ['None','x'] else float(mx), args.dqm_I)])
+    print('qc_in: ', [qc_val for qc_val in map(lambda cx: 'x' if cx in ['None','x'] else float(cx), args.dqm_c)])
+    print('qs_in: ', [qs_val for qs_val in qs_in])
+
     #qc = np.array([qc_val if qc_val is not None else rng.uniform(0.7, 1.3) if sample_qcons else 0. for qc_val in qc_arr_in], dtype=float)
-    qc = np.array([rng.uniform(0.7, 1.3) if qc_val is None else qc_val for qc_val in qc_in], dtype=float).reshape((6,))
+    qc = np.array([rng.uniform(0.7*qs_val, 1.3*qs_val) if qc_val is None else qc_val for qc_val, qs_val in zip(qc_in, qs_in)], dtype=float).reshape((6,))
+
+    print('qc: ', [float('%.2f' % qc_val) for qc_val in qc])
 
     # Dark quark masses (up, down, strange, charm, bottom, top)
     dqm = np.array([qm[0]*qc[0], qm[0]*qc[1], qm[1]*qc[2], qm[1]*qc[3], qm[2]*qc[4], qm[2]*qc[5]])
@@ -515,11 +522,17 @@ def run_single_case(args, rho_in=None, Fpi_in=None, L3_in=None, L4_in=None, m_sc
 
         # Plot k-mode power spectrum (TODO: Verify power spectrum calculation)
         if make_plots:
-            res_plt = make_resonance_spectrum(params, units, solutions, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
-            result_plots['resonance'] = res_plt.gcf()
-            if show_plots:
-                res_plt.show()
-            res_plt.close()
+            try:
+                res_plt = make_resonance_spectrum(params, units, solutions, k_to_Hz_local, Hz_to_k_local, numf_in=n_k_local, class_method=class_method)
+                result_plots['resonance'] = res_plt.gcf()
+                if show_plots:
+                    res_plt.show()
+                res_plt.close()
+            except Exception as e:
+                print('Error while plotting resonance spectrum:', e)
+                if verbosity > 5:
+                    print('Skipping resonance spectrum plot due to error.')
+                #result_plots['resonance'] = None
 
         # Known observable frequency range and bandwidth classification
         res_freq_label, res_freq_class = get_frequency_class(k_peak, k_to_Hz_local, tot_class, verbosity=verbosity)
@@ -926,6 +939,8 @@ if __name__ == '__main__':
     parser.add_argument('--scan_rho_N',     type=int,  default=1,     help='Provide number of values to sample within specified DM energy density range')
 
     parser.add_argument('--dqm_c', type=str, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Scaling constants c1-c6 used to define dQCD quark species masses. Provide \'x\' to sample that index instead.')
+    parser.add_argument('--dqm_s', type=str, nargs=6, default=[1.,1.,1.,1.,1.,1.], help='Sampling parameters which re-scale the default sampling range for each of the dQCD quark mass constants c1-c6.')
+    parser.add_argument('--dqm_I', type=str, nargs=3, default=[1.,2.,40.], help='Mass-generation scales m_I-III, used to enforce relative separations between different generations of dQCD quarks.')
 
     args = parser.parse_args()
     main(args)
