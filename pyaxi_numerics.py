@@ -86,7 +86,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
 
     # Establish cutoff values for resonance and infinities
     res_con = params['res_con']
-    inf_con = params['inf_con']
+    inf_con = np.log(params['inf_con'])
 
     # Solve the differential equation for each k, in parallel
     if parallelize:
@@ -132,7 +132,7 @@ def solve_piaxi_system(system_in, params, k_values, parallelize=False, jupyter=N
     return solutions, params, time_elapsed
 
 # Solve the differential equation for a singular given k
-def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', resonance_limit=1e6, precision_limit=1e100):
+def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', resonance_limit=1e6, precision_limit=100):
     # Initial conditions
     y0 = y0_in
 
@@ -146,14 +146,33 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', res
 
     # Define milestone events during integration
     def hit_resonance_limit(t, y, k, params, limit=resonance_limit):
-        return limit - y[0]
+        if np.isfinite(y[0]) and not np.isnan(y[0]):
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                try:
+                    return limit - y[0]
+                except RuntimeWarning as e:
+                    print(f'RuntimeWarning: {e} \n  when t={t:.3f}, k={k:.2f}, y[0]={y[0]}')
+                    return limit - y[0]
+        else:
+            return -1
     def hit_precision_limit(t, y, k, params, limit=precision_limit):
-        return limit - y[0]
+        if np.isfinite(y[0]) and not np.isnan(y[0]):
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                try:
+                    return limit - np.log(np.abs(y[0]))
+                except RuntimeWarning as e:
+                    print(f'RuntimeWarning: {e} \n  when t={t:.3f}, k={k:.2f}, y[0]={y[0]}')
+                    return limit - np.log(np.abs(y[0]))
+        else:
+            return -1
     
     # Integration will end when we hit a terminal event
     hit_precision_limit.terminal = True
     # (DISABLED) We only care about when we first reach resonance, not dipping back below it
-    # hit_resonance_limit.direction = +1
+    if False:
+        hit_resonance_limit.direction = +1
 
     extra_events = [hit_resonance_limit] if resonance_limit is not None else []
     solve_events = [hit_precision_limit] + extra_events
@@ -169,30 +188,50 @@ def solve_subsystem(system_in, params, y0_in, k, verbosity=0, method='RK45', res
         if status == -1 and verbosity >= 7:
             print('Integration step failed')
     
-    # TODO: Extract important timestamps
-    t_events = sol.t_events
-    y_events = sol.y_events
+    # TODO: Extract important timestamps and store them for later analysis
+    if False:
+        t_events = sol.t_events
+        y_events = sol.y_events
     
     # Evaluate the solution at the times in the array
     #t = sol.t
     y = sol.sol(t)
     return y
 
-def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsumexp=False):
-    # System of differential equations to be solved (bg = photon background)
-    '''
-    print('\n'.join(['t = %s    k = %.1f' % (t,k), \
-                        '  P(t): %.2e' % (bg + P(t)), \
-                        '  B(t): %.2e' % B(t), \
-                        '  C(t): %.2e' % C(t, A_pm), \
-                        '  D(t): %.2e' % D(t)]))
-    '''
+# Define our system of differential equations to be solved (bg = coefficient on photon background)
+def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsumexp=False, precision_limit=100):    
+
+    if False:
+        print('\n'.join(['t = %s    k = %.1f' % (t,k), \
+                            '  P(t): %.2e' % (bg + P(t)), \
+                            '  B(t): %.2e' % B(t), \
+                            '  C(t): %.2e' % C(t, A_pm), \
+                            '  D(t): %.2e' % D(t)]))
     
+    # WIP: Handle precision limits without NaN/inf values
+    if False:
+        if np.log(np.abs(y[0])) >= precision_limit:
+            y[0] = np.sign(y[0])*np.exp(precision_limit)
+        if np.log(np.abs(y[1])) >= precision_limit:
+            y[1] = np.sign(y[1])*np.exp(precision_limit)
+
     disable_B = params['disable_B']
     disable_C = params['disable_C']
     disable_D = params['disable_D']
     if use_logsumexp: # WIP
         # Handle edge cases to sidestep log[0] errors when certain coefficients are turned off
+        '''
+        if np.abs(bg + P(t)) <= np.exp(-precision_limit):
+            print('Warning: bg + P(t) = 0')
+        if np.abs(B(t)) <= np.exp(-precision_limit):
+            print('Warning: B(t) = 0')
+        if np.abs(C(t, A_pm)) <= np.exp(-precision_limit):
+            print('Warning: C(t) = 0')
+        if np.abs(y[0]) <= np.exp(-precision_limit):
+            print('Warning: y[0] = 0')
+        if np.abs(y[1]) <= np.exp(-precision_limit):
+            print('Warning: y[1] = 0')
+        '''
         if disable_B:
             logBeta    = 0
             Beta_sign  = 0
@@ -211,27 +250,57 @@ def piaxi_system(t, y, k, params, P, B, C, D, A_pm, bg, k0, c, h, G, use_logsume
         else:
             logDterm   = np.log(np.abs(D(t))) - np.log(np.abs(bg + P(t)))
             Dterm_sign = np.sign(D(t))*np.sign(bg + P(t))
-        logAlpha, Alpha_sign = logsumexp(a=[logCterm, logDterm, np.log(k**2)],
-                                         b=[Cterm_sign, Dterm_sign, 1], return_sign=True)
+        
+        
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            try:
+                logAlpha, Alpha_sign = logsumexp(a=[logCterm, logDterm, np.log(k**2)],
+                                                 b=[Cterm_sign, Dterm_sign, 1], return_sign=True)
+            except RuntimeWarning as e:
+                print(f'RuntimeWarning in LogSumExp #1: {e}')
+                logAlpha, Alpha_sign = logsumexp(a=[logCterm, logDterm, np.log(k**2)],
+                                                 b=[Cterm_sign, Dterm_sign, 1], return_sign=True)
         
         # Numerically calculate A''[t] in log-space
-        logdy1dt, dy1dt_sign = logsumexp(a=[logBeta + np.log(np.abs(y[1])), logAlpha + np.log(np.abs(y[0]))],
-                                         b=[Beta_sign * np.sign(y[1]), Alpha_sign * np.sign(y[0])], return_sign=True)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            try:
+                logdy1dt, dy1dt_sign = logsumexp(a=[logBeta + np.log(np.abs(y[1])), logAlpha + np.log(np.abs(y[0]))],
+                                                 b=[Beta_sign * np.sign(y[1]), Alpha_sign * np.sign(y[0])], return_sign=True)
+            except RuntimeWarning as e:
+                print(f'RuntimeWarning in LogSumExp #2: {e}')
+                logdy1dt, dy1dt_sign = logsumexp(a=[logBeta + np.log(np.abs(y[1])), logAlpha + np.log(np.abs(y[0]))],
+                                                 b=[Beta_sign * np.sign(y[1]), Alpha_sign * np.sign(y[0])], return_sign=True)
         
         with warnings.catch_warnings():
             warnings.filterwarnings('error')
             try:
                 dy1dt = -dy1dt_sign*np.exp(np.float64(logdy1dt))
+                if False:
+                    print('  k: %.3f \n  t: %.3f \n  logdy1dt: %.1f \n  dy1dt: %.2e \n-----------------------' % (k, t, logdy1dt, dy1dt))
             except RuntimeWarning as e:
-                print('RuntimeWarning: %s \n   -->   when logdy1dt= %.1f' % (e, logdy1dt))
-                if logdy1dt >= 100:
+                print('RuntimeWarning: %s \n   --> at k=%.3f\n       when logdy1dt = %.2f' % (e, k, logdy1dt))
+                print('       and logy(t) = [%.2f, %.2f]' % (np.log(np.abs(y[0])), np.log(np.abs(y[1]))))
+                print('       and logAlpha = %.2f' % logAlpha)
+                if logdy1dt >= precision_limit:
+                    print('logdy1dt >> precision_limit (%.1f)  --> inf' % precision_limit)
+                    print('\n'.join(['       |  P(t): %.2e' % (bg + P(t)), \
+                                     '       |  B(t): %.2e' % B(t), \
+                                     '       |  C(t): %.2e' % C(t, A_pm), \
+                                     '       |  D(t): %.2e' % D(t), \
+                                     '       |  y[0]: %.2e' % y[0], \
+                                     '       |  y[1]: %.2e' % y[1]]))
                     dy1dt = -dy1dt_sign*np.inf
-                elif logdy1dt <= -100:
+                elif logdy1dt <= -precision_limit:
+                    print('logdy1dt << precision_limit (%.1f)  --> 0' % precision_limit)
                     dy1dt = 0
                 else:
+                    print('??? --> NaN')
+                    print('logdy1dt = %.1f' % logdy1dt)
                     dy1dt = np.nan
     else:
-        # Numerically calculate A''[t]
+        # Directly calculate A''[t]
         dy1dt = -1./(bg + P(t)) * (B(t)*y[1] + (C(t, A_pm)*(k*np.float64(k0)) + D(t))*y[0]) - (k*np.float64(k0))**2*y[0]
     
     # Return A'[t], A''[t]
@@ -289,8 +358,8 @@ def floquet_exponent(params_in, p=Beta, q=Alpha, T=2*np.pi, y0_in=None, yp0_in=N
     
     return floquet_exponents
 
-    # Example usage
     '''
+    # Example usage
     p_func = lambda t: np.cos(t)
     q_func = lambda t, k: np.sin(t) + k
     T = 2 * np.pi
