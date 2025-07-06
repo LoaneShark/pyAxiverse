@@ -25,8 +25,8 @@ import glob
 signstr = {1: '+', -1: '-', 0: '±'}
 signtex = {1: '+', -1: '-', 0: '\pm'}
 GeV = 1e9
-default_output_directory='~/scratch'
-scratch_output_directory='~/scratch'
+default_output_directory='~/scratch/pyAxiverse'
+scratch_output_directory='~/scratch/pyAxiverse'
 version='v3.2.8'
 # Fundamental constants
 c = c_raw = np.float64(2.998e10)    # Speed of light       [cm/s]
@@ -407,33 +407,38 @@ def save_results(output_dir_in, filename, params_in, results=None, plots=None, s
     web_formats = ['html', 'web', 'all']
     if save_plots and plots is not None:
         if save_format == 'all' or any([save_format in fmt_set for fmt_set in [doc_formats, img_formats, nbk_formats, web_formats]]):
-            plot_figs = [plots[p_type] for p_type in plot_types]
-            if save_format in doc_formats:
-                with PdfPages(os.path.join(output_dir, filename + '_plots.pdf')) as pdf:
-                    for fig in plot_figs:
-                        pdf.savefig(fig)
+            plot_figs = [plots[p_type] for p_type in plot_types if p_type in plots]
+            if len(plot_figs) > 0:
+                if save_format in doc_formats:
+                    with PdfPages(os.path.join(output_dir, filename + '_plots.pdf')) as pdf:
+                        for fig, fig_name in zip(plot_figs, plot_types):
+                            print('Saving to pdf: %s' % fig_name)
+                            try:
+                                pdf.savefig(fig)
+                            except Exception as e:
+                                print('Error saving %s plot to pdf:' % fig_name, e)
+                            plt.close(fig)
+                if save_format in img_formats:
+                    for i, fig in enumerate(plot_figs):
+                        fig.savefig(os.path.join(output_dir, filename + f'_plot_{i}.png'))
                         plt.close(fig)
-            if save_format in img_formats:
-                for i, fig in enumerate(plot_figs):
-                    fig.savefig(os.path.join(output_dir, filename + f'_plot_{i}.png'))
-                    plt.close(fig)
-            if save_format in nbk_formats:
-                # Display plots in the notebook (TODO)
-                for fig in plot_figs:
-                    display(fig)
-                    #plt.close(fig)
-            if save_format in web_formats:
-                # Convert notebook to HTML and save (TODO)
-                if True:
-                    print('HTML not supported yet')
-                else:
-                    html_content = str(HTML('<h1>Simulation Plots</h1>'))
+                if save_format in nbk_formats:
+                    # Display plots in the notebook (TODO)
                     for fig in plot_figs:
-                        #display(fig)
-                        html_content += str(HTML(str(html_content) + '<img src="data:image/png;base64,{}">'.format(fig)))
-                        plt.close(fig)
-                    with open(os.path.join(output_dir, filename + '_plots.html'), 'w') as f:
-                        f.write(str(html_content))
+                        display(fig)
+                        #plt.close(fig)
+                if save_format in web_formats:
+                    # Convert notebook to HTML and save (TODO)
+                    if True:
+                        print('HTML not supported yet')
+                    else:
+                        html_content = str(HTML('<h1>Simulation Plots</h1>'))
+                        for fig in plot_figs:
+                            #display(fig)
+                            html_content += str(HTML(str(html_content) + '<img src="data:image/png;base64,{}">'.format(fig)))
+                            plt.close(fig)
+                        with open(os.path.join(output_dir, filename + '_plots.html'), 'w') as f:
+                            f.write(str(html_content))
         else:
             print(f'Incompatable file format: {save_format}')
     
@@ -531,7 +536,7 @@ def load_multiple_results(output_dir, label, load_images=False, save_format='pdf
     
     return all_params, all_results, all_plots, all_coeffs
 
-def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, save_format='pdf', encoding=None):
+def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, save_format='pdf', encoding=None, verbosity=0):
     """
     Parameters:
     - output_dir (str): The directory where the output files are saved.
@@ -545,28 +550,48 @@ def load_single_result(output_dir, filename, load_plots=False, load_funcs=True, 
     
     # Load parameters
     params_filename = os.path.join(output_dir, filename + '.json')
-    with open(params_filename, 'r', encoding=encoding) as f:
-        params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
+    try:
+        with open(params_filename, 'r', encoding=encoding) as f:
+            params = dict(json.loads(f.read(), object_hook=NumpyEncoder.decode))
+    except Exception as e:
+        if verbosity >= 0:
+            print(f'{e} encountered while trying to read input parameters from {params_filename}')
+            raise e
 
     # Load results
     results_filename = os.path.join(output_dir, filename + '.npy')
-    results = np.array(np.load(results_filename, allow_pickle=True), dtype=np.float64)
+    try:
+        results = np.array(np.load(results_filename, allow_pickle=True), dtype=np.float64)
+    except Exception as e:
+        if verbosity >= 0:
+            print(f'{e} encountered while trying to read results from {results_filename}')
+            raise e
     
     # Load coefficient functions
-    coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
-    if os.path.exists(coeffs_filename) and load_funcs:
-        coeffs_dict = dict(load_coefficient_functions(coeffs_filename))
-    else:
-        coeffs_dict = None
+    try:
+        coeffs_filename = os.path.join(output_dir, filename + '_funcs.pkl')
+        if os.path.exists(coeffs_filename) and load_funcs:
+            coeffs_dict = dict(load_coefficient_functions(coeffs_filename))
+        else:
+            coeffs_dict = None
+    except Exception as e:
+        if verbosity >= 0:
+            print(f'{e} encountered while trying to load coefficient funtions from {coeffs_filename}')
+            raise e
 
     # Load plots
     plots = []
-    if load_plots and save_format is not None :
-        if save_format == 'png':
-            i = 0
-            while os.path.exists(os.path.join(output_dir, filename, f'_plot_{i}.png')):
-                plots.append(plt.imread(os.path.join(output_dir, filename, f'_plot_{i}.png')))
-                i += 1
+    if load_plots and save_format is not None:
+        try:
+            if save_format == 'png':
+                i = 0
+                while os.path.exists(os.path.join(output_dir, filename, f'_plot_{i}.png')):
+                    plots.append(plt.imread(os.path.join(output_dir, filename, f'_plot_{i}.png')))
+                    i += 1
+        except Exception as e:
+            if verbosity >= 0:
+                print(f'{e} encountered while trying to load plots from directory: {output_dir}')
+                raise e
     
     return params, results, plots, coeffs_dict
 
@@ -762,11 +787,17 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
 
     # Plot results of numerical integration, as imported from file
     if plot_res:
-        plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
+        try:
+            plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
+        except Exception as e:
+            print('Error plotting amplitudes:', e)
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
-        plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
+        try:
+            plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
+        except Exception as e:
+            print('Error plotting occupation numbers:', e)
 
     # Plot time-dependent oscillatory coefficients, as imported from file
     if plot_coeffs:
@@ -774,12 +805,19 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         B = coeffs['B'] if coeffs is not None else B_off
         C = coeffs['C'] if coeffs is not None else C_off
         D = coeffs['D'] if coeffs is not None else D_off
-        plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
+        try:
+            plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
+        except Exception as e:
+            print('Error plotting coefficients:', e)
     
+    # Plot resonance spectrum, as imported from file
     if plot_spectrum:
         k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw: k_to_Hz(ki, k0, h, c)
         Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
-        plot_resonance_spectrum(params_in=params, units_in=units, results_in=results, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
+        try:
+            plot_resonance_spectrum(params_in=params, units_in=units, results_in=results, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
+        except Exception as e:
+            print('Error plotting resonance spectrum:', e)
 
 # Helper function for below (NOTE: m_u may not be the same m_u as in other parts of the code -- look into this)
 min_timescale = lambda m_min, m_u: 1./(np.min([m_min,1.]))*((2*np.pi)/(m_u))
@@ -1251,7 +1289,7 @@ def classify_resonance(params_in, nk_arr, k_span, method='heaviside', verbosity=
         nk_binned = binned_statistic(times, np.log10(nk_arr), bins=N_bins, statistic='mean')
         class_res = pd.DataFrame([binned_classifier(nk_binned.statistic[k_i], N_bins, ln_rescon, return_dict=True) for k_i, _ in enumerate(k_values)])
         nk_class = np.array(class_res['label'])
-        nk_ratios = np.array(zip(k_values, class_res['ratio_final'] + class_res['ratio_max'] + class_res['baseline']))
+        nk_ratios = np.array(zip(k_values, class_res['ratio_final'] + class_res['ratio_max'] + class_res['baseline']), dtype=np.float64)
 
         nt_binned = binned_statistic(times, np.log10(n_tot), bins=N_bins, statistic='mean')
         tot_class, ratio_f, ratio_m, base_val = binned_classifier(nt_binned.statistic, N_bins, ln_rescon)
@@ -1623,23 +1661,32 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     nk_arr = np.array([n_p(k_i, params_in, results_in, k_values, times, n=numf_in if numf_in is not None else n_k) for k_i,_ in enumerate(k_values)])
     nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max = classify_resonance(params_in, nk_arr, k_span, method=class_method)
     
+    nk_ratios_masked = np.ma.masked_invalid(nk_ratios)   # Mask inf / nan vals for plotting routine
+    nk_ratio_mask = np.ma.getmask(nk_ratios_masked)
+    nk_class_mask = nk_ratio_mask.any(axis=1)
+    nk_class_masked = np.ma.masked_array(nk_class, nk_class_mask)
+
+    print(nk_class)
+
     plt.figure(figsize = (20,6))
     plt.suptitle(r'Resonance Classification')
 
     ax = plt.subplot2grid((2,4), (0,0), colspan=2, rowspan=2)
-    plt.scatter(k_values, nk_ratios[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
+    plt.scatter(k_values, nk_ratios_masked[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
     if plot_max:
-        plt.scatter(k_values, nk_ratios[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
+        plt.scatter(k_values, nk_ratios_masked[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
     plt.xlabel(r'$k$%s' % (' [$m_u$]' if params_in['use_mass_units'] else ''))
     plt.xlim(left=-1, right=params_in['k_span'][1] + 1)
     
     plt.ylabel(r'Growth in $n_k$')
-    plt.yscale('log') if np.any(np.isfinite(nk_ratios[:,0])) or np.any(np.isfinite(nk_ratios[:,1])) else plt.yscale('symlog')
+    #plt.yscale('log') if np.all(np.isfinite(nk_ratios_masked[:,0])) and np.all(np.isfinite(nk_ratios_masked[:,1])) else plt.yscale('symlog')
+    plt.yscale('log') if np.any(np.isfinite(nk_ratios_masked[:,0])) or np.any(np.isfinite(nk_ratios_masked[:,1])) else plt.yscale('symlog')
     plt.grid()
 
     plt.subplot2grid((2,4), (0,2), colspan=2, rowspan=2)
-    class_counts = [(nk_class == class_label).sum() for class_label in class_colors.keys()]
-    plt.bar(class_colors.keys(),class_counts,color=class_colors.values())
+    class_counts = [(nk_class_masked == class_label).sum() for class_label in class_colors.keys()]
+    print('class_counts:', class_counts)
+    plt.bar(class_colors.keys(), class_counts, color=class_colors.values())
     plt.xlabel(r'Classification')
     plt.ylabel(r'Count')
     plt.grid()
