@@ -8,6 +8,7 @@ tools/AxionLimits/
 logs/*
 data/*
 ARGFILES
+ARCHIVE
 
 # VSCode Workspace
 *.code-workspace
