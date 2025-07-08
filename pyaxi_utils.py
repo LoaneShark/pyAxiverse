@@ -37,6 +37,10 @@ e = 0.3                             # Dimensionless electron charge
 colordict = {
     'purple': '#b042f5'
 }
+# Symbol to use for "mass unit" in plots
+#m_u_symbol = 'm_u'
+m_u_symbol = 'm_0'
+#m_u_symbol = 'm_Ø'
 
 ## Set parameters of model for use in numerical integration
 # TODO: Remove dependence on this function
@@ -623,7 +627,7 @@ def load_case(input_str, output_root='~/scratch', version=version, load_images=F
     
     return load_multiple_results(output_dir, result_name, load_images, save_format, nested=(input_str=='all'), include_debug=include_debug, combined_folder=combined_folder)
 
-def load_single(input_str, label=None, phash=None, output_root='~/scratch', version=version, save_format='pdf', load_plots=False, verbosity=0):
+def load_single(input_str, label=None, phash=None, output_root='~/scratch', version=version, save_format='pdf', load_plots=False, nested_folders=True, verbosity=0):
     """
     Load results of a single run given a full filepath to any of the files associated with a run, or just the label and unique parameter hash.
     
@@ -679,7 +683,8 @@ def load_single(input_str, label=None, phash=None, output_root='~/scratch', vers
             print('input_label:  ', input_label)
             print('input_phash:  ', input_hash)
         pathroot, pathrest = os.path.split(output_dir)
-        output_dir = os.path.join(pathroot, pathrest, version, input_label)
+        if nested_folders:
+            output_dir = os.path.join(pathroot, pathrest, version, input_label)
         if verbosity > 3:
             print('output_dir', output_dir)
         filename = f"{input_label}_{input_hash}"
@@ -733,11 +738,18 @@ def if_output_exists(directory, phash):
             return True
     return False
 
-# Main function to load results and plot them, for a single given case
-def plot_single_case(input_str, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], set_params_globally=False, tex_fmt=False, add_colorbars=False, version=version):
+# Main function to load results and plot them, for a single given case. Optionally save the plots to file.
+def plot_single_case(input_str, label=None, output_dir=default_output_directory, plot_res=True, plot_nums=True, plot_coeffs=True, plot_spectrum=True, k_samples_in=[], 
+                     nested_folders=False, set_params_globally=False, tex_fmt=False, add_colorbars=False, plot_parameters=True, plot_Adot=False, version=version, 
+                     save_plots=False, save_dir='./plots', verbosity=0):
 
     # Load results
-    params, results, _, coeffs = load_single(input_str, output_root=output_dir, version=version)
+    params, results, _, coeffs = load_single(input_str, label, output_root=output_dir, version=version, verbosity=verbosity, nested_folders=nested_folders,
+                                             load_plots=False)
+
+    if save_plots:
+        save_filename_base, _ = os.path.splitext(input_str)
+        save_dir = os.path.join(save_dir, save_filename_base)
 
     t_span = params['t_span']
     t_num  = params['t_num']
@@ -788,14 +800,30 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
     # Plot results of numerical integration, as imported from file
     if plot_res:
         try:
-            plot_amplitudes(params_in=params, units_in=units, results_in=results, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
+            amp_fig = make_amplitudes_plot(params_in=params, units_in=units, results_in=results, 
+                                           k_samples_in=k_samples, times_in=times, plot_Adot=plot_Adot,
+                                           tex_fmt=tex_fmt, add_colorbars=add_colorbars, plot_parameters=plot_parameters)
+            if save_plots:
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                amp_fig.savefig(os.path.join(save_dir, f'{save_filename_base}_amps.png'), format='png')
+            else:
+                amp_fig.show()
         except Exception as e:
             print('Error plotting amplitudes:', e)
 
     # Plot occupation number of the photon field, as imported from file
     if plot_nums:
         try:
-            plot_occupation_nums(params_in=params, units_in=units, results_in=results, numf=None, k_samples=k_samples, times=times, tex_fmt=tex_fmt, add_colorbars=add_colorbars)
+            num_fig, _, _, _ = make_occupation_num_plots(params_in=params, units_in=units, results_in=results,
+                                                         k_samples_in=k_samples, times_in=times, numf_in=None, 
+                                                         tex_fmt=tex_fmt, add_colorbars=add_colorbars, plot_parameters=plot_parameters)
+            if save_plots:
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                num_fig.savefig(os.path.join(save_dir, f'{save_filename_base}_nums.png'), format='png')
+            else:
+                num_fig.show()
         except Exception as e:
             print('Error plotting occupation numbers:', e)
 
@@ -806,7 +834,15 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         C = coeffs['C'] if coeffs is not None else C_off
         D = coeffs['D'] if coeffs is not None else D_off
         try:
-            plot_coefficients(params_in=params, units_in=units, P=P, B=B, C=C, D=D, k_samples=k_samples, times=times, tex_fmt=tex_fmt)
+            coeff_fig = make_coefficients_plot(params_in=params, units_in=units, P_in=P, B_in=B, C_in=C, D_in=D, 
+                                                k_samples_in=k_samples, times_in=times, tex_fmt=tex_fmt,
+                                                plot_parameters=plot_parameters)
+            if save_plots:
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                coeff_fig.savefig(os.path.join(save_dir, f'{save_filename_base}_coeffs.png'), format='png')
+            else:
+                coeff_fig.show()
         except Exception as e:
             print('Error plotting coefficients:', e)
     
@@ -815,16 +851,25 @@ def plot_single_case(input_str, output_dir=default_output_directory, plot_res=Tr
         k_to_Hz_local = lambda ki, k0=params['k_0'], h=h_raw, c=c_raw: k_to_Hz(ki, k0, h, c)
         Hz_to_k_local = lambda fi, k0=params['k_0'], h=h_raw, c=c_raw: Hz_to_k(fi, k0, h, c)
         try:
-            plot_resonance_spectrum(params_in=params, units_in=units, results_in=results, fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, tex_fmt=tex_fmt)
+            spect_fig = make_resonance_spectrum(params_in=params, units_in=units, results_in=results, 
+                                                fwd_fn=k_to_Hz_local, inv_fn=Hz_to_k_local, numf_in=None,
+                                                tex_fmt=tex_fmt)
+            if save_plots:
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                spect_fig.savefig(os.path.join(save_dir, f'{save_filename_base}_spect.png'), format='png')
+            else:
+                plt.show()
         except Exception as e:
             print('Error plotting resonance spectrum:', e)
 
-# Helper function for below (NOTE: m_u may not be the same m_u as in other parts of the code -- look into this)
+# Helper function for below (NOTE: m_u may not be the same m_u as in other parts of the code -- look into clarifying this)
 min_timescale = lambda m_min, m_u: 1./(np.min([m_min,1.]))*((2*np.pi)/(m_u))
 
 # Characteristic timescales (minimum amount of time needed to capture full oscillations) by species
 def get_timescales(m, m0, m_u=1., verbosity=0):
     # Assuming m_min is given in units of [m_u], else set rescaling relation in m_u arg
+    # m0 = conversion from m_u to eV units
     t_min = lambda m: min_timescale(m, m_u)
     for i in range(m.shape[0]):
         m_min_r = np.min(m[0]*m0) if len(m[0]) > 0 else 0
@@ -839,13 +884,13 @@ def get_timescales(m, m0, m_u=1., verbosity=0):
     if verbosity >= 2:
         if verbosity >= 5:
             print('Characteristic timescales by species:')
-            print(' -   reals: m_min = %.2f [m_u]  --->  T_r = %.2fπ [1/m_u]' % (m_min_r, np.abs(t_min_r/np.pi)))
-            print(' - complex: m_min = %.2f [m_u]  --->  T_n = %.2fπ [1/m_u]' % (m_min_n, np.abs(t_min_n/np.pi)))
-            print(' - charged: m_min = %.2f [m_u]  --->  T_c = %.2fπ [1/m_u]' % (m_min_c, np.abs(t_min_c/np.pi)))
+            print(' -   reals: m_min = %.2f [%s]  --->  T_r = %.2fπ [1/%s]' % (m_min_r, m_u_symbol, np.abs(t_min_r/np.pi), m_u_symbol))
+            print(' - complex: m_min = %.2f [%s]  --->  T_n = %.2fπ [1/%s]' % (m_min_n, m_u_symbol, np.abs(t_min_n/np.pi), m_u_symbol))
+            print(' - charged: m_min = %.2f [%s]  --->  T_c = %.2fπ [1/%s]' % (m_min_c, m_u_symbol, np.abs(t_min_c/np.pi), m_u_symbol))
             if verbosity >= 8:
-                print(' -----------> T_min = %.2fπ [1/m_u]' % np.abs(T_min/np.pi))
+                print(' -----------> T_min = %.2fπ [1/%s]' % (np.abs(T_min/np.pi), m_u_symbol))
         else:
-            print('Characteristic timescale: T_min = %.2fπ [1/m_u]' % np.abs(T_min/np.pi))
+            print('Characteristic timescale: T_min = %.2fπ [1/%s]' % (np.abs(T_min/np.pi), m_u_symbol))
         print('----------------------------------------------------')
 
     return T_min, t_min_r, t_min_n, t_min_c
@@ -938,11 +983,11 @@ def get_colorbar_params(k_values_in):
     return c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar
 
 # Plot the amplitudes (results of integration)
-def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False):
-    amp_plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars)
+def plot_amplitudes(params_in, units_in, results_in, k_samples=[], times=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, plot_parameters=True):
+    amp_plt = make_amplitudes_plot(params_in, units_in, results_in, k_samples, times, plot_Adot, plot_RMS, plot_avg, tex_fmt, add_colorbars, plot_parameters)
     amp_plt.show()
     
-def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, abs_amps=None, precision_limit=1e100):
+def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times_in=None, plot_Adot=True, plot_RMS=False, plot_avg=False, tex_fmt=False, add_colorbars=False, plot_parameters=True, abs_amps=None, precision_limit=1e100):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     k_peak, k_mean = get_peak_k_modes(params_in, results_in, k_values)
     plot_all_k = True if len(k_samples_in) == 1 and k_samples_in[0] < 0 else False
@@ -959,15 +1004,13 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
     times = get_times(params_in, times_in)
     t_step = float(params_in['t_span'][1] - params_in['t_span'][0]) / float(params_in['t_num'])
 
-    xdim = 5
-    if plot_Adot:
-        ydim = 3 
-    else:
-        ydim = 2
+
+    xdim = 5 if plot_parameters else 3
+    ydim = 3 if plot_Adot else 2
 
     #fig = Figure(figsize=(4*xdim, 4*ydim))
     #plt.subplot2grid((ydim,xdim), (0,0), fig=fig, colspan=3)
-    fig = plt.figure(figsize=(4*xdim, 4*ydim))
+    fig = plt.figure(figsize=(4*xdim, 4.5*ydim))
     ax1 = plt.subplot2grid((ydim,xdim), (0,0), colspan=3, fig=fig)
 
     if add_colorbars:
@@ -1067,15 +1110,18 @@ def make_amplitudes_plot(params_in, units_in, results_in, k_samples_in=[], times
 
     #print(len(d[0]))
 
-    textstr1, textstr2 = print_param_space(params_in, units_in)
+    if plot_parameters:
+        textstr1, textstr2 = print_param_space(params_in, units_in)
 
-    plt.subplot2grid((ydim,xdim), (max(0,ydim-3),3), rowspan=(3 if plot_Adot else 2))
-    plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=fontsize)
-    plt.axis('off')
+    if plot_parameters:
+        plt.subplot2grid((ydim,xdim), (max(0,ydim-3),3), rowspan=(3 if plot_Adot else 2))
+        plt.text(0.15, 0 + (ydim-2)*0.2, textstr1, fontsize=fontsize)
+        plt.axis('off')
 
-    plt.subplot2grid((ydim,xdim), (max(0,ydim-3),4), rowspan=(3 if plot_Adot else 2))
-    plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=fontsize)
-    plt.axis('off')
+    if plot_parameters:
+        plt.subplot2grid((ydim,xdim), (max(0,ydim-3),4), rowspan=(3 if plot_Adot else 2))
+        plt.text(0, 0 + (ydim-2)*0.2, textstr2, fontsize=fontsize)
+        plt.axis('off')
 
     plt.tight_layout()
     
@@ -1340,14 +1386,14 @@ def classify_resonance(params_in, nk_arr, k_span, method='heaviside', verbosity=
     return nk_class, tot_class, nk_ratios, ratio_f, ratio_m, t_res, t_max
 
 # Plot occupation number results
-def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, class_method='heaviside', tex_fmt=False, add_colorbars=False):
-    num_plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, class_method, tex_fmt, add_colorbars)
+def plot_occupation_nums(params_in, units_in, results_in, numf=None, k_samples=[], times=None, scale_n=False, class_method='heaviside', tex_fmt=False, add_colorbars=False, plot_parameters=True):
+    num_plt, _, _, _ = make_occupation_num_plots(params_in, units_in, results_in, numf, k_samples, times, scale_n, class_method, tex_fmt, add_colorbars, plot_parameters)
     num_plt.show()
 
 sum_n_k = lambda n_in, k_v: np.sum([n_in(k) for k in k_v], axis=0)
 sum_n_p = lambda n_in, p_in, sol_in, k_v, times: np.sum([n_p(k_i, p_in, sol_in, k_v, times, n=n_in) for k_i in range(len(k_v))], axis=0)
 
-def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, class_method='heaviside', tex_fmt=False, add_colorbars=False, write_to_params=False):
+def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_samples_in=[], times_in=None, scale_n=True, class_method='heaviside', tex_fmt=False, add_colorbars=False, plot_parameters=True, write_to_params=False):
     k_span = (params_in['k_span'][0], params_in['k_span'][1])
     k_values = get_kvals(params_in, None)
     k_peak, k_mean = get_peak_k_modes(params_in, results_in, k_values)
@@ -1368,9 +1414,15 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     res_con = params_in['res_con']
     numf = numf_in if numf_in is not None else n_k
     
-    plt.figure(figsize=(20, 9))
+    if plot_parameters:
+        xdim = 5
+    else:
+        xdim = 3
+    ydim = 2
 
-    plt.subplot2grid((2,5), (0,0), colspan=3)
+    plt.figure(figsize=(4*xdim, 4.5*ydim))
+
+    plt.subplot2grid((ydim,xdim), (0,0), colspan=3)
 
     if add_colorbars:
         c_m, cm_vals, cbar_ticks, cbar_labels, s_m_plt, cm_norm_plt, s_m_cbar, cm_norm_cbar = get_colorbar_params(k_values)
@@ -1425,12 +1477,16 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     print('n_max:', n_max)
 
     #with plt.xkcd():
-    plt.subplot2grid((2,5), (1,0), colspan=3)
+    plt.subplot2grid((ydim,xdim), (1,0), colspan=3)
     #fig,ax = plt.subplots()
     #plt.plot(np.ma.masked_where(t >= t_res, times), np.ma.masked_where(np.array(n_tot) > res_con*sum(k_sens(np.mean, -t_sens)), n_tot), label='none', color='grey')
 
+    # for t < t_resonance, label the line as not resonant
     plt.plot(np.ma.masked_greater(times, min(t_res, t_max)), n_tot_plt, label='none', color='grey')
-    plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot_plt, label='energy injection', color='orange')
+    if t_max < t_res:
+        # for t_max < t < t_resonance, label the line as energy injection
+        plt.plot(np.ma.masked_greater(np.ma.masked_less(times, t_max), t_res), n_tot_plt, label='energy injection', color='orange')
+    # for t > t_resonance, label the line as resonant
     plt.plot(np.ma.masked_less(times, t_res), n_tot_plt, label='resonance', color='red')
     plt.title(r'Occupation Number (total)', fontsize=16)
     plt.xlabel(r'Time $[%s]$' % units_in['t'])
@@ -1444,15 +1500,16 @@ def make_occupation_num_plots(params_in, units_in, results_in, numf_in=None, k_s
     plt.legend()
     plt.grid()
 
-    textstr1, textstr2 = print_param_space(params_in, units_in)
+    if plot_parameters:
+        textstr1, textstr2 = print_param_space(params_in, units_in)
 
-    plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
-    plt.axis('off')
+        plt.subplot2grid((ydim,xdim), (0,3), rowspan=2)
+        plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
+        plt.axis('off')
 
-    plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.05, textstr2, fontsize=fontsize)
-    plt.axis('off')
+        plt.subplot2grid((ydim,xdim), (0,4), rowspan=2)
+        plt.text(0, 0.05, textstr2, fontsize=fontsize)
+        plt.axis('off')
 
     plt.tight_layout()
 
@@ -1476,11 +1533,11 @@ Alpha = lambda t, k, k0, P, C, D, A_pm: ((C(t, A_pm)*(k*k0) + D(t)) / (1. + P(t)
 Beta  = lambda t, B, P: B(t) / (1. + P(t))
 
 # Plot time-dependent coefficient values of the model
-def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True, tex_fmt=False):
-    coeff_plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all, tex_fmt)
+def plot_coefficients(params_in, units_in, P=None, B=None, C=None, D=None, polarization=None, k_unit=None, k_samples=[], times=None, plot_all=True, tex_fmt=False, plot_parameters=True):
+    coeff_plt = make_coefficients_plot(params_in, units_in, P, B, C, D, polarization, k_unit, k_samples, times, plot_all, tex_fmt, plot_parameters)
     coeff_plt.show()
     
-def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True, tex_fmt=False):
+def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None, D_in=None, Cpm_in=None, k_unit=None, k_samples_in=[], times_in=None, plot_all=True, tex_fmt=False, plot_parameters=True):
     k_values = np.linspace(params_in['k_span'][0], params_in['k_span'][1], params_in['k_num'])
     fontsize = 16 if tex_fmt else 14
     P = P_in if P_in is not None else P_off
@@ -1496,10 +1553,12 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
         k_samples = k_samples_in
     times = get_times(params_in, times_in)
 
+    xdim = 5 if plot_parameters else 3
+    ydim = 2
     #fig = Figure(figsize = (20,9))
     #plt.subplot2grid((2,5), (0,0), fig=fig, colspan=3, rowspan=1)
-    plt.figure(figsize = (20,9))
-    plt.subplot2grid((2,5), (0,0), colspan=3, rowspan=1)
+    plt.figure(figsize = (4*xdim,4.5*ydim))
+    plt.subplot2grid((ydim,xdim), (0,0), colspan=3, rowspan=1)
 
     for (c_t, c_label) in get_coefficient_values(params_in, P, B, C, D, times):
         plt.plot(times, c_t, label=c_label)
@@ -1513,7 +1572,7 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
     # Compare Alpha(t) and Beta(t) for a sampling of k values
     #   for EoM of the form: A_k'' + [Beta]A_k' + [Alpha(k)]A_k = 0
     if plot_all:
-        plt.subplot2grid((2,5), (1,0), colspan=3, rowspan=1)
+        plt.subplot2grid((ydim,xdim), (1,0), colspan=3, rowspan=1)
 
         #k_samples = np.geomspace(1,len(k_values),num=5)
         k_samples = [i for i, k_i in enumerate(k_values) if k_i in [0,1,10,25,50,75,100,150,200,500]]
@@ -1549,15 +1608,16 @@ def make_coefficients_plot(params_in, units_in, P_in=None, B_in=None, C_in=None,
         plt.legend()
 
     # Write parameter space configuration next to plot
-    textstr1, textstr2 = print_param_space(params_in, units_in)
+    if plot_parameters:
+        textstr1, textstr2 = print_param_space(params_in, units_in)
 
-    plt.subplot2grid((2,5), (0,3), rowspan=2)
-    plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
-    plt.axis('off')
+        plt.subplot2grid((ydim,xdim), (0,3), rowspan=2)
+        plt.text(0.15, 0.05, textstr1, fontsize=fontsize)
+        plt.axis('off')
 
-    plt.subplot2grid((2,5), (0,4), rowspan=2)
-    plt.text(0, 0.05, textstr2, fontsize=fontsize)
-    plt.axis('off')
+        plt.subplot2grid((ydim,xdim), (0,4), rowspan=2)
+        plt.text(0, 0.05, textstr2, fontsize=fontsize)
+        plt.axis('off')
 
     plt.tight_layout()
     
@@ -1675,7 +1735,7 @@ def make_resonance_spectrum(params_in, units_in, results_in, fwd_fn, inv_fn, num
     plt.scatter(k_values, nk_ratios_masked[:,0], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class])
     if plot_max:
         plt.scatter(k_values, nk_ratios_masked[:,1], c=[class_colors[k_c] if k_c in class_colors else 'pink' for k_c in nk_class], alpha=0.2)
-    plt.xlabel(r'$k$%s' % (' [$m_u$]' if params_in['use_mass_units'] else ''))
+    plt.xlabel(r'$k$%s' % (f' [${m_u_symbol}$]' if params_in['use_mass_units'] else ''))
     plt.xlim(left=-1, right=params_in['k_span'][1] + 1)
     
     plt.ylabel(r'Growth in $n_k$')
@@ -1996,13 +2056,14 @@ def print_param_space(params, units_in):
     k_step_in = (params['k_span'][1] - params['k_span'][0] + 1.) / params['k_num']
     t_step_in = (params['t_span'][1] - params['t_span'][0] + 1.) / params['t_num']
     units = units_in.copy()
+    # Convert certain parameters to more readable units for display alongside plots
     for key in ['c', 'h', 'G', 'm', 'k', 'p', 'amp', 'Lambda', 'lambda', 'F', 't', 'Theta', 'delta', 'eps']:
         if key not in units_in or units_in[key] == 1:
             units[key] = ''
-        elif key in ['Lambda','F'] and units_in[key] == 'm_u':
+        elif key in ['Lambda','F'] and units_in[key] == m_u_symbol:
             units[key] = '\quad[%s]' % ('eV')
         elif key in ['k'] and units_in[key] == 'eV':
-            units[key] = '\quad[%s]' % ('m_u')
+            units[key] = '\quad[%s]' % (m_u_symbol)
         else:
             units[key] = '\quad[%s]' % (units_in[key])
     
@@ -2033,7 +2094,7 @@ def print_param_space(params, units_in):
     m2_mask = np.ma.getmask(params['m'][2]) if np.ma.getmask(params['m'][2]) else np.full_like(params['m'][2], False)
     textstr2 = '\n'.join((
         r'$m_{q, dQCD} = [%s]\quad%.2g eV$' % (', '.join('%d' % q for q in np.array(params['qm']) / params['m_q']), params['m_q']),
-        '' if units['m'] == 'eV' else r'$m_{u} = %.2e\quad[eV]$' % (params['m_u'], ),
+        '' if units['m'] == 'eV' else r'$%s = %.2e\quad[eV]$' % (m_u_symbol, params['m_u']),
         r'$m%s$' % units['m'],
         ' '.join([r'$m_{(0),%d}=%.2g$'   % (i+1, params['m'][0][i]*params['m_0'], ) for i in range(len(params['m'][0])) if not m0_mask[i]]),
         ' '.join([r'$m_{(\pi),%d}=%.2g$' % (i+1, params['m'][1][i]*params['m_0'], ) for i in range(len(params['m'][1])) if not m1_mask[i]]),
@@ -2071,14 +2132,14 @@ def get_units(unitful_m, rescale_m, unitful_k, rescale_k, unitful_amps, rescale_
               unitful_c=False, unitful_h=False, unitful_G=False, use_mass_units=True, use_natural_units=None, verbosity=0):
     is_natural_units = all([not(unitful_c), not(unitful_h), not(unitful_G)]) if use_natural_units is None else use_natural_units
     units = {'c': 1 if not unitful_c else 'cm/s', 'h': 1 if not unitful_h else 'eV/Hz', 'G': 1 if not unitful_G else 'cm^5/(eV s^4)', 
-             'm': 'm_u' if not((unitful_m and not rescale_m) or (not unitful_m and rescale_m)) else 'eV/c^2' if unitful_c else 'eV',
-             'k': 'm_u' if not rescale_k else 'eV/c' if unitful_c else 'eV',
+             'm': m_u_symbol if not((unitful_m and not rescale_m) or (not unitful_m and rescale_m)) else 'eV/c^2' if unitful_c else 'eV',
+             'k': m_u_symbol if not rescale_k else 'eV/c' if unitful_c else 'eV',
              'p': 'eV/cm^3' if dimensionful_p else 'eV^4' if not(unitful_c or unitful_h) else 'eV^4/(hc)^3',
-             'amp': 'm_u' if (rescale_amps and unitful_amps) else 'eV^2/m_u^2' if (rescale_amps and not unitful_amps) else 'eV' if unitful_amps and is_natural_units else 'eV/c', # 'eV (h^3 c)^(-1/2)'
-             'Lambda': 'm_u' if rescale_consts else 'eV/c^2' if unitful_c else 'eV',
+             'amp': m_u_symbol if (rescale_amps and unitful_amps) else 'eV^2/m_u^2' if (rescale_amps and not unitful_amps) else 'eV' if unitful_amps and is_natural_units else 'eV/c', # 'eV (h^3 c)^(-1/2)'
+             'Lambda': m_u_symbol if rescale_consts else 'eV/c^2' if unitful_c else 'eV',
              'lambda': 1,
-             'F': 'm_u' if rescale_consts else 'eV/c^2' if unitful_c else 'eV',
-             't': '1/m_u',
+             'F': m_u_symbol if rescale_consts else 'eV/c^2' if unitful_c else 'eV',
+             't': f'1/{m_u_symbol}',
              'Theta': 'π',
              'delta': 'π'}
     
@@ -2102,20 +2163,27 @@ def print_units(units, unit_args, verbosity=0):
                 print('unitful_'+c_name+':', c_sw, '      | ', c_name+' =', str(1 if units[c_name] == 1 else '%.3e [%s]' % (c_val, units[c_name])))
         print('----------------------------------------------------')
     if verbosity > 3:
-        print('unitful_masses:', '%5s' % str(unitful_m),      '| [m_u]' if not unitful_m else '| [%s]' % 'eV')
-        print('rescale_m:     ', '%5s' % str(rescale_m),      ''        if not rescale_m else '| [%s] -> [%s]' % (('eV','m_u') if unitful_m    else ('m_u','eV')))
-        print('unitful_k:     ', '%5s' % str(unitful_k),      '| [m_u]' if not unitful_k else '| [%s]' % 'eV')
-        print('rescale_k:     ', '%5s' % str(rescale_k),      ''        if not rescale_k else '| [%s] -> [%s]' % (('eV','m_u') if unitful_k    else ('m_u','eV')))
-        print('unitful_amps:  ', '%5s' % str(unitful_amps),   '| [eV]'  if unitful_amps  else '| [eV^2/m_u]')
-        print('rescale_amps:  ', '%5s' % str(rescale_amps),   '' if not rescale_amps     else '| [%s] -> [%s]' % (('eV','m_u') if unitful_amps else ('eV^2/m_u','eV^2/m_u^2')))
-        print('rescale_consts:', '%5s' % str(rescale_consts), '' if not rescale_consts   else '| [%s] -> [%s]' % (('eV','m_u') if unitful_m    else ('eV', 'eV/m_u')))
+        print('unitful_masses:', '%5s' % str(unitful_m),
+              ('| [%s]' % m_u_symbol) if not unitful_m else '| [%s]' % 'eV')
+        print('rescale_m:     ', '%5s' % str(rescale_m),
+              ''        if not rescale_m else '| [%s] -> [%s]' % (('eV', m_u_symbol) if unitful_m    else (m_u_symbol,'eV')))
+        print('unitful_k:     ', '%5s' % str(unitful_k),
+              ('| [%s]' % m_u_symbol) if not unitful_k else '| [%s]' % 'eV')
+        print('rescale_k:     ', '%5s' % str(rescale_k),
+              ''        if not rescale_k else '| [%s] -> [%s]' % (('eV', m_u_symbol) if unitful_k    else (m_u_symbol,'eV')))
+        print('unitful_amps:  ', '%5s' % str(unitful_amps),
+              '| [eV]'  if unitful_amps  else f'| [eV^2/{m_u_symbol}]')
+        print('rescale_amps:  ', '%5s' % str(rescale_amps),
+              '' if not rescale_amps     else '| [%s] -> [%s]' % (('eV', m_u_symbol) if unitful_amps else (f'eV^2/{m_u_symbol}',f'eV^2/{m_u_symbol}^2')))
+        print('rescale_consts:', '%5s' % str(rescale_consts),
+              '' if not rescale_consts   else '| [%s] -> [%s]' % (('eV', m_u_symbol) if unitful_m    else ('eV', f'eV/{m_u_symbol}')))
         print('----------------------------------------------------')
 
 def print_params(units, m=None, p=None, amps=None, Th=None, d=None, m_q=None, m_0=None, m_u=None, natural_units=True, verbosity=0, precision=3):
     if verbosity >= 0:
         if m is not None:
             print('m_dQCD = %.0e [eV%s]' % (m_q, '' if natural_units else '/c^2'))
-            if units['m'] == 'm_u': print('m_u = %.3e [eV%s]' % (m_u, '' if natural_units else '/c^2'))
+            if units['m'] == m_u_symbol: print('%s = %.3e [eV%s]' % (m_u_symbol, m_u, '' if natural_units else '/c^2'))
             print('m [' + units['m'] + ']\n'      + pp_param(m, m_0, n=precision))
         if p is not None:
             print('rho [' + units['p'] + ']\n'    + pp_param(p, n=precision))
