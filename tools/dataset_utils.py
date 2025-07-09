@@ -28,9 +28,9 @@ if use_tex:
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-from ..pyaxi_utils import load_all, load_case, get_units_from_params, classify_resonance, fit_Fpi, \
+from pyaxi_utils import load_all, load_case, get_units_from_params, classify_resonance, fit_Fpi, \
                         check_Fpi_fit, calc_local_phase_diffs, calc_global_phase_diffs
-from ..pyaxi_utils import n_p, n_k, cosmo_stability
+from pyaxi_utils import n_p, n_k, cosmo_stability
 
 
 # LaTeX Formatting for Plots
@@ -335,29 +335,36 @@ vec_col_set = lambda set_in: ((set(df_arr_cols + df_dict_cols) | (set(df_arr_key
 vectorized_param_set = lambda set_in: \
     ((set(set_in) | set([vec_val for vec_col in [get_vectorized_cols(vec_col_in) for vec_col_in in vec_col_set(set_in)] for vec_val in vec_col])) - (vec_col_set(set_in) | set(df_subarrs)))
 
+def get_param_sets(verbosity=0):
+    # Create unique sets and split vector-shaped parameters into separate columns
+    performance_params = performance_inputs + performance_outputs + primary_inputs + \
+                        primary_sim_settings + secondary_sim_settings + total_phase_dependents + ['config_name', 'job_partition']
+    print('performance_params: ', performance_params)
+    print('df_arr_keys: ', df_arr_keys)
+    print('df_dict_keys: ', df_dict_keys)
+    print('vec_col_set: ', vec_col_set(performance_params))
+    time_param_set = vectorized_param_set(performance_params)
 
-# Create unique sets and split vector-shaped parameters into separate columns
-performance_params = performance_inputs + performance_outputs + primary_inputs + \
-                    primary_sim_settings + secondary_sim_settings + total_phase_dependents + ['config_name', 'job_partition']
-time_param_set = vectorized_param_set(performance_params)
+    correlation_params = primary_inputs + secondary_inputs + \
+                        primary_sim_settings + sampled_params + phase_parameters + \
+                        primary_dependents + secondary_dependents + \
+                        primary_outputs + secondary_outputs + ['config_name']
+    corr_param_set = vectorized_param_set(correlation_params)
 
-correlation_params = primary_inputs + secondary_inputs + \
-                    primary_sim_settings + sampled_params + phase_parameters + \
-                    primary_dependents + secondary_dependents + \
-                    primary_outputs + secondary_outputs + ['config_name']
-corr_param_set = vectorized_param_set(correlation_params)
+    disabled_params = hidden_params + k_dependents + constant_inputs + \
+                    tertiary_inputs + tertiary_sim_settings + tertiary_dependents + \
+                    cosmetic_params + redundant_params
 
-disabled_params = hidden_params + k_dependents + constant_inputs + \
-                tertiary_inputs + tertiary_sim_settings + tertiary_dependents + \
-                cosmetic_params + redundant_params
+    combined_params = correlation_params + performance_params + disabled_params
+    #print(combined_params)
+    #combined_params = [combo_param for combo_param in combined_params if combo_param in df.columns]
+    #print(combined_params)
+    print(set(combined_params))
+    combined_param_set = vectorized_param_set(combined_params)
+    print(combined_param_set)
 
-combined_params = correlation_params + performance_params + disabled_params
-#print(combined_params)
-#combined_params = [combo_param for combo_param in combined_params if combo_param in df.columns]
-#print(combined_params)
-#print(combined_params)
-combined_param_set = vectorized_param_set(combined_params)
-#print(combined_param_set)
+    return combined_param_set, corr_param_set, time_param_set
+
 
 
 def df_push_dict(dict_in, col_in, sub_cols_in):
@@ -767,7 +774,6 @@ def scan_log_files(directory, output_folder, scratch_folder=None, argfile_in=Non
                             print(f'Copying data file {old_datafile} to {new_datafile}')
                         shutil.copy(old_datafile, new_datafile)
 
-
 def format_for_slurm_job_array(num_list, offset=0):
     # Do not attempt to format empty lists
     if len(num_list) < 1:
@@ -957,7 +963,7 @@ def prepare_data(config_name, output_root='~/scratch', version='v3.2.8', reclass
         '''
 
     if recalc_couplings:
-        from ..pyaxi_utils import g_anomaly, g_coupling, alpha_off, alpha_sm
+        from pyaxi_utils import g_anomaly, g_coupling, alpha_off, alpha_sm
         # Coupling constants for triangle diagram, scalar QED, charged scattering, and neutral scattering interactions respectively
         get_g_pi  = lambda x: g_anomaly(x['F']/1e9,   l1=x['l1'], eps=x['eps'], fs_in=alpha_sm)  if x['N_r'] > 0 else None
         get_g_qed = lambda x: g_coupling(1,           li=x['l2'], eps=x['eps'], fs_in=alpha_off) if x['N_c'] > 0 else None
@@ -1128,13 +1134,16 @@ def get_param_dataframes(verbosity=0):
                     combined_param_set.remove(new_param)
     '''
 
+    combined_param_set, corr_param_set, time_param_set = get_param_sets(verbosity=verbosity)
+
     full_df = df[sorted(combined_param_set)].copy(deep=True)
     #print(full_df)
     corr_df = df[sorted(corr_param_set)].copy(deep=True)
     time_df = df[sorted(time_param_set)].copy(deep=True)
 
     # Identify any free parameters not being properly classified
-    unclassified_params = set(df_in.columns) - set(combined_params)
+    unclassified_params = set(df_in.columns) - set(full_df.columns)
+    #unclassified_params = set(df_in.columns) - set(combined_params)
     if len(unclassified_params) > 0:
         if verbosity >= 1:
             print('-----------------------------------------------------------------')
